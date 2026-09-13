@@ -1,0 +1,25 @@
+[
+  {
+    "dataset": "traffic",
+    "topic_key": "traffic:sample-gangnam",
+    "headline": "사고가 가장 잦은 교차로",
+    "headline_number": "37건",
+    "subject": "강남대로 일대 교통사고 다발 구간",
+    "context": "샘플 데이터. 강남대로 한 구간에서 교통사고 37건이 발생해 52명이 다쳤다.",
+    "series": [
+      {"label": "사고", "value": 37},
+      {"label": "부상", "value": 52},
+      {"label": "사망", "value": 1}
+    ],
+    "series_unit": "건",
+    "source_name": "샘플 데이터 — 실제 공공데이터 아님",
+    "source_url": "https://www.data.go.kr/data/15070282/openapi.do",
+    "image_queries": ["gangnam seoul street", "korean road intersection", "seoul traffic"],
+    "features": {
+      "personal_relevance": 0.7,
+      "surprise": 0.6,
+      "magnitude": 0.7,
+      "freshness": 0.6
+    }
+  }
+]

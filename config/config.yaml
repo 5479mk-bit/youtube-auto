@@ -1,0 +1,69 @@
+video:
+  width: 1080
+  height: 1920
+  fps: 30
+  # 유튜브 쇼츠 UI 가 덮는 영역. 핵심 정보는 이 사이(safe band)에만 배치한다.
+  safe_top: 0.25
+  safe_bottom: 0.25
+  part_duration_min: 30
+  part_duration_max: 40
+  cut_duration_min: 2.5
+  cut_duration_max: 3.0
+  hook_duration: 3.0
+  zoom_amount: 0.08
+
+subtitle:
+  font_size: 64
+  font_color: "#FFFFFF"
+  emphasis_color: "#FFD84D"
+  stroke_color: "#000000"
+  stroke_width: 6
+  max_chars_per_line: 16
+
+audio:
+  voice: ko-KR-InJoonNeural
+  rate: "+8%"
+  bgm_volume_db: -18
+  bgm_hook_volume_db: -12
+
+script:
+  llm:
+    provider: gemini
+    model: gemini-2.0-flash
+    temperature: 0.9
+  # 부별 목표 글자 수. 한국어 내레이션 기준 대략 1초당 5~6자.
+  part1_target_chars: 190
+  part2_target_chars: 200
+
+topics:
+  datasets:
+    - business
+    - population
+    - fire
+    - traffic
+    - realestate
+  candidates_per_dataset: 12
+  # 감정 훅 스코어 가중치
+  weights:
+    personal_relevance: 0.35
+    surprise: 0.35
+    magnitude: 0.20
+    freshness: 0.10
+
+visuals:
+  images_per_part: 6
+  wikimedia_endpoint: https://commons.wikimedia.org/w/api.php
+  allowed_licenses:
+    - cc0
+    - cc-by
+    - cc-by-sa
+    - public domain
+
+publish:
+  privacy_status: private
+  category_id: "25"  # News & Politics
+  default_tags:
+    - 공공데이터
+    - 데이터분석
+    - 통계
+    - 쇼츠

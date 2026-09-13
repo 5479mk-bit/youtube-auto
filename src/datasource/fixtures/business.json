@@ -1,0 +1,52 @@
+[
+  {
+    "dataset": "business",
+    "topic_key": "business:sample-seoul-cafe",
+    "headline": "서울에서 가장 빨리 사라지는 가게",
+    "headline_number": "2.9년",
+    "subject": "서울 카페 업종의 평균 영업 기간",
+    "context": "샘플 데이터. 서울 지역 점포 12,480곳을 업종별로 집계했을 때 카페의 평균 영업 기간이 2.9년으로 가장 짧았다. 한식 6.1년, 미용 5.4년, 편의점 4.8년, 치킨 3.6년이 뒤를 이었다.",
+    "series": [
+      {"label": "카페", "value": 2.9},
+      {"label": "치킨", "value": 3.6},
+      {"label": "편의점", "value": 4.8},
+      {"label": "미용", "value": 5.4},
+      {"label": "한식", "value": 6.1}
+    ],
+    "series_unit": "년",
+    "source_name": "샘플 데이터 — 실제 공공데이터 아님",
+    "source_url": "https://www.data.go.kr/data/15083033/openapi.do",
+    "image_queries": ["seoul cafe street", "korean coffee shop", "seoul alley shops"],
+    "features": {
+      "personal_relevance": 0.9,
+      "surprise": 0.85,
+      "magnitude": 0.7,
+      "freshness": 0.7
+    }
+  },
+  {
+    "dataset": "business",
+    "topic_key": "business:sample-noryangjin",
+    "headline": "한 동네에 학원이 몰린 비율",
+    "headline_number": "31%",
+    "subject": "노량진 일대의 학원 밀집도",
+    "context": "샘플 데이터. 노량진 일대 점포 2,140곳 중 학원이 663곳으로 31%를 차지한다.",
+    "series": [
+      {"label": "학원", "value": 663},
+      {"label": "음식점", "value": 512},
+      {"label": "카페", "value": 318},
+      {"label": "편의점", "value": 205},
+      {"label": "기타", "value": 442}
+    ],
+    "series_unit": "곳",
+    "source_name": "샘플 데이터 — 실제 공공데이터 아님",
+    "source_url": "https://www.data.go.kr/data/15083033/openapi.do",
+    "image_queries": ["noryangjin seoul", "korean study academy street", "seoul night street"],
+    "features": {
+      "personal_relevance": 0.8,
+      "surprise": 0.75,
+      "magnitude": 0.5,
+      "freshness": 0.6
+    }
+  }
+]
