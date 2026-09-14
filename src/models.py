@@ -48,14 +48,23 @@ class StoryCandidate:
 class ScriptLine:
     """내레이션 한 문장 + 그 문장이 화면에서 어떻게 보일지."""
 
-    text: str
+    text: str  # 화면 자막에 띄우는 글
     visual_query_ko: str  # 공공 API 용 한국어 검색어
     visual_query_en: str = ""  # 위키미디어 폴백용 영어 검색어
+    # 입으로 읽는 글. 비어 있으면 text 를 그대로 읽는다.
+    spoken_text: str = ""
     show_chart: bool = False
     emphasis: list[str] = field(default_factory=list)  # 자막에서 강조할 조각
     audio_path: str = ""
     duration: float = 0.0
     camera: CameraMove = "push_in"
+    # 이 문장을 읽고 나서 쉬는 시간. 숨 쉴 틈이 없으면 기계가 읽는 것처럼 들린다.
+    pause_after: float = 0.0
+    speech_rate: str = "+0%"
+
+    @property
+    def narration(self) -> str:
+        return self.spoken_text or self.text
 
 
 @dataclass

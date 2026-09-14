@@ -21,8 +21,14 @@ subtitle:
   max_chars_per_line: 16
 
 audio:
-  voice: ko-KR-InJoonNeural
-  rate: "+8%"
+  # gemini 는 스타일을 말로 지시할 수 있어 톤이 살고, edge 는 키 없이 동작한다.
+  # gemini 가 한도에 걸리거나 실패하면 자동으로 edge 로 내려간다.
+  engine: gemini
+  gemini_voice: Charon        # 낮고 차분한 남성 톤
+  gemini_model: gemini-2.5-flash-preview-tts
+  gemini_style_prompt: "차분하고 낮은 목소리의 다큐멘터리 내레이터처럼, 숫자를 말할 때는 또박또박"
+  gemini_min_request_interval: 1.5   # preview 모델의 분당 요청 한도를 피한다
+  edge_voice: hyunsu          # hyunsu | injoon | sunhi
   bgm_volume_db: -18
   bgm_hook_volume_db: -12
 

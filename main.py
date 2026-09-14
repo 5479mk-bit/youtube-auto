@@ -42,6 +42,11 @@ def main() -> int:
     photos_parser.add_argument("query", help="한국어 검색어")
     photos_parser.add_argument("--en", default="", help="영어 보조 검색어")
 
+    voice_parser = subparsers.add_parser(
+        "voice-test", help="엔진별로 내레이션 샘플을 만들어 들어본다"
+    )
+    voice_parser.add_argument("text", help="읽게 할 문장")
+
     veo_parser = subparsers.add_parser(
         "veo-test", help="Veo 클립을 딱 1개만 만들어 본다 (과금 발생)"
     )
@@ -57,6 +62,8 @@ def main() -> int:
         return _topics(settings)
     if args.command == "photos":
         return _photos(settings, args.query, args.en)
+    if args.command == "voice-test":
+        return _voice_test(settings, args.text)
     if args.command == "veo-test":
         return _veo_test(settings, Path(args.image), args.prompt)
 
@@ -111,6 +118,32 @@ def _photos(settings, query_ko: str, query_en: str) -> int:
         logger.info(f"원본: {credit.page_url}")
     logger.info(f"미리보기: {out_path}")
     return 0
+
+
+def _voice_test(settings, text: str) -> int:
+    """목소리는 코드로 판단할 수 없다. 엔진별로 뽑아 귀로 비교한다."""
+    from src.text_ko import read_aloud
+
+    spoken = read_aloud(text)
+    logger.info(f"자막용: {text}")
+    logger.info(f"낭독용: {spoken}")
+
+    out_dir = OUTPUT_DIR / "voice_test"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    made = 0
+    for engine in pipeline.build_tts_engines(settings):
+        if not engine.enabled:
+            logger.warning(f"{engine.name}: 키가 없어 건너뜁니다")
+            continue
+        out_path = out_dir / f"{engine.name}.mp3"
+        if engine.synthesize(spoken, "-4%", out_path):
+            logger.info(f"{engine.name}: {out_path}")
+            made += 1
+        else:
+            logger.warning(f"{engine.name}: 합성 실패")
+
+    return 0 if made else 1
 
 
 def _veo_test(settings, image_path: Path, prompt: str) -> int:

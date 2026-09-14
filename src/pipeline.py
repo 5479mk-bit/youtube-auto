@@ -17,7 +17,9 @@ from .datasource.datagokr import DataGoKrClient
 from .models import PhotoCredit, RenderedPart, Script, ScriptPart, StoryCandidate, write_json
 from .motion.veo_budget import VeoBudget
 from .motion.veo_client import VeoClient
-from .narration import tts_edge
+from .narration import tts_engine
+from .narration.tts_edge import EdgeTTS
+from .narration.tts_gemini import GeminiTTS
 from .publish import seo_metadata
 from .render.thumbnail import build_thumbnail
 from .render.video_builder import build_part
@@ -81,6 +83,22 @@ def build_collector(settings: Settings) -> ImageCollector:
         settings.get("video.width", 1080),
     )
     return ImageCollector(sources, CACHE_DIR / "images")
+
+
+def build_tts_engines(settings: Settings) -> list:
+    """설정한 엔진을 앞에 두고, 실패했을 때 내려갈 자리를 뒤에 붙인다."""
+    gemini = GeminiTTS(
+        api_key=settings.secrets.gemini_api_key,
+        voice=settings.get("audio.gemini_voice", "Charon"),
+        model=settings.get("audio.gemini_model", ""),
+        style_prompt=settings.get("audio.gemini_style_prompt", ""),
+        min_request_interval=settings.get("audio.gemini_min_request_interval", 1.5),
+    )
+    edge = EdgeTTS(settings.get("audio.edge_voice", "hyunsu"))
+
+    if settings.get("audio.engine", "gemini") == "edge":
+        return [edge]
+    return [gemini, edge]
 
 
 def build_veo_client(settings: Settings) -> VeoClient:
@@ -204,12 +222,7 @@ def _render_part(
     veo_client,
 ) -> tuple[RenderedPart, list[PhotoCredit]]:
     logger.info(f"{part.part}부 내레이션 합성")
-    tts_edge.synthesize_part(
-        part,
-        settings.get("audio.voice"),
-        settings.get("audio.rate"),
-        work_dir / "audio",
-    )
+    tts_engine.synthesize_part(part, build_tts_engines(settings), work_dir / "audio")
 
     cues = subtitle_builder.build_cues(
         part,

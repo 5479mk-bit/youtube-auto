@@ -55,6 +55,39 @@ Veo 는 8초 단위로 과금되므로 3초만 쓰고 버리지 않도록 컷 �
 - `--dry-run`, `photos`, 테스트는 Veo 를 절대 호출하지 않는다
 - 텔레그램 승인 요청에 "Veo lite 2클립 · 약 1,176원" 이 함께 뜬다
 
+## 내레이션
+
+목소리가 AI 같아지는 건 엔진 탓만이 아니다. 세 가지를 같이 잡는다.
+
+**1. 자막용 글과 낭독용 글을 나눈다.** 화면에는 `12,480곳` 을 띄우고, 입으로는
+`만 이천사백팔십 곳` 이라고 읽는다. LLM 이 둘을 같이 만들고, 빠뜨리면 `src/text_ko.py` 의
+숫자 변환이 채운다.
+
+**2. 숨 쉴 틈을 준다.** 문장을 그냥 이어 붙이면 쉼표도 숨도 없이 계속된다.
+
+| 위치 | 쉼 |
+|---|---|
+| 훅 문장 뒤 | 0.5초 |
+| 일반 문장 사이 | 0.25초 |
+| 클리프행어 직전 | 0.6초 |
+
+속도도 문장 역할에 따라 다르다. 훅은 느리게(-8%), 데이터 전개는 보통(+6%), 닫는 질문은
+다시 느리게(-4%). 이 쉼은 음원 길이에 포함되므로 자막 타임코드와 컷 배치가 자동으로 따라온다.
+
+**3. 엔진은 Gemini TTS, 실패하면 edge-tts.**
+
+| | Gemini TTS | edge-tts |
+|---|---|---|
+| 비용 | 무료 티어 (preview 라 분당 요청 한도가 빡빡) | 완전 무료 |
+| 톤 제어 | 스타일을 말로 지시 | 속도 숫자만 |
+| 키 | `GEMINI_API_KEY` (Veo 와 공유) | 불필요 |
+
+`audio.engine` 으로 고르고, Gemini 가 한도에 걸리거나 실패하면 자동으로 edge-tts 로
+내려간다. `audio.gemini_style_prompt` 에 "차분하고 낮은 목소리의 다큐멘터리 내레이터처럼"
+같은 지시를 적으면 그대로 반영된다.
+
+`python main.py voice-test "문장"` 으로 엔진별 샘플을 뽑아 귀로 비교할 수 있다.
+
 ## 영상 구성 규칙
 
 세로 1080×1920, 30fps.
@@ -86,7 +119,7 @@ cp .env.example .env    # 키를 채운다
 | 키 | 발급처 | 없으면 |
 |---|---|---|
 | `DATA_GO_KR_SERVICE_KEY` | [공공데이터포털](https://www.data.go.kr) 활용신청 | 번들 샘플 데이터로 동작하고, 업로드는 차단된다 |
-| `GEMINI_API_KEY` | Google AI Studio | 대본은 템플릿으로, 영상은 전부 무료 파랄랙스로 간다. **Veo 는 유료 결제가 필요하다** |
+| `GEMINI_API_KEY` | Google AI Studio | 대본은 템플릿으로, 내레이션은 edge-tts 로, 영상은 무료 파랄랙스로 간다. TTS 는 무료 티어가 있지만 **Veo 는 유료 결제가 필요하다** |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | @BotFather | 검수를 건너뛰고 업로드하지 않는다 |
 | `YOUTUBE_CLIENT_SECRET_FILE` | Google Cloud Console OAuth 데스크톱 클라이언트 | 업로드 단계만 실패한다 |
 
@@ -97,6 +130,7 @@ TTS(edge-tts)는 키가 필요 없다. 프록시 뒤에서는 `HTTPS_PROXY`를 �
 ```bash
 python main.py topics                  # 주제 후보 확인만
 python main.py photos "강남 거리"       # 어떤 사진이 오는지 미리 확인 (Veo 호출 없음)
+python main.py voice-test "문장"        # 엔진별 내레이션 샘플을 만들어 들어본다
 python main.py veo-test 사진.jpg        # Veo 클립 1개만 생성해 결과·청구액 확인 (과금)
 python main.py run --dry-run           # 주제·대본까지만 (영상 렌더 없음)
 python main.py run --no-veo            # 전부 무료 파랄랙스로 mp4 2편 생성

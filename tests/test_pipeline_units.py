@@ -16,7 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.datasource.base import load_fixture
 from src.models import DataPoint, ScriptLine, ScriptPart, StoryCandidate
 from src.script.script_writer import _template_script
-from src.text_ko import particle
+from src.narration.pacing import HOOK_PAUSE, SENTENCE_PAUSE, apply_pacing
+from src.text_ko import particle, read_aloud, sino_korean
 from src.subtitles.subtitle_builder import build_cues, wrap_text
 from src.topics import topic_scorer
 from src.motion.veo_budget import BudgetExceeded, ClipCost, VeoBudget
@@ -200,6 +201,51 @@ class TestLicenseFilter:
         assert not any(
             normalize_license(item) in haystack for item in ["cc0", "cc-by", "cc-by-sa"]
         )
+
+
+class TestReadAloud:
+    @pytest.mark.parametrize(
+        ("number", "expected"),
+        [(0, "영"), (10, "십"), (1000, "천"), (12480, "만 이천사백팔십"), (100000, "십만")],
+    )
+    def test_sino_korean_reading(self, number, expected):
+        assert sino_korean(number) == expected
+
+    def test_decimals_are_read_digit_by_digit(self):
+        assert read_aloud("2.9년") == "이 점 구 년"
+
+    def test_thousands_separator_is_handled(self):
+        assert read_aloud("12,480곳") == "만 이천사백팔십 곳"
+
+    def test_percent_becomes_a_word(self):
+        assert read_aloud("22.6% 올랐습니다") == "이십이 점 육 퍼센트 올랐습니다"
+
+    def test_short_numbers_stay_attached_to_their_unit(self):
+        # '일 부에서' 가 아니라 '일부에서'. 짧은 숫자는 붙여 읽어야 자연스럽다.
+        assert read_aloud("1부에서") == "일부에서"
+
+    def test_text_without_numbers_is_untouched(self):
+        assert read_aloud("짧죠.") == "짧죠."
+
+
+class TestPacing:
+    def test_hook_is_slower_and_gets_a_longer_pause(self):
+        part = make_part([("훅", 2.0, False), ("본문", 3.0, False), ("마무리", 3.0, False)])
+        apply_pacing(part)
+        assert part.lines[0].pause_after == pytest.approx(HOOK_PAUSE)
+        assert part.lines[0].speech_rate.startswith("-")
+
+    def test_every_line_gets_a_pause_so_sentences_never_collide(self):
+        part = make_part([(f"문장{index}", 3.0, False) for index in range(5)])
+        apply_pacing(part)
+        assert all(line.pause_after >= SENTENCE_PAUSE for line in part.lines[:-1])
+
+    def test_line_reads_spoken_text_when_present(self):
+        part = make_part([("2.9년", 2.0, False)])
+        part.lines[0].spoken_text = "이 점 구 년"
+        assert part.lines[0].narration == "이 점 구 년"
+        part.lines[0].spoken_text = ""
+        assert part.lines[0].narration == "2.9년"
 
 
 class TestScriptTemplate:
