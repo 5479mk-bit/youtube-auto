@@ -21,6 +21,9 @@ from .pacing import apply_pacing
 # 한국어 내레이션 평균 속도(초당 글자 수). 무음 폴백의 길이 추정에 쓴다.
 CHARS_PER_SECOND = 5.5
 MIN_DURATION = 1.2
+# 문장 앞뒤 무음을 깎을 기준. 말 시작 직전의 숨소리까지 잘리지 않게 조금 남긴다.
+SILENCE_THRESHOLD = "-45dB"
+KEEP_SILENCE = "0.05"
 
 
 class TTSEngine(Protocol):
@@ -48,8 +51,7 @@ def synthesize_part(part: ScriptPart, engines: list[TTSEngine], out_dir: Path) -
             silent_lines += 1
             _write_silence(audio_path, _estimate_duration(line.narration))
 
-        if line.pause_after > 0:
-            _append_silence(audio_path, line.pause_after)
+        _trim_and_pad(audio_path, line.pause_after)
 
         line.audio_path = str(audio_path)
         line.duration = _measure_duration(audio_path) or _estimate_duration(line.narration)
@@ -78,11 +80,24 @@ def _estimate_duration(text: str) -> float:
     return max(len(text) / CHARS_PER_SECOND, MIN_DURATION)
 
 
-def _append_silence(audio_path: Path, seconds: float) -> None:
-    """문장 뒤에 숨 쉴 틈을 붙인다. 이 길이가 그대로 자막 타임코드에 반영된다."""
+def _trim_and_pad(audio_path: Path, pause: float) -> None:
+    """문장 앞뒤의 무음을 걷어낸 뒤 설계한 만큼만 쉼을 붙인다.
+
+    TTS 엔진은 문장마다 앞뒤로 제멋대로 무음을 붙여 보낸다. 그 위에 쉼을 더하면
+    문장 사이가 1초 가까이 벌어져 쇼츠에서는 늘어지게 들린다. 한 번 깎고 다시 붙여야
+    설계한 호흡이 그대로 나온다.
+    """
     import imageio_ffmpeg
 
-    padded = audio_path.with_name(f"{audio_path.stem}_padded.mp3")
+    trim = (
+        f"silenceremove=start_periods=1:start_threshold={SILENCE_THRESHOLD}"
+        f":start_silence={KEEP_SILENCE}:detection=peak"
+    )
+    filters = f"{trim},areverse,{trim},areverse"
+    if pause > 0:
+        filters += f",apad=pad_dur={pause:.3f}"
+
+    processed = audio_path.with_name(f"{audio_path.stem}_paced.mp3")
     subprocess.run(
         [
             imageio_ffmpeg.get_ffmpeg_exe(),
@@ -90,13 +105,13 @@ def _append_silence(audio_path: Path, seconds: float) -> None:
             "-i",
             str(audio_path),
             "-af",
-            f"apad=pad_dur={seconds:.3f}",
-            str(padded),
+            filters,
+            str(processed),
         ],
         check=True,
         capture_output=True,
     )
-    padded.replace(audio_path)
+    processed.replace(audio_path)
 
 
 def _write_silence(out_path: Path, duration: float) -> None:

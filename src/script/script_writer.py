@@ -147,6 +147,21 @@ def _fmt(value: float) -> str:
     return f"{value:,.1f}"
 
 
+def _runner_up_line(line, candidate: StoryCandidate, unit: str) -> list:
+    """2위 항목. 항목이 넷 이상일 때만 말한다. 셋 이하면 중간값과 겹친다."""
+    if len(candidate.series) < 4:
+        return []
+    runner_up = candidate.series[1]
+    return [
+        line(
+            4,
+            f"바로 뒤가 {_particle(runner_up.label, '이', '가')} {_fmt(runner_up.value)}{unit},",
+            chart=True,
+            emphasis=[runner_up.label],
+        )
+    ]
+
+
 def _ratio_line(line, top_value: float, bottom_value: float) -> list:
     """몇 배 차이인지는 계산해서 말한다. 0 으로 나눌 수 없거나 차이가 미미하면 말하지 않는다."""
     smaller, larger = sorted((abs(top_value), abs(bottom_value)))
@@ -193,6 +208,7 @@ def _template_script(candidate: StoryCandidate) -> Script:
             line(3, f"같은 기준으로 잰 {len(candidate.series)}개를 나란히 놓으면,"),
             line(4, f"{_particle(top.label, '이', '가')} {_fmt(top.value)}{_particle(unit, '으로', '로')} 가장 앞이고,",
                  chart=True, emphasis=[top.label, f"{_fmt(top.value)}{unit}"]),
+            *_runner_up_line(line, candidate, unit),
             line(5, f"{_particle(middle.label, '은', '는')} {_fmt(middle.value)}{unit},",
                  chart=True, emphasis=[middle.label]),
             line(6, f"{_particle(bottom.label, '은', '는')} {_fmt(bottom.value)}{unit}까지 갑니다.",
@@ -214,8 +230,10 @@ def _template_script(candidate: StoryCandidate) -> Script:
                  chart=True, emphasis=[top.label, bottom.label]),
             line(3, f"격차는 {_fmt(gap)}{unit}.", chart=True, emphasis=[f"{_fmt(gap)}{unit}"]),
             *_ratio_line(line, top.value, bottom.value),
-            line(5, "추정이 아니라 집계된 기록이에요."),
-            line(6, f"{candidate.source_name} 자료입니다.", emphasis=[candidate.source_name]),
+            line(5, f"가운데 있는 {_particle(middle.label, '은', '는')} {_fmt(middle.value)}{unit}.",
+                 chart=True, emphasis=[middle.label]),
+            line(6, "추정이 아니라 집계된 기록이에요."),
+            line(7, f"{candidate.source_name} 자료입니다.", emphasis=[candidate.source_name]),
             line(7, "어느 쪽이 맞는지는 숫자가 말해주지 않습니다."),
             line(8, "숫자는 답이 아니라 질문에 가깝죠."),
             line(9, "당신 동네는 어느 쪽인가요?", emphasis=["당신 동네"]),

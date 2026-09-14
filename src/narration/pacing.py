@@ -17,9 +17,10 @@ CLIFFHANGER_PAUSE = 0.6  # 질문을 던지기 전에 뜸을 들인다
 CLOSING_PAUSE = 0.4
 LAST_LINE_PAUSE = 0.3  # 끝나자마자 잘리면 급하게 들린다
 
-HOOK_RATE = "-8%"  # 첫 문장은 천천히
-BODY_RATE = "+6%"
-CLOSING_RATE = "-4%"  # 닫는 질문도 천천히
+# 다큐 내레이션은 서두르지 않는다. 빠르게 읽으면 정보를 흘려보내고 톤도 가벼워진다.
+HOOK_RATE = "-10%"  # 첫 문장은 천천히
+BODY_RATE = "+2%"
+CLOSING_RATE = "-6%"  # 닫는 질문도 천천히
 
 
 def apply_pacing(part: ScriptPart) -> ScriptPart:
