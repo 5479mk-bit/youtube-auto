@@ -88,11 +88,10 @@ def build_collector(settings: Settings) -> ImageCollector:
 def build_tts_engines(settings: Settings) -> list:
     """설정한 엔진을 앞에 두고, 실패했을 때 내려갈 자리를 뒤에 붙인다."""
     gemini = GeminiTTS(
-        api_key=settings.secrets.gemini_api_key,
-        voice=settings.get("audio.gemini_voice", "Charon"),
+        api_keys=settings.secrets.gemini_api_keys,
+        voice=settings.get("audio.gemini_voice", "Fenrir"),
         model=settings.get("audio.gemini_model", ""),
         style_prompt=settings.get("audio.gemini_style_prompt", ""),
-        min_request_interval=settings.get("audio.gemini_min_request_interval", 1.5),
     )
     edge = EdgeTTS(settings.get("audio.edge_voice", "hyunsu"))
 

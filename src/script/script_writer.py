@@ -36,9 +36,8 @@ PROMPT = """당신은 공공데이터를 다루는 한국어 다큐멘터리 쇼
 - 문장 길이를 섞는다. 6자짜리 짧은 문장과 25자짜리 긴 문장이 번갈아 나와야 말처럼 들린다.
 - 같은 어미를 세 번 연속 쓰지 않는다. "~입니다. ~입니다. ~입니다." 는 읽는 티가 난다.
 - 명사만 나열하지 않는다. 사람이 실제로 하는 말로 쓴다.
-- text 는 화면 자막용이라 숫자를 그대로 쓴다 (예: "2.9년", "12,480곳").
-- spoken_text 는 입으로 읽을 글이라 숫자를 소리 나는 대로 적는다
-  (예: "이 점 구 년", "만 이천사백팔십 곳"). 숫자 뒤에 쉼표를 넣어 한 박자 쉬게 해도 좋다.
+- text 에는 숫자를 그대로 쓴다 (예: "2.9년", "12,480곳"). 소리 나는 대로 적지 말 것.
+  낭독용 문장은 시스템이 따로 만든다.
 - visual_query_ko 는 한국 공공데이터 사진 API 로 찾을 한국어 검색어. 지명·장소·시설 이름처럼
   실제로 사진이 있을 법한 말로 쓴다 (예: "남대문시장", "강남 거리 야경").
 - visual_query_en 은 같은 장면을 영어로 쓴 보조 검색어 2~4단어.
@@ -49,11 +48,11 @@ PROMPT = """당신은 공공데이터를 다루는 한국어 다큐멘터리 쇼
 {{
   "title_seed": "채널 제목에 쓸 한 줄",
   "part1": {{"hook_number": "화면에 크게 띄울 숫자", "lines": [
-    {{"text": "", "spoken_text": "", "visual_query_ko": "", "visual_query_en": "",
+    {{"text": "", "visual_query_ko": "", "visual_query_en": "",
       "show_chart": false, "emphasis": [""]}}
   ]}},
   "part2": {{"hook_number": "", "lines": [
-    {{"text": "", "spoken_text": "", "visual_query_ko": "", "visual_query_en": "",
+    {{"text": "", "visual_query_ko": "", "visual_query_en": "",
       "show_chart": false, "emphasis": [""]}}
   ]}}
 }}
@@ -121,9 +120,10 @@ def _parse_part(raw: dict, part: int, candidate: StoryCandidate) -> ScriptPart:
             visual_query_en=str(
                 line.get("visual_query_en") or _first(candidate.image_queries_en)
             ),
-            # LLM 이 낭독용 문장을 빼먹으면 숫자만 소리 나는 대로 바꿔서 채운다.
-            spoken_text=str(line.get("spoken_text") or "").strip()
-            or read_aloud(str(line["text"]).strip()),
+            # 낭독문은 LLM 이 준 걸 쓰지 않고 직접 만든다. 모델이 큰 수를 소리대로
+            # 적게 하면 '육억'을 '유걱'이라고 쓰는 식으로 틀리는데, 그대로 읽히면
+            # 말이 되지 않는다. 숫자 읽기는 규칙이 정해져 있으니 계산하는 편이 맞다.
+            spoken_text=read_aloud(str(line["text"]).strip()),
             show_chart=bool(line.get("show_chart", False)),
             emphasis=[str(item) for item in line.get("emphasis", []) if str(item).strip()],
         )

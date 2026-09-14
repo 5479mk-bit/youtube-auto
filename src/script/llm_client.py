@@ -16,13 +16,21 @@ from loguru import logger
 TIMEOUT = 60
 
 
+def _safe(error: Exception) -> str:
+    """오류 메시지에 키가 섞여 나오지 않게 거른다."""
+    text = str(error)
+    if "key=" in text:
+        text = text.split("key=")[0] + "key=***"
+    return text[:200]
+
+
 class LLMProvider(Protocol):
     def complete_json(self, prompt: str, temperature: float) -> dict | None: ...
 
 
 class GeminiProvider:
-    def __init__(self, api_key: str, model: str):
-        self.api_key = api_key
+    def __init__(self, api_keys: list[str], model: str):
+        self.api_keys = [key for key in api_keys if key]
         self.model = model
 
     def complete_json(self, prompt: str, temperature: float) -> dict | None:
@@ -37,19 +45,27 @@ class GeminiProvider:
                 "responseMimeType": "application/json",
             },
         }
-        try:
-            response = requests.post(
-                url,
-                params={"key": self.api_key},
-                json=payload,
-                timeout=TIMEOUT,
-            )
-            response.raise_for_status()
-            text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-            return json.loads(text)
-        except Exception as exc:
-            logger.warning(f"Gemini 호출 실패: {exc}")
-            return None
+
+        for key in self.api_keys:
+            try:
+                # 키는 헤더로만 보낸다. 쿼리로 붙이면 실패 로그에 URL 이 찍히면서
+                # 키가 그대로 남는다.
+                response = requests.post(
+                    url,
+                    headers={"x-goog-api-key": key},
+                    json=payload,
+                    timeout=TIMEOUT,
+                )
+                if response.status_code == 429:
+                    logger.warning("LLM 키 하나가 한도에 걸려 다음 키로 넘어갑니다")
+                    continue
+                response.raise_for_status()
+                text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+                return json.loads(text)
+            except Exception as exc:
+                logger.warning(f"Gemini 호출 실패 ({self.model}): {_safe(exc)}")
+
+        return None
 
 
 class OpenAICompatibleProvider:
@@ -80,8 +96,8 @@ class OpenAICompatibleProvider:
 
 
 def build_provider(provider_name: str, model: str, secrets) -> LLMProvider | None:
-    if provider_name == "gemini" and secrets.gemini_api_key:
-        return GeminiProvider(secrets.gemini_api_key, model)
+    if provider_name == "gemini" and secrets.gemini_api_keys:
+        return GeminiProvider(secrets.gemini_api_keys, model)
     if provider_name in {"openai", "openai_compatible"} and secrets.openai_api_key:
         return OpenAICompatibleProvider(secrets.openai_api_key, model, secrets.openai_base_url)
 

@@ -20,6 +20,9 @@ STATE_DB = PROJECT_ROOT / "state.sqlite3"
 class Secrets:
     data_go_kr_service_key: str
     gemini_api_key: str
+    # 백업 키를 포함한 전체 목록. Gemini 무료 한도는 키(프로젝트)마다 따로 계산되므로
+    # 하나가 하루 한도를 다 쓰면 다음 키로 넘어간다.
+    gemini_api_keys: list[str]
     openai_api_key: str
     openai_base_url: str
     telegram_bot_token: str
@@ -61,9 +64,17 @@ def load_settings(config_path: Path | None = None) -> Settings:
             else:
                 config[section] = value
 
+    primary_key = os.getenv("GEMINI_API_KEY", "")
+    backup_keys = [
+        key.strip()
+        for key in os.getenv("GEMINI_API_KEY_BACKUP", "").split(",")
+        if key.strip()
+    ]
+
     secrets = Secrets(
         data_go_kr_service_key=os.getenv("DATA_GO_KR_SERVICE_KEY", ""),
-        gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
+        gemini_api_key=primary_key,
+        gemini_api_keys=[key for key in [primary_key, *backup_keys] if key],
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
         openai_base_url=os.getenv("OPENAI_BASE_URL", ""),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),

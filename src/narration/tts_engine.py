@@ -34,46 +34,68 @@ class TTSEngine(Protocol):
 
     def synthesize(self, text: str, rate: str, out_path: Path) -> bool: ...
 
+    # 배치를 지원하면 부 전체를 한 번에 읽는다 (호출 한도가 빡빡한 엔진용).
+    supports_batch: bool
+
+    def synthesize_batch(
+        self, texts: list[str], out_dir: Path, prefix: str
+    ) -> list[Path] | None: ...
+
 
 def synthesize_part(part: ScriptPart, engines: list[TTSEngine], out_dir: Path) -> ScriptPart:
-    """앞 엔진부터 차례로 시도한다. 문장 뒤에는 pacing 이 정한 쉼을 붙인다."""
+    """부 하나를 한 엔진으로 끝까지 읽힌다.
+
+    엔진을 문장마다 갈아타면 한 편 안에서 목소리가 바뀐다. 그래서 폴백은 문장이 아니라
+    **부 단위**로 한다. 앞 엔진이 한 문장이라도 실패하면 그 부 전체를 다음 엔진으로 다시
+    읽힌다.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     apply_pacing(part)
 
-    silent_lines = 0
-    for index, line in enumerate(part.lines):
-        audio_path = out_dir / f"part{part.part}_line{index:02d}.mp3"
-        engine_used = _synthesize_with_fallback(
-            engines, line.narration, line.speech_rate, audio_path
-        )
-
-        if engine_used is None:
-            silent_lines += 1
-            _write_silence(audio_path, _estimate_duration(line.narration))
-
-        _trim_and_pad(audio_path, line.pause_after)
-
-        line.audio_path = str(audio_path)
-        line.duration = _measure_duration(audio_path) or _estimate_duration(line.narration)
-
-    if silent_lines:
-        logger.warning(
-            f"{part.part}부에서 {silent_lines}개 문장이 무음으로 채워졌습니다. "
-            "내레이션 없이 영상만 나갑니다."
-        )
-    return part
-
-
-def _synthesize_with_fallback(
-    engines: list[TTSEngine], text: str, rate: str, out_path: Path
-) -> str | None:
     for engine in engines:
         if not engine.enabled:
             continue
-        if engine.synthesize(text, rate, out_path):
-            return engine.name
-        logger.warning(f"{engine.name} 실패 — 다음 엔진으로 내려갑니다")
-    return None
+        paths = _synthesize_all(engine, part, out_dir)
+        if paths is not None:
+            _finish(part, paths)
+            logger.info(f"{part.part}부 내레이션: {engine.name}")
+            return part
+        logger.warning(f"{engine.name} 로는 {part.part}부를 끝까지 읽지 못했습니다 — 다음 엔진")
+
+    logger.warning(f"{part.part}부를 읽을 엔진이 없어 무음으로 채웁니다")
+    paths = []
+    for index, line in enumerate(part.lines):
+        path = out_dir / f"part{part.part}_line{index:02d}.mp3"
+        _write_silence(path, _estimate_duration(line.narration))
+        paths.append(path)
+    _finish(part, paths)
+    return part
+
+
+def _synthesize_all(engine: TTSEngine, part: ScriptPart, out_dir: Path) -> list[Path] | None:
+    """한 엔진으로 부 전체를 만든다. 하나라도 실패하면 None."""
+    texts = [line.narration for line in part.lines]
+
+    # 배치를 지원하는 엔진은 한 번만 부른다. Gemini 무료 한도가 하루 10회라 문장마다
+    # 부르면 한 편도 못 만든다.
+    if getattr(engine, "supports_batch", False):
+        return engine.synthesize_batch(texts, out_dir, f"part{part.part}")
+
+    paths = []
+    for index, line in enumerate(part.lines):
+        path = out_dir / f"part{part.part}_line{index:02d}.mp3"
+        if not engine.synthesize(line.narration, line.speech_rate, path):
+            return None
+        paths.append(path)
+    return paths
+
+
+def _finish(part: ScriptPart, paths: list[Path]) -> None:
+    """문장마다 앞뒤 무음을 정리하고 설계한 쉼을 붙인 뒤 길이를 잰다."""
+    for line, path in zip(part.lines, paths):
+        _trim_and_pad(path, line.pause_after)
+        line.audio_path = str(path)
+        line.duration = _measure_duration(path) or _estimate_duration(line.narration)
 
 
 def _estimate_duration(text: str) -> float:
