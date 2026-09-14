@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 CameraMove = Literal["push_in", "pull_out", "pan_lr", "pan_rl", "pan_tb", "freeze"]
+# 컷을 움직이는 방식. veo 는 생성 영상, parallax 는 깊이 기반 2.5D 카메라 이동.
+MotionEngine = Literal["veo", "parallax"]
 
 
 @dataclass
@@ -30,7 +32,9 @@ class StoryCandidate:
     series_unit: str = ""
     source_name: str = ""
     source_url: str = ""
-    image_queries: list[str] = field(default_factory=list)
+    # 사진 검색어. 공공 API 는 한국어로, 위키미디어는 영어로 찾아야 한다.
+    image_queries_ko: list[str] = field(default_factory=list)
+    image_queries_en: list[str] = field(default_factory=list)
     features: dict[str, float] = field(default_factory=dict)
     score: float = 0.0
     # 픽스처(샘플) 데이터로 만들어진 후보. 실제 통계가 아니므로 업로드가 차단된다.
@@ -45,7 +49,8 @@ class ScriptLine:
     """내레이션 한 문장 + 그 문장이 화면에서 어떻게 보일지."""
 
     text: str
-    visual_query: str  # 이미지 검색어
+    visual_query_ko: str  # 공공 API 용 한국어 검색어
+    visual_query_en: str = ""  # 위키미디어 폴백용 영어 검색어
     show_chart: bool = False
     emphasis: list[str] = field(default_factory=list)  # 자막에서 강조할 조각
     audio_path: str = ""
@@ -96,13 +101,26 @@ class Script:
 
 
 @dataclass
+class PhotoCredit:
+    """사진 한 장의 출처. 공공누리 1유형은 출처 표기가 이용 조건이라 끝까지 들고 다닌다."""
+
+    query: str
+    source_name: str
+    license_name: str = ""
+    page_url: str = ""
+    author: str = ""
+
+
+@dataclass
 class Scene:
     """화면에 얹히는 한 컷. 문장 하나가 길면 여러 컷으로 쪼개진다."""
 
     start: float
     duration: float
-    image_query: str
+    image_query_ko: str
+    image_query_en: str
     camera: CameraMove
+    engine: MotionEngine = "parallax"
     show_chart: bool = False
     chart_step: int = 0  # 차트를 몇 항목까지 드러낼지
     is_hook: bool = False

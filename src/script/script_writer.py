@@ -29,7 +29,9 @@ PROMPT = """당신은 공공데이터를 다루는 한국어 다큐멘터리 쇼
   마지막 문장에서 시청자에게 자기 동네/상황을 떠올리게 하는 질문으로 닫는다.
 - 문장은 한 문장당 12~28자. 1부 합계 약 {part1_chars}자, 2부 합계 약 {part2_chars}자.
 - 과장·추측 금지. 데이터에 없는 수치를 지어내지 말 것.
-- visual_query 는 사진 검색용 영어 키워드 2~4단어.
+- visual_query_ko 는 한국 공공데이터 사진 API 로 찾을 한국어 검색어. 지명·장소·시설 이름처럼
+  실제로 사진이 있을 법한 말로 쓴다 (예: "남대문시장", "강남 거리 야경").
+- visual_query_en 은 같은 장면을 영어로 쓴 보조 검색어 2~4단어.
 - emphasis 에는 그 문장에서 자막으로 크게 강조할 짧은 조각(숫자·핵심어)만 넣는다.
 - show_chart 는 그 문장에서 데이터 차트를 띄울지 여부.
 
@@ -37,10 +39,10 @@ PROMPT = """당신은 공공데이터를 다루는 한국어 다큐멘터리 쇼
 {{
   "title_seed": "채널 제목에 쓸 한 줄",
   "part1": {{"hook_number": "화면에 크게 띄울 숫자", "lines": [
-    {{"text": "", "visual_query": "", "show_chart": false, "emphasis": [""]}}
+    {{"text": "", "visual_query_ko": "", "visual_query_en": "", "show_chart": false, "emphasis": [""]}}
   ]}},
   "part2": {{"hook_number": "", "lines": [
-    {{"text": "", "visual_query": "", "show_chart": false, "emphasis": [""]}}
+    {{"text": "", "visual_query_ko": "", "visual_query_en": "", "show_chart": false, "emphasis": [""]}}
   ]}}
 }}
 """
@@ -101,7 +103,12 @@ def _parse_part(raw: dict, part: int, candidate: StoryCandidate) -> ScriptPart:
     lines = [
         ScriptLine(
             text=str(line["text"]).strip(),
-            visual_query=str(line.get("visual_query") or candidate.image_queries[0]),
+            visual_query_ko=str(
+                line.get("visual_query_ko") or _first(candidate.image_queries_ko)
+            ),
+            visual_query_en=str(
+                line.get("visual_query_en") or _first(candidate.image_queries_en)
+            ),
             show_chart=bool(line.get("show_chart", False)),
             emphasis=[str(item) for item in line.get("emphasis", []) if str(item).strip()],
         )
@@ -115,6 +122,10 @@ def _parse_part(raw: dict, part: int, candidate: StoryCandidate) -> ScriptPart:
     )
 
 
+def _first(items: list[str]) -> str:
+    return items[0] if items else ""
+
+
 def _fmt(value: float) -> str:
     if abs(value) >= 100 or float(value).is_integer():
         return f"{value:,.0f}"
@@ -123,10 +134,14 @@ def _fmt(value: float) -> str:
 
 def _template_script(candidate: StoryCandidate) -> Script:
     """LLM 없이도 파이프라인이 끝까지 돌도록 데이터만으로 구성하는 대본."""
-    queries = candidate.image_queries or ["korea city"]
+    queries_ko = candidate.image_queries_ko or ["대한민국 도시"]
+    queries_en = candidate.image_queries_en or ["korean city"]
 
-    def query(index: int) -> str:
-        return queries[index % len(queries)]
+    def query_ko(index: int) -> str:
+        return queries_ko[index % len(queries_ko)]
+
+    def query_en(index: int) -> str:
+        return queries_en[index % len(queries_en)]
 
     top = candidate.series[0]
     bottom = candidate.series[-1]
@@ -141,45 +156,53 @@ def _template_script(candidate: StoryCandidate) -> Script:
         lines=[
             ScriptLine(
                 text=f"{candidate.headline_number}.",
-                visual_query=query(0),
+                visual_query_ko=query_ko(0),
+                visual_query_en=query_en(0),
                 emphasis=[candidate.headline_number],
             ),
             ScriptLine(
                 text=f"{candidate.subject}에서 나온 숫자입니다.",
-                visual_query=query(1),
+                visual_query_ko=query_ko(1),
+                visual_query_en=query_en(1),
                 emphasis=[candidate.subject],
             ),
             ScriptLine(
                 text="그냥 지나칠 숫자가 아닙니다.",
-                visual_query=query(2),
+                visual_query_ko=query_ko(2),
+                visual_query_en=query_en(2),
             ),
             ScriptLine(
                 text=f"{_particle(top.label, '이', '가')} {_fmt(top.value)}{_particle(unit, '으로', '로')} 가장 앞섭니다.",
-                visual_query=query(3),
+                visual_query_ko=query_ko(3),
+                visual_query_en=query_en(3),
                 show_chart=True,
                 emphasis=[top.label, f"{_fmt(top.value)}{unit}"],
             ),
             ScriptLine(
                 text=f"중간에 놓인 {_particle(middle.label, '은', '는')} {_fmt(middle.value)}{unit}입니다.",
-                visual_query=query(4),
+                visual_query_ko=query_ko(4),
+                visual_query_en=query_en(4),
                 show_chart=True,
                 emphasis=[middle.label],
             ),
             ScriptLine(
                 text=f"끝에 선 {_particle(bottom.label, '은', '는')} {_fmt(bottom.value)}{unit}까지 내려갑니다.",
-                visual_query=query(5),
+                visual_query_ko=query_ko(5),
+                visual_query_en=query_en(5),
                 show_chart=True,
                 emphasis=[bottom.label, f"{_fmt(bottom.value)}{unit}"],
             ),
             ScriptLine(
                 text=f"양 끝의 차이는 {_fmt(gap)}{unit}입니다.",
-                visual_query=query(6),
+                visual_query_ko=query_ko(6),
+                visual_query_en=query_en(6),
                 show_chart=True,
                 emphasis=[f"{_fmt(gap)}{unit}"],
             ),
             ScriptLine(
                 text="같은 조건인데 왜 이렇게 갈릴까요?",
-                visual_query=query(7),
+                visual_query_ko=query_ko(7),
+                visual_query_en=query_en(7),
                 emphasis=["왜"],
             ),
         ],
@@ -191,43 +214,51 @@ def _template_script(candidate: StoryCandidate) -> Script:
         lines=[
             ScriptLine(
                 text=f"{candidate.headline_number}, 1부에서 본 숫자입니다.",
-                visual_query=query(0),
+                visual_query_ko=query_ko(0),
+                visual_query_en=query_en(0),
                 emphasis=[candidate.headline_number],
             ),
             ScriptLine(
                 text=f"{_particle(candidate.subject, '을', '를')} 다시 펼쳐봅니다.",
-                visual_query=query(1),
+                visual_query_ko=query_ko(1),
+                visual_query_en=query_en(1),
                 show_chart=True,
                 emphasis=[candidate.subject],
             ),
             ScriptLine(
                 text=f"{_particle(top.label, '과', '와')} {_particle(bottom.label, '은', '는')} 같은 표에 있습니다.",
-                visual_query=query(2),
+                visual_query_ko=query_ko(2),
+                visual_query_en=query_en(2),
                 show_chart=True,
                 emphasis=[top.label, bottom.label],
             ),
             ScriptLine(
                 text=f"그런데 격차는 {_fmt(gap)}{unit}까지 벌어집니다.",
-                visual_query=query(3),
+                visual_query_ko=query_ko(3),
+                visual_query_en=query_en(3),
                 show_chart=True,
                 emphasis=[f"{_fmt(gap)}{unit}"],
             ),
             ScriptLine(
                 text="이 숫자는 추정이 아니라 집계된 기록입니다.",
-                visual_query=query(4),
+                visual_query_ko=query_ko(4),
+                visual_query_en=query_en(4),
             ),
             ScriptLine(
                 text=f"{candidate.source_name} 자료입니다.",
-                visual_query=query(5),
+                visual_query_ko=query_ko(5),
+                visual_query_en=query_en(5),
                 emphasis=[candidate.source_name],
             ),
             ScriptLine(
                 text="숫자는 결론이 아니라 질문에 가깝습니다.",
-                visual_query=query(6),
+                visual_query_ko=query_ko(6),
+                visual_query_en=query_en(6),
             ),
             ScriptLine(
                 text="당신의 동네는 어느 쪽에 서 있나요?",
-                visual_query=query(7),
+                visual_query_ko=query_ko(7),
+                visual_query_en=query_en(7),
                 emphasis=["당신의 동네"],
             ),
         ],

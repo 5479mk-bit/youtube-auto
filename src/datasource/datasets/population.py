@@ -52,7 +52,8 @@ class PopulationAdapter:
                     series_unit="명",
                     source_name="행정안전부 주민등록 인구통계",
                     source_url="https://jumin.mois.go.kr",
-                    image_queries=[region, f"{region} street", "korean town"],
+                    image_queries_ko=[region, f"{region} 전경", f"{region} 거리"],
+                    image_queries_en=[region, "korean rural town", "empty village korea"],
                     features={
                         "personal_relevance": 0.9,
                         "surprise": min(abs(change_pct) / 20, 1.0),

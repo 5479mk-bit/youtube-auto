@@ -7,21 +7,45 @@
     "subject": "전국 주거시설 화재의 원인 분포",
     "context": "샘플 데이터. 전국 주거시설 화재 18,900건 중 부주의가 8,127건으로 43%를 차지했다.",
     "series": [
-      {"label": "부주의", "value": 8127},
-      {"label": "전기적요인", "value": 4590},
-      {"label": "기계적요인", "value": 2210},
-      {"label": "방화", "value": 980},
-      {"label": "기타", "value": 2993}
+      {
+        "label": "부주의",
+        "value": 8127
+      },
+      {
+        "label": "전기적요인",
+        "value": 4590
+      },
+      {
+        "label": "기계적요인",
+        "value": 2210
+      },
+      {
+        "label": "방화",
+        "value": 980
+      },
+      {
+        "label": "기타",
+        "value": 2993
+      }
     ],
     "series_unit": "건",
     "source_name": "샘플 데이터 — 실제 공공데이터 아님",
     "source_url": "https://www.data.go.kr/data/15055800/openapi.do",
-    "image_queries": ["korean apartment building", "fire truck korea", "kitchen stove"],
     "features": {
       "personal_relevance": 0.85,
       "surprise": 0.7,
       "magnitude": 0.8,
       "freshness": 0.6
-    }
+    },
+    "image_queries_en": [
+      "korean apartment building",
+      "fire truck korea",
+      "kitchen stove"
+    ],
+    "image_queries_ko": [
+      "아파트 단지",
+      "소방서",
+      "주택가"
+    ]
   }
 ]

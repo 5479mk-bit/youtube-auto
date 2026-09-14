@@ -44,7 +44,8 @@ class TrafficAdapter:
                     series_unit="건",
                     source_name="도로교통공단 교통사고 다발지역",
                     source_url="https://www.data.go.kr/data/15070282/openapi.do",
-                    image_queries=[spot, "korean road intersection", "traffic korea"],
+                    image_queries_ko=[spot, f"{spot} 도로", "교차로"],
+                    image_queries_en=[spot, "korean road intersection", "seoul traffic"],
                     features={
                         "personal_relevance": 0.75,
                         "surprise": min(accidents / 30, 1.0),

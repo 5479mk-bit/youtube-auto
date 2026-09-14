@@ -52,7 +52,8 @@ class RealEstateAdapter:
                     series_unit="만원",
                     source_name="국토교통부 아파트 실거래가",
                     source_url="https://rt.molit.go.kr",
-                    image_queries=[name, "korean apartment complex", "seoul apartment"],
+                    image_queries_ko=[name, "아파트 단지", "도시 주거지"],
+                    image_queries_en=[name, "korean apartment complex", "seoul apartment"],
                     features={
                         "personal_relevance": 0.95,
                         "surprise": min(abs(change_pct) / 30, 1.0),

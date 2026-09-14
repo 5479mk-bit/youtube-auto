@@ -20,13 +20,14 @@ from moviepy import (
     concatenate_videoclips,
 )
 
-from ..models import Scene, Script, ScriptPart, StoryCandidate
+from ..models import PhotoCredit, Scene, Script, ScriptPart, StoryCandidate
 from ..settings import RESOURCE_DIR
 from ..subtitles.subtitle_builder import SubtitleCue
 from ..visuals.chart_renderer import render_reveal_frames
 from ..visuals.image_collector import ImageCollector
 from . import overlays
-from .ken_burns import make_clip
+from .film_look import apply_film_look
+from .motion_sources import build_scene_clip
 
 # 사진 위에 흰 자막을 얹으려면 배경을 꽤 눌러야 한다. 다큐 톤과도 맞는다.
 BACKGROUND_DIM = 0.42
@@ -42,20 +43,30 @@ def build_part(
     settings,
     work_dir: Path,
     out_path: Path,
-) -> float:
+    veo_client=None,
+) -> tuple[float, list[PhotoCredit]]:
     width = settings.get("video.width")
     height = settings.get("video.height")
     fps = settings.get("video.fps")
     size = (width, height)
 
-    background = _build_background(scenes, collector, settings, size)
+    background, credits = _build_background(scenes, collector, veo_client, settings, size)
+    background = apply_film_look(
+        background,
+        size,
+        grain=settings.get("film_look.grain", 6.0),
+        vignette=settings.get("film_look.vignette", 0.30),
+        exposure_breathing=settings.get("film_look.exposure_breathing", 0.02),
+    )
     layers = [background, _dim_layer(size, background.duration)]
 
     chart_frames = _chart_frames(candidate, part, work_dir, size)
     layers.extend(_chart_layers(scenes, chart_frames, size))
     layers.extend(_hook_layers(part, scenes, work_dir, size, settings))
     layers.extend(_subtitle_layers(cues, work_dir, part.part, size, settings))
-    layers.extend(_badge_layers(script, part, work_dir, size, background.duration))
+    layers.extend(
+        _badge_layers(script, part, work_dir, size, background.duration, credits)
+    )
 
     # 이어붙인 클립은 마지막 프레임 시각이 총 길이와 같아질 때 어느 컷에도 속하지 않아
     # 인덱스 오류가 난다. 끝을 아주 살짝 당겨 그 경계를 피한다.
@@ -78,20 +89,29 @@ def build_part(
     )
     duration = float(video.duration)
     video.close()
-    return duration
+    return duration, credits
 
 
 def _build_background(
-    scenes: list[Scene], collector: ImageCollector, settings, size: tuple[int, int]
+    scenes: list[Scene],
+    collector: ImageCollector,
+    veo_client,
+    settings,
+    size: tuple[int, int],
 ):
-    zoom = settings.get("video.zoom_amount")
+    parallax_amount = settings.get("parallax.shift", 0.06)
+    dolly_amount = settings.get("parallax.dolly", 0.12)
+
     clips = []
+    credits: list[PhotoCredit] = []
     for scene in scenes:
-        image_path = collector.collect(scene.image_query)
-        clips.append(
-            make_clip(image_path, scene.duration, scene.camera, size, zoom, scene.is_hook)
+        clip, credit = build_scene_clip(
+            scene, collector, veo_client, size, parallax_amount, dolly_amount
         )
-    return concatenate_videoclips(clips)
+        clips.append(clip.with_duration(scene.duration))
+        if credit not in credits:
+            credits.append(credit)
+    return concatenate_videoclips(clips), credits
 
 
 def _dim_layer(size: tuple[int, int], duration: float):
@@ -177,7 +197,12 @@ def _subtitle_layers(
 
 
 def _badge_layers(
-    script: Script, part: ScriptPart, work_dir: Path, size: tuple[int, int], duration: float
+    script: Script,
+    part: ScriptPart,
+    work_dir: Path,
+    size: tuple[int, int],
+    duration: float,
+    credits: list[PhotoCredit],
 ):
     layers = []
 
@@ -190,13 +215,26 @@ def _badge_layers(
             ImageClip(str(path)).with_start(max(duration - tail, 0)).with_duration(tail)
         )
     else:
+        # 2부 말미에 통계 출처와 사진 출처를 함께 남긴다. 공공누리 1유형은 출처 표기가
+        # 이용 조건이라 화면에서 빠지면 안 된다.
         path = overlays.render_banner(
-            script.source_note, work_dir / "banner_source.png", size, 34, 0.70, "#C3C2B7"
+            script.source_note, work_dir / "banner_source.png", size, 34, 0.68, "#C3C2B7"
         )
         tail = min(4.0, duration)
         layers.append(
             ImageClip(str(path)).with_start(max(duration - tail, 0)).with_duration(tail)
         )
+
+        photo_note = photo_credit_line(credits)
+        if photo_note:
+            photo_path = overlays.render_banner(
+                photo_note, work_dir / "banner_photo.png", size, 26, 0.72, "#C3C2B7"
+            )
+            layers.append(
+                ImageClip(str(photo_path))
+                .with_start(max(duration - tail, 0))
+                .with_duration(tail)
+            )
 
     if script.is_sample:
         # 샘플 데이터로 만든 영상이 실제 통계로 오인되지 않도록 항상 표시한다.
@@ -247,3 +285,11 @@ def _load_bgm(settings, duration: float):
     if clip.duration > duration:
         clip = clip.subclipped(0, duration)
     return clip.with_volume_scaled(gain)
+
+
+def photo_credit_line(credits: list[PhotoCredit]) -> str:
+    """화면과 설명란에 같이 쓰는 사진 출처 한 줄."""
+    names = list(dict.fromkeys(credit.source_name for credit in credits if credit.source_name))
+    if not names:
+        return ""
+    return "사진: " + ", ".join(names)

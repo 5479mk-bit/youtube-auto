@@ -52,7 +52,8 @@ class FireAdapter:
                     series_unit="건",
                     source_name="소방청 화재통계",
                     source_url="https://www.data.go.kr/data/15055800/openapi.do",
-                    image_queries=[f"{region} city", "fire truck korea", "apartment building korea"],
+                    image_queries_ko=[f"{region} 도심", "소방서", "아파트 단지"],
+                    image_queries_en=[f"{region} city", "fire truck korea", "apartment building korea"],
                     features={
                         "personal_relevance": 0.8,
                         "surprise": min(share / 45, 1.0),

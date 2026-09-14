@@ -52,7 +52,8 @@ class BusinessAdapter:
                     series_unit="곳",
                     source_name="소상공인시장진흥공단 상가정보",
                     source_url="https://www.data.go.kr/data/15083033/openapi.do",
-                    image_queries=[region, "korean street shops", "small business korea"],
+                    image_queries_ko=[region, f"{region} 상가", "전통시장"],
+                    image_queries_en=[region, "korean street shops", "small business korea"],
                     features={
                         "personal_relevance": 0.85,
                         "surprise": min(share / 40, 1.0),

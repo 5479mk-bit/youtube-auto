@@ -7,21 +7,45 @@
     "subject": "수도권 한 아파트 단지의 실거래가 흐름",
     "context": "샘플 데이터. 해당 단지 실거래가가 2024-03 62,000만원에서 2026-03 76,000만원으로 22.6% 올랐다.",
     "series": [
-      {"label": "2024-03", "value": 62000},
-      {"label": "2024-09", "value": 64500},
-      {"label": "2025-03", "value": 67800},
-      {"label": "2025-09", "value": 71200},
-      {"label": "2026-03", "value": 76000}
+      {
+        "label": "2024-03",
+        "value": 62000
+      },
+      {
+        "label": "2024-09",
+        "value": 64500
+      },
+      {
+        "label": "2025-03",
+        "value": 67800
+      },
+      {
+        "label": "2025-09",
+        "value": 71200
+      },
+      {
+        "label": "2026-03",
+        "value": 76000
+      }
     ],
     "series_unit": "만원",
     "source_name": "샘플 데이터 — 실제 공공데이터 아님",
     "source_url": "https://rt.molit.go.kr",
-    "image_queries": ["korean apartment complex", "seoul apartment skyline", "korean housing"],
     "features": {
       "personal_relevance": 0.95,
       "surprise": 0.7,
       "magnitude": 0.7,
       "freshness": 0.9
-    }
+    },
+    "image_queries_en": [
+      "korean apartment complex",
+      "seoul apartment skyline",
+      "korean housing"
+    ],
+    "image_queries_ko": [
+      "아파트 단지",
+      "수도권 아파트",
+      "도시 주거지"
+    ]
   }
 ]

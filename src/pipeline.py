@@ -14,7 +14,9 @@ from pathlib import Path
 from loguru import logger
 
 from .datasource.datagokr import DataGoKrClient
-from .models import RenderedPart, Script, ScriptPart, StoryCandidate, write_json
+from .models import PhotoCredit, RenderedPart, Script, ScriptPart, StoryCandidate, write_json
+from .motion.veo_budget import VeoBudget
+from .motion.veo_client import VeoClient
 from .narration import tts_edge
 from .publish import seo_metadata
 from .render.thumbnail import build_thumbnail
@@ -24,8 +26,11 @@ from .script.llm_client import build_provider
 from .settings import CACHE_DIR, OUTPUT_DIR, STATE_DB, Settings
 from .subtitles import subtitle_builder
 from .topics import history, story_finder, topic_scorer
+from .render.motion_sources import PhotoMissing
+from .render.video_builder import photo_credit_line
 from .visuals.image_collector import ImageCollector
-from .visuals.scene_planner import plan_scenes
+from .visuals.photo_sources import build_chain
+from .visuals.scene_planner import engine_counts, plan_scenes
 
 
 @dataclass
@@ -35,6 +40,9 @@ class PipelineResult:
     script: Script
     parts: list[RenderedPart]
     work_dir: Path
+    credits: list[PhotoCredit]
+    veo_clips: int = 0
+    cost_note: str = ""
 
 
 def select_topic(settings: Settings) -> StoryCandidate | None:
@@ -66,7 +74,35 @@ def write_script(settings: Settings, candidate: StoryCandidate) -> Script:
     )
 
 
-def run(settings: Settings, render: bool = True) -> PipelineResult | None:
+def build_collector(settings: Settings) -> ImageCollector:
+    sources = build_chain(
+        settings.secrets.data_go_kr_service_key,
+        settings.get("visuals.allowed_licenses", []),
+        settings.get("video.width", 1080),
+    )
+    return ImageCollector(sources, CACHE_DIR / "images")
+
+
+def build_veo_client(settings: Settings) -> VeoClient:
+    tier = settings.get("veo.tier", "lite")
+    budget = VeoBudget(
+        cache_dir=CACHE_DIR / "veo",
+        tier=tier,
+        max_clips_per_episode=settings.get("veo.max_clips_per_episode", 2),
+        max_clips_per_day=settings.get("veo.max_clips_per_day", 6),
+    )
+    return VeoClient(
+        api_key=settings.secrets.gemini_api_key,
+        budget=budget,
+        tier=tier,
+        resolution=settings.get("veo.resolution", "720p"),
+        duration_seconds=settings.get("veo.duration_seconds", 8),
+    )
+
+
+def run(
+    settings: Settings, render: bool = True, use_veo: bool = True
+) -> PipelineResult | None:
     candidate = select_topic(settings)
     if candidate is None:
         logger.error("선정할 주제 후보가 없습니다")
@@ -84,15 +120,10 @@ def run(settings: Settings, render: bool = True) -> PipelineResult | None:
 
     if not render:
         logger.info(f"dry-run: 텍스트 산출물만 생성했습니다 → {work_dir}")
-        return PipelineResult(task_id, candidate, script, [], work_dir)
+        return PipelineResult(task_id, candidate, script, [], work_dir, [])
 
-    collector = ImageCollector(
-        endpoint=settings.get("visuals.wikimedia_endpoint"),
-        allowed_licenses=settings.get("visuals.allowed_licenses", []),
-        cache_dir=CACHE_DIR / "images",
-        width=settings.get("video.width"),
-        height=settings.get("video.height"),
-    )
+    collector = build_collector(settings)
+    veo_client = build_veo_client(settings) if use_veo else None
     provider = build_provider(
         settings.get("script.llm.provider", "gemini"),
         settings.get("script.llm.model", ""),
@@ -100,20 +131,37 @@ def run(settings: Settings, render: bool = True) -> PipelineResult | None:
     )
 
     parts: list[RenderedPart] = []
-    for part in (script.part1, script.part2):
-        parts.append(
-            _render_part(settings, script, part, candidate, collector, provider, work_dir)
+    credits: list[PhotoCredit] = []
+    try:
+        for part in (script.part1, script.part2):
+            rendered, part_credits = _render_part(
+                settings, script, part, candidate, collector, provider, work_dir, veo_client
+            )
+            parts.append(rendered)
+            credits.extend(
+                credit for credit in part_credits if credit not in credits
+            )
+    except PhotoMissing as exc:
+        # 사진이 없으면 단색으로 때우지 않고 멈춘다. 쓸모없는 영상을 몇 분씩 렌더하고
+        # 나서야 알게 되는 편이 훨씬 나쁘다.
+        logger.error(
+            f"사진을 구하지 못해 렌더를 중단했습니다: {', '.join(exc.queries)}\n"
+            f"실패한 검색어 전체: {', '.join(collector.failed_queries)}\n"
+            "python main.py photos \"검색어\" 로 어떤 사진이 오는지 먼저 확인하세요."
         )
+        return None
 
     # 내레이션 길이가 채워진 뒤의 대본을 다시 남긴다. 디스크의 기록이 실제 영상과
     # 어긋나 있으면 나중에 그 대본으로 재렌더할 수 없다.
     write_json(work_dir / "script.json", script)
 
-    if collector.placeholder_count:
-        logger.warning(
-            f"컷 {collector.placeholder_count}개가 사진 대신 단색 배경으로 채워졌습니다. "
-            "검색어를 손보거나 네트워크 상태를 확인하세요."
-        )
+    veo_clips = veo_client.budget.episode_clips if veo_client else 0
+    cost_note = (
+        veo_client.budget.episode_cost(veo_client.duration_seconds).summary()
+        if veo_clips
+        else "Veo 사용 없음"
+    )
+    logger.info(cost_note)
 
     history.mark_used(STATE_DB, candidate.topic_key, candidate.headline)
     write_json(
@@ -135,9 +183,14 @@ def run(settings: Settings, render: bool = True) -> PipelineResult | None:
                 }
                 for part in parts
             ],
+            "photo_credits": [credit.__dict__ for credit in credits],
+            "veo_clips": veo_clips,
+            "cost_note": cost_note,
         },
     )
-    return PipelineResult(task_id, candidate, script, parts, work_dir)
+    return PipelineResult(
+        task_id, candidate, script, parts, work_dir, credits, veo_clips, cost_note
+    )
 
 
 def _render_part(
@@ -148,7 +201,8 @@ def _render_part(
     collector: ImageCollector,
     provider,
     work_dir: Path,
-) -> RenderedPart:
+    veo_client,
+) -> tuple[RenderedPart, list[PhotoCredit]]:
     logger.info(f"{part.part}부 내레이션 합성")
     tts_edge.synthesize_part(
         part,
@@ -165,19 +219,37 @@ def _render_part(
     )
     subtitle_builder.write_srt(cues, work_dir / f"part{part.part}.srt")
 
+    veo_seconds = 0.0
+    if veo_client is not None and veo_client.enabled and settings.get("veo.clips_per_part", 1):
+        veo_seconds = float(veo_client.duration_seconds)
+
     scenes = plan_scenes(
         part,
         cut_duration_max=settings.get("video.cut_duration_max", 3.0),
         freeze_last=part.part == 1,
         series_labels=[point.label for point in candidate.series],
+        veo_seconds=veo_seconds,
     )
 
     _warn_if_off_target(settings, part)
 
-    logger.info(f"{part.part}부 렌더 ({part.duration:.1f}초, 컷 {len(scenes)}개)")
+    counts = engine_counts(scenes)
+    logger.info(
+        f"{part.part}부 렌더 ({part.duration:.1f}초, 컷 {len(scenes)}개"
+        f" · Veo {counts['veo']} / 파랄랙스 {counts['parallax']})"
+    )
     video_path = work_dir / f"part{part.part}.mp4"
-    duration = build_part(
-        script, part, candidate, scenes, cues, collector, settings, work_dir, video_path
+    duration, credits = build_part(
+        script,
+        part,
+        candidate,
+        scenes,
+        cues,
+        collector,
+        settings,
+        work_dir,
+        video_path,
+        veo_client=veo_client,
     )
 
     thumbnail_path = build_thumbnail(
@@ -190,13 +262,19 @@ def _render_part(
     metadata = seo_metadata.generate(
         script, part, candidate, provider, settings.get("publish.default_tags", [])
     )
+    photo_note = photo_credit_line(credits)
+    if photo_note:
+        metadata.description = f"{metadata.description}\n{photo_note}"
 
-    return RenderedPart(
-        part=part.part,
-        video_path=str(video_path),
-        thumbnail_path=str(thumbnail_path),
-        duration=duration,
-        metadata=metadata,
+    return (
+        RenderedPart(
+            part=part.part,
+            video_path=str(video_path),
+            thumbnail_path=str(thumbnail_path),
+            duration=duration,
+            metadata=metadata,
+        ),
+        credits,
     )
 
 
@@ -231,7 +309,11 @@ def review_and_publish(
     first = result.parts[0].metadata
     titles = [first.title, *first.title_alternatives]
     summary = build_summary(
-        result.script.title_seed, titles, first.description, result.script.is_sample
+        result.script.title_seed,
+        titles,
+        first.description,
+        result.script.is_sample,
+        result.cost_note,
     )
 
     history.save_pending(

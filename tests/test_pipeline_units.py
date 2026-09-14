@@ -19,8 +19,9 @@ from src.script.script_writer import _template_script
 from src.text_ko import particle
 from src.subtitles.subtitle_builder import build_cues, wrap_text
 from src.topics import topic_scorer
-from src.visuals.image_collector import _normalize_license
-from src.visuals.scene_planner import MIN_CUT_DURATION, plan_scenes
+from src.motion.veo_budget import BudgetExceeded, ClipCost, VeoBudget
+from src.visuals.photo_sources.wikimedia import normalize_license
+from src.visuals.scene_planner import MIN_CUT_DURATION, engine_counts, plan_scenes
 
 WEIGHTS = {
     "personal_relevance": 0.35,
@@ -41,7 +42,8 @@ def make_candidate(topic_key: str = "t:1", series_length: int = 3, **features) -
         series=[DataPoint(label=f"항목{index}", value=float(index + 1)) for index in range(series_length)],
         series_unit="년",
         source_name="테스트 출처",
-        image_queries=["test city"],
+        image_queries_ko=["테스트 도시"],
+        image_queries_en=["test city"],
         features={"personal_relevance": 0.5, "surprise": 0.5, "magnitude": 0.5, "freshness": 0.5}
         | features,
     )
@@ -52,7 +54,13 @@ def make_part(texts: list[tuple[str, float, bool]]) -> ScriptPart:
         part=1,
         hook_number="3.0년",
         lines=[
-            ScriptLine(text=text, visual_query="q", show_chart=chart, duration=duration)
+            ScriptLine(
+                text=text,
+                visual_query_ko="서울",
+                visual_query_en="seoul",
+                show_chart=chart,
+                duration=duration,
+            )
             for text, duration, chart in texts
         ],
     )
@@ -112,6 +120,58 @@ class TestScenePlanner:
         assert scenes[-1].camera == "freeze"
 
 
+class TestMotionEngines:
+    def test_opening_becomes_one_veo_scene(self):
+        part = make_part([(f"문장 {index}", 3.0, False) for index in range(8)])
+        scenes = plan_scenes(
+            part, 3.0, freeze_last=True, series_labels=[], veo_seconds=8.0
+        )
+        # 8초를 결제하니 8초를 다 쓴다. 3초만 쓰고 5초를 버리면 돈을 버리는 것과 같다.
+        assert scenes[0].engine == "veo"
+        assert scenes[0].duration == pytest.approx(8.0)
+        assert engine_counts(scenes)["veo"] == 1
+
+    def test_without_veo_every_cut_is_parallax(self):
+        part = make_part([(f"문장 {index}", 3.0, False) for index in range(4)])
+        scenes = plan_scenes(part, 3.0, freeze_last=False, series_labels=[])
+        assert engine_counts(scenes) == {"veo": 0, "parallax": len(scenes)}
+
+
+class TestVeoBudget:
+    def _budget(self, tmp_path, per_episode=2, per_day=6) -> VeoBudget:
+        return VeoBudget(tmp_path, "lite", per_episode, per_day)
+
+    def test_same_input_gives_the_same_cache_key(self, tmp_path):
+        image = tmp_path / "a.jpg"
+        image.write_bytes(b"fake-image-bytes")
+        budget = self._budget(tmp_path)
+        params = {"aspectRatio": "9:16"}
+        assert budget.cache_key(image, "prompt", params) == budget.cache_key(
+            image, "prompt", params
+        )
+        assert budget.cache_key(image, "prompt", params) != budget.cache_key(
+            image, "다른 프롬프트", params
+        )
+
+    def test_episode_limit_blocks_further_generation(self, tmp_path):
+        budget = self._budget(tmp_path, per_episode=1)
+        budget.ensure_can_generate()
+        budget.record(1)
+        with pytest.raises(BudgetExceeded):
+            budget.ensure_can_generate()
+
+    def test_daily_limit_blocks_generation(self, tmp_path):
+        budget = self._budget(tmp_path, per_episode=99, per_day=1)
+        budget.record(1)
+        with pytest.raises(BudgetExceeded):
+            budget.ensure_can_generate()
+
+    def test_cost_scales_with_tier_and_clip_count(self):
+        assert ClipCost(2, 8, "lite").usd == pytest.approx(0.8)
+        assert ClipCost(2, 8, "fast").usd == pytest.approx(2.4)
+        assert "2클립" in ClipCost(2, 8, "lite").summary()
+
+
 class TestSubtitles:
     def test_wrap_keeps_lines_within_limit(self):
         lines = wrap_text("서울에서 가장 빨리 사라지는 가게 업종은 무엇일까요", 16)
@@ -132,13 +192,13 @@ class TestLicenseFilter:
     )
     def test_hyphen_and_space_variants_match(self, declared):
         allowed = ["cc-by-sa", "public domain"]
-        haystack = _normalize_license(declared)
-        assert any(_normalize_license(item) in haystack for item in allowed)
+        haystack = normalize_license(declared)
+        assert any(normalize_license(item) in haystack for item in allowed)
 
     def test_unfree_license_does_not_match(self):
-        haystack = _normalize_license("All rights reserved")
+        haystack = normalize_license("All rights reserved")
         assert not any(
-            _normalize_license(item) in haystack for item in ["cc0", "cc-by", "cc-by-sa"]
+            normalize_license(item) in haystack for item in ["cc0", "cc-by", "cc-by-sa"]
         )
 
 

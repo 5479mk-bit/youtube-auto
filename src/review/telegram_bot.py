@@ -118,10 +118,19 @@ class TelegramReviewer:
         return response.json()
 
 
-def build_summary(title_seed: str, titles: list[str], descriptions: str, is_sample: bool) -> str:
+def build_summary(
+    title_seed: str,
+    titles: list[str],
+    descriptions: str,
+    is_sample: bool,
+    cost_note: str = "",
+) -> str:
     lines = [f"<b>{title_seed}</b>", "", "<b>제목 후보</b>"]
     lines.extend(f"{index + 1}. {title}" for index, title in enumerate(titles))
     lines.extend(["", "<b>설명</b>", descriptions])
+    if cost_note:
+        # 승인 버튼을 누르기 전에 이번 편이 돈을 얼마나 썼는지 보이게 한다.
+        lines.extend(["", f"<b>비용</b> {cost_note}"])
     if is_sample:
         lines.insert(0, "⚠️ 샘플 데이터로 만든 영상입니다. 업로드가 차단됩니다.")
     return "\n".join(lines)

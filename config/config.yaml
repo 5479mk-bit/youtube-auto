@@ -51,8 +51,6 @@ topics:
     freshness: 0.10
 
 visuals:
-  images_per_part: 6
-  wikimedia_endpoint: https://commons.wikimedia.org/w/api.php
   allowed_licenses:
     - cc0
     - cc-by
@@ -67,3 +65,23 @@ publish:
     - 데이터분석
     - 통계
     - 쇼츠
+
+# 사진을 실제로 움직이는 영상으로 만드는 유료 경로. 8초 단위로 과금되므로 도입부에 몰아준다.
+veo:
+  tier: lite            # lite | fast | standard — 단가가 8배까지 벌어진다
+  resolution: 720p
+  duration_seconds: 8
+  clips_per_part: 1     # 부당 Veo 클립 수. 0 이면 전부 무료 파랄랙스로 간다
+  max_clips_per_episode: 2
+  max_clips_per_day: 6
+
+# 무료 경로. 깊이를 추정해 카메라가 장면 안으로 들어간다.
+parallax:
+  shift: 0.06   # 좌우/상하 이동 시 가까운 것과 먼 것의 최대 시차(화면 폭 대비)
+  dolly: 0.12   # 전진/후퇴 시 깊이별 배율 차이
+
+# Veo 클립과 파랄랙스 컷을 한 카메라로 찍은 것처럼 묶는 마감.
+film_look:
+  grain: 6.0
+  vignette: 0.30
+  exposure_breathing: 0.02

@@ -16,3 +16,4 @@ resource/fonts/*
 .cache/
 .pytest_cache/
 *TEMP_MPY*
+resource/models/

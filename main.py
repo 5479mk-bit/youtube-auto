@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from loguru import logger
 
 from src import pipeline
-from src.settings import load_settings
+from src.settings import OUTPUT_DIR, load_settings
 
 
 def main() -> int:
@@ -17,9 +18,12 @@ def main() -> int:
 
     run_parser = subparsers.add_parser("run", help="한 회차(1부/2부)를 생성한다")
     run_parser.add_argument(
-        "--dry-run",
+        "--dry-run", action="store_true", help="영상 렌더 없이 주제·대본만 만든다"
+    )
+    run_parser.add_argument(
+        "--no-veo",
         action="store_true",
-        help="영상 렌더 없이 주제·대본만 만든다",
+        help="Veo 를 쓰지 않고 전부 무료 파랄랙스로 만든다 (과금 없음)",
     )
     run_parser.add_argument(
         "--review",
@@ -27,37 +31,108 @@ def main() -> int:
         help="렌더 후 텔레그램으로 검수 요청을 보내고 승인 시 업로드한다",
     )
     run_parser.add_argument(
-        "--wait",
-        type=int,
-        default=1800,
-        help="검수 응답을 기다릴 최대 시간(초)",
+        "--wait", type=int, default=1800, help="검수 응답을 기다릴 최대 시간(초)"
     )
 
     subparsers.add_parser("topics", help="주제 후보 순위만 확인한다")
+
+    photos_parser = subparsers.add_parser(
+        "photos", help="검색어로 어떤 사진이 오는지 미리 본다 (Veo 호출 없음)"
+    )
+    photos_parser.add_argument("query", help="한국어 검색어")
+    photos_parser.add_argument("--en", default="", help="영어 보조 검색어")
+
+    veo_parser = subparsers.add_parser(
+        "veo-test", help="Veo 클립을 딱 1개만 만들어 본다 (과금 발생)"
+    )
+    veo_parser.add_argument("image", help="움직이게 만들 사진 경로")
+    veo_parser.add_argument(
+        "--prompt", default="", help="생성 프롬프트 (비우면 기본 다큐 프롬프트)"
+    )
 
     args = parser.parse_args()
     settings = load_settings()
 
     if args.command == "topics":
-        candidate = pipeline.select_topic(settings)
-        if candidate is None:
-            logger.error("후보가 없습니다")
-            return 1
-        logger.info(f"{candidate.headline} | {candidate.headline_number} | score={candidate.score:.3f}")
-        logger.info(candidate.context)
-        return 0
+        return _topics(settings)
+    if args.command == "photos":
+        return _photos(settings, args.query, args.en)
+    if args.command == "veo-test":
+        return _veo_test(settings, Path(args.image), args.prompt)
 
-    result = pipeline.run(settings, render=not args.dry_run)
+    result = pipeline.run(
+        settings, render=not args.dry_run, use_veo=not args.no_veo
+    )
     if result is None:
         return 1
 
     logger.info(f"산출물: {result.work_dir}")
     for part in result.parts:
         logger.info(f"{part.part}부 {part.duration:.1f}초 · {part.metadata.title}")
+    if result.parts:
+        logger.info(result.cost_note)
 
     if args.review and result.parts:
         pipeline.review_and_publish(settings, result, args.wait)
 
+    return 0
+
+
+def _topics(settings) -> int:
+    candidate = pipeline.select_topic(settings)
+    if candidate is None:
+        logger.error("후보가 없습니다")
+        return 1
+    logger.info(
+        f"{candidate.headline} | {candidate.headline_number} | score={candidate.score:.3f}"
+    )
+    logger.info(candidate.context)
+    return 0
+
+
+def _photos(settings, query_ko: str, query_en: str) -> int:
+    """렌더를 4분 돌리기 전에, 어떤 사진이 실제로 오는지 먼저 눈으로 본다."""
+    collector = pipeline.build_collector(settings)
+    found = collector.collect(query_ko, query_en)
+    if found is None:
+        logger.error(
+            f"'{query_ko}' 사진을 어떤 소스에서도 찾지 못했습니다. "
+            "검색어를 더 구체적인 지명·시설명으로 바꿔보세요."
+        )
+        return 1
+
+    path, credit = found
+    out_path = OUTPUT_DIR / "photo_preview.jpg"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_bytes(path.read_bytes())
+
+    logger.info(f"출처: {credit.source_name} ({credit.license_name or '라이선스 미표기'})")
+    if credit.page_url:
+        logger.info(f"원본: {credit.page_url}")
+    logger.info(f"미리보기: {out_path}")
+    return 0
+
+
+def _veo_test(settings, image_path: Path, prompt: str) -> int:
+    """클립 하나만 만들어 결과와 실제 청구액을 확인한다."""
+    from src.render.motion_sources import VEO_PROMPT
+
+    if not image_path.exists():
+        logger.error(f"사진이 없습니다: {image_path}")
+        return 1
+
+    client = pipeline.build_veo_client(settings)
+    if not client.enabled:
+        logger.error("GEMINI_API_KEY 가 없습니다")
+        return 1
+
+    text = prompt or VEO_PROMPT.format(subject=image_path.stem)
+    logger.info(f"Veo {client.tier} 로 {client.duration_seconds}초 클립 1개를 만듭니다")
+    clip_path = client.animate(image_path, text)
+
+    cost = client.budget.episode_cost(client.duration_seconds)
+    logger.info(f"생성 완료: {clip_path}")
+    logger.info(cost.summary() if cost.clips else "캐시 적중 — 과금 없음")
     return 0
 
 
