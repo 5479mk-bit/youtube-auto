@@ -13,7 +13,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.datasource.base import load_fixture
+from src.datasource.base import load_fixture as load_stats_fixture
+from src.heritage.fixtures import load_fixture as load_heritage_fixture
+from src.heritage.story_scorer import mystery_score, prestige_score, story_density
 from src.models import DataPoint, ScriptLine, ScriptPart, StoryCandidate
 from src.script.script_writer import _template_script
 from src.narration.pacing import HOOK_PAUSE, SENTENCE_PAUSE, apply_pacing
@@ -25,10 +27,10 @@ from src.visuals.photo_sources.wikimedia import normalize_license
 from src.visuals.scene_planner import MIN_CUT_DURATION, engine_counts, plan_scenes
 
 WEIGHTS = {
-    "personal_relevance": 0.35,
-    "surprise": 0.35,
-    "magnitude": 0.20,
-    "freshness": 0.10,
+    "story_density": 0.30,
+    "mystery_score": 0.35,
+    "prestige": 0.20,
+    "freshness": 0.15,
 }
 
 
@@ -37,15 +39,17 @@ def make_candidate(topic_key: str = "t:1", series_length: int = 3, **features) -
         dataset="test",
         topic_key=topic_key,
         headline="테스트",
-        headline_number="3.0년",
-        subject="테스트 업종",
+        headline_number="국보",
+        subject="테스트 유적",
         context="설명",
         series=[DataPoint(label=f"항목{index}", value=float(index + 1)) for index in range(series_length)],
         series_unit="년",
         source_name="테스트 출처",
-        image_queries_ko=["테스트 도시"],
-        image_queries_en=["test city"],
-        features={"personal_relevance": 0.5, "surprise": 0.5, "magnitude": 0.5, "freshness": 0.5}
+        image_queries_ko=["테스트 유적"],
+        image_queries_en=["test heritage site"],
+        facts=["테스트 유적은 통일신라시대에 세워진 것으로 전해진다."],
+        wiki_excerpt="전해지는 말로는 테스트 유적에 얽힌 전설이 있다고 한다.",
+        features={"story_density": 0.5, "mystery_score": 0.5, "prestige": 0.5, "freshness": 0.5}
         | features,
     )
 
@@ -73,15 +77,17 @@ class TestTopicScorer:
         picked = topic_scorer.pick(candidates, WEIGHTS, {"used"})
         assert picked is not None and picked.topic_key == "fresh"
 
-    def test_candidate_without_chartable_series_is_skipped(self):
-        thin = make_candidate("thin", series_length=1, surprise=1.0)
-        fat = make_candidate("fat", series_length=4, surprise=0.1)
-        picked = topic_scorer.pick([thin, fat], WEIGHTS, set())
-        assert picked is not None and picked.topic_key == "fat"
+    def test_candidate_without_facts_or_wiki_excerpt_is_skipped(self):
+        empty = make_candidate("empty", mystery_score=1.0)
+        empty.facts = []
+        empty.wiki_excerpt = ""
+        grounded = make_candidate("grounded", mystery_score=0.1)
+        picked = topic_scorer.pick([empty, grounded], WEIGHTS, set())
+        assert picked is not None and picked.topic_key == "grounded"
 
-    def test_higher_personal_relevance_wins(self):
-        low = make_candidate("low", personal_relevance=0.1)
-        high = make_candidate("high", personal_relevance=1.0)
+    def test_higher_mystery_score_wins(self):
+        low = make_candidate("low", mystery_score=0.1)
+        high = make_candidate("high", mystery_score=1.0)
         picked = topic_scorer.pick([low, high], WEIGHTS, set())
         assert picked is not None and picked.topic_key == "high"
 
@@ -254,15 +260,43 @@ class TestScriptTemplate:
         assert particle("한식", "이", "가") == "한식이"
         assert particle("년", "으로", "로") == "년으로"
 
-    def test_template_covers_both_parts_and_shows_charts(self):
-        script = _template_script(make_candidate(series_length=5))
+    def test_template_covers_both_parts_and_cites_source(self):
+        script = _template_script(make_candidate())
         assert script.part1.lines and script.part2.lines
-        assert any(line.show_chart for line in script.part1.lines)
-        assert any(line.show_chart for line in script.part2.lines)
+        assert any("전해지는 말로는" in line.text for line in script.part1.lines + script.part2.lines)
+        assert any("테스트 출처" in line.text for line in script.part2.lines)
+
+    def test_template_without_wiki_excerpt_falls_back_to_facts_only(self):
+        candidate = make_candidate()
+        candidate.wiki_excerpt = ""
+        script = _template_script(candidate)
+        joined = " ".join(line.text for line in script.part1.lines + script.part2.lines)
+        assert "전해지는 말로는" not in joined
+
+
+class TestHeritageScorer:
+    def test_mystery_keywords_raise_the_score(self):
+        plain = mystery_score("평범한 사실 설명 문장입니다." * 10)
+        mysterious = mystery_score("전설과 설화가 전해지며, 사라진 유물의 행방은 여전히 의문이다." * 3)
+        assert mysterious > plain
+
+    def test_prestige_ranks_designation_grades(self):
+        assert prestige_score("국보") > prestige_score("보물")
+        assert prestige_score("보물") > prestige_score("시도유형문화유산")
+        assert prestige_score("") == prestige_score("알수없음")
+
+    def test_story_density_scales_with_text_length(self):
+        assert story_density("짧다") < story_density("길다 " * 200)
 
 
 class TestFixtures:
-    def test_fixture_candidates_are_marked_as_sample(self):
-        candidates = load_fixture("business")
+    def test_stats_fixture_candidates_are_marked_as_sample(self):
+        candidates = load_stats_fixture("business")
         assert candidates
         assert all(candidate.is_sample for candidate in candidates)
+
+    def test_heritage_fixture_candidates_are_marked_as_sample(self):
+        candidates = load_heritage_fixture()
+        assert candidates
+        assert all(candidate.is_sample for candidate in candidates)
+        assert all(candidate.facts for candidate in candidates)

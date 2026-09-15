@@ -27,7 +27,8 @@ from .script import script_writer
 from .script.llm_client import build_provider
 from .settings import CACHE_DIR, OUTPUT_DIR, STATE_DB, Settings
 from .subtitles import subtitle_builder
-from .topics import history, story_finder, topic_scorer
+from . import heritage
+from .topics import history, topic_scorer
 from .render.motion_sources import PhotoMissing
 from .render.video_builder import photo_credit_line
 from .visuals.image_collector import ImageCollector
@@ -49,10 +50,9 @@ class PipelineResult:
 
 def select_topic(settings: Settings) -> StoryCandidate | None:
     client = DataGoKrClient(settings.secrets.data_go_kr_service_key)
-    candidates = story_finder.collect_candidates(
+    candidates = heritage.collect_candidates(
         client,
-        settings.get("topics.datasets", []),
-        settings.get("topics.candidates_per_dataset", 10),
+        settings.get("topics.candidates_per_dataset", 8),
     )
     return topic_scorer.pick(
         candidates,

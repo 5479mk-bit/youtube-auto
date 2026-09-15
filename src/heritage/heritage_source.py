@@ -1,0 +1,99 @@
+"""국가유산청 국가문화유산포털 — 문화재 목록과 해설문.
+
+야사 콘텐츠의 1차 소스다. 해설문은 정식 설명이라 사실관계는 믿을 수 있지만, 그 자체로는
+"이야기"가 아닐 수 있어 위키백과 보강(wikipedia_enrich)과 합쳐서 쓴다.
+
+활용신청 후 실제 응답 스키마가 이 파일의 필드명과 다르면 여기만 맞추면 된다 — 통계 어댑터를
+쓸 때와 같은 패턴이다.
+"""
+
+from __future__ import annotations
+
+from ..datasource.datagokr import DataGoKrClient, DataGoKrError
+from ..models import StoryCandidate
+from .story_scorer import extract_facts, mystery_score, prestige_score, story_density
+
+# 실제 freshness(최근에 다룬 시대·지역과 겹치는지)는 history 를 참조하는 pipeline 쪽에서
+# 채운다. 여기서는 "아직 아무 회차와도 비교 전" 이라는 중립값을 준다.
+_DEFAULT_FRESHNESS = 1.0
+
+LIST_ENDPOINT = "http://www.khs.go.kr/cha/SearchKindOpenapiList.do"
+DETAIL_ENDPOINT = "http://www.khs.go.kr/cha/SearchKindOpenapiDt.do"
+SOURCE_NAME = "국가유산청 국가문화유산포털"
+SOURCE_URL = "https://www.heritage.go.kr"
+
+# 시대·지역이 겹치지 않게 훑을 기본 검색어. 실제로는 지정 등급별 목록 API 를 페이지네이션
+# 하는 편이 낫지만, 최소 동작을 위해 대표 키워드로 시작한다.
+DEFAULT_QUERIES = ["국보", "보물", "사적"]
+
+
+class HeritageSource:
+    name = "heritage"
+
+    def __init__(self, client: DataGoKrClient):
+        self.client = client
+
+    def fetch(self, limit_per_query: int = 8) -> list[StoryCandidate]:
+        if not self.client.enabled:
+            return []
+
+        candidates: list[StoryCandidate] = []
+        for query in DEFAULT_QUERIES:
+            try:
+                rows = self.client.get(
+                    LIST_ENDPOINT, {"ccbaKdcd": "", "ccbaCtcd": "", "ccbaMnm1": query}
+                )
+            except DataGoKrError:
+                continue
+
+            for row in rows[:limit_per_query]:
+                candidate = self._row_to_candidate(row)
+                if candidate:
+                    candidates.append(candidate)
+        return candidates
+
+    def fetch_detail(self, name: str, category: str, region: str) -> StoryCandidate | None:
+        """목록에서 고른 항목의 해설문을 상세 API 로 채운다."""
+        try:
+            rows = self.client.get(DETAIL_ENDPOINT, {"ccbaMnm1": name})
+        except DataGoKrError:
+            return None
+        if not rows:
+            return None
+
+        row = rows[0]
+        explanation = str(row.get("content") or row.get("ccbaAsdt") or "").strip()
+        return self._build_candidate(name, category, region, explanation)
+
+    def _row_to_candidate(self, row: dict) -> StoryCandidate | None:
+        name = str(row.get("ccbaMnm1") or row.get("name") or "").strip()
+        if not name:
+            return None
+        category = str(row.get("ccmaName") or row.get("ccbaKdcd") or "").strip()
+        region = str(row.get("ccbaCtcdNm") or row.get("region") or "").strip()
+        explanation = str(row.get("content") or row.get("ccbaAsdt") or "").strip()
+        return self._build_candidate(name, category, region, explanation)
+
+    def _build_candidate(
+        self, name: str, category: str, region: str, explanation: str
+    ) -> StoryCandidate:
+        facts = extract_facts(explanation)
+        return StoryCandidate(
+            dataset=self.name,
+            topic_key=f"heritage:{name}",
+            headline=name,
+            headline_number=category or "문화유산",
+            subject=name,
+            context=explanation,
+            source_name=SOURCE_NAME,
+            source_url=SOURCE_URL,
+            image_queries_ko=[name, f"{name} {region}".strip(), region or name],
+            image_queries_en=[name],
+            facts=facts,
+            features={
+                "story_density": story_density(explanation),
+                "mystery_score": mystery_score(explanation),
+                "prestige": prestige_score(category),
+                "freshness": _DEFAULT_FRESHNESS,
+            },
+        )

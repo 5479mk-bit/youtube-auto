@@ -42,19 +42,13 @@ script:
   part2_target_chars: 200
 
 topics:
-  datasets:
-    - business
-    - population
-    - fire
-    - traffic
-    - realestate
   candidates_per_dataset: 12
-  # 감정 훅 스코어 가중치
+  # 문화유산 야사 스코어 가중치. 축 설명은 src/heritage/story_scorer.py 참고.
   weights:
-    personal_relevance: 0.35
-    surprise: 0.35
-    magnitude: 0.20
-    freshness: 0.10
+    story_density: 0.30
+    mystery_score: 0.35
+    prestige: 0.20
+    freshness: 0.15
 
 visuals:
   allowed_licenses:
@@ -67,9 +61,9 @@ publish:
   privacy_status: private
   category_id: "25"  # News & Politics
   default_tags:
-    - 공공데이터
-    - 데이터분석
-    - 통계
+    - 문화유산
+    - 역사
+    - 야사
     - 쇼츠
 
 # 사진을 실제로 움직이는 영상으로 만드는 유료 경로. 8초 단위로 과금되므로 도입부에 몰아준다.

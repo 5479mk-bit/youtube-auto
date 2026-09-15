@@ -1,0 +1,52 @@
+[
+  {
+    "dataset": "heritage",
+    "topic_key": "heritage:sample-cheomseongdae",
+    "headline": "첨성대",
+    "headline_number": "국보",
+    "subject": "첨성대",
+    "context": "샘플 데이터. 경상북도 경주시에 있는 신라시대 천문 관측 시설로 전해진다. 선덕여왕 대에 세워진 것으로 추정되며, 정확한 축조 목적과 사용 방식은 지금도 학계에서 논쟁이 이어지고 있다. 원통형 몸체는 362개의 돌로 쌓았는데, 이는 음력 1년의 날수와 같아 우연이 아니라는 해석이 있다.",
+    "source_name": "샘플 데이터 — 실제 국가유산청 해설문 아님",
+    "source_url": "https://www.heritage.go.kr",
+    "image_queries_ko": ["첨성대", "첨성대 경주", "경주 첨성대 야경"],
+    "image_queries_en": ["Cheomseongdae observatory"],
+    "facts": [
+      "경상북도 경주시에 있는 신라시대 천문 관측 시설로 전해진다.",
+      "선덕여왕 대에 세워진 것으로 추정된다.",
+      "원통형 몸체는 362개의 돌로 쌓았다.",
+      "정확한 축조 목적과 사용 방식은 지금도 학계에서 논쟁이 이어지고 있다."
+    ],
+    "wiki_excerpt": "전해지는 말로는 첨성대가 천문 관측 외에도 제단이나 상징적 구조물 역할을 했을 가능성이 제기된다. 실제 관측이 가능했는지에 대해서는 여전히 의문이 남아 있다.",
+    "features": {
+      "story_density": 0.65,
+      "mystery_score": 0.55,
+      "prestige": 1.0,
+      "freshness": 1.0
+    }
+  },
+  {
+    "dataset": "heritage",
+    "topic_key": "heritage:sample-seokguram",
+    "headline": "석굴암",
+    "headline_number": "국보",
+    "subject": "석굴암",
+    "context": "샘플 데이터. 경상북도 경주시 토함산에 있는 통일신라시대 석굴 사원이다. 화강암을 인공적으로 쌓아 만든 석굴로, 내부의 본존불은 정교한 비례로 유명하다. 천장의 돔 구조가 어떤 방식으로 조립되었는지는 아직도 완전히 밝혀지지 않았다.",
+    "source_name": "샘플 데이터 — 실제 국가유산청 해설문 아님",
+    "source_url": "https://www.heritage.go.kr",
+    "image_queries_ko": ["석굴암", "석굴암 본존불", "경주 토함산 석굴암"],
+    "image_queries_en": ["Seokguram grotto"],
+    "facts": [
+      "경상북도 경주시 토함산에 있는 통일신라시대 석굴 사원이다.",
+      "화강암을 인공적으로 쌓아 만든 석굴이다.",
+      "내부의 본존불은 정교한 비례로 유명하다.",
+      "천장의 돔 구조가 어떤 방식으로 조립되었는지는 아직도 완전히 밝혀지지 않았다."
+    ],
+    "wiki_excerpt": "일제강점기 해체·복원 과정에서 원형이 훼손되었다는 논란이 있다. 이후 여러 차례 보수를 거치며 원래의 결로 방지 구조가 사라졌다는 지적도 있다.",
+    "features": {
+      "story_density": 0.7,
+      "mystery_score": 0.6,
+      "prestige": 1.0,
+      "freshness": 1.0
+    }
+  }
+]

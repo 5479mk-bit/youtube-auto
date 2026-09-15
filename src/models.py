@@ -28,6 +28,8 @@ class StoryCandidate:
     headline_number: str  # "3.7년"
     subject: str  # 내레이션이 다룰 대상 ("서울시 카페 업종")
     context: str  # LLM 에 넘길 배경 설명
+    # 통계 콘텐츠 시절의 유물. 야사 후보는 차트가 없으니 비어 있는 게 정상이고,
+    # topic_scorer 도 더는 series 를 요구하지 않는다.
     series: list[DataPoint] = field(default_factory=list)
     series_unit: str = ""
     source_name: str = ""
@@ -35,9 +37,14 @@ class StoryCandidate:
     # 사진 검색어. 공공 API 는 한국어로, 위키미디어는 영어로 찾아야 한다.
     image_queries_ko: list[str] = field(default_factory=list)
     image_queries_en: list[str] = field(default_factory=list)
+    # 해설문에서 뽑은, 출처가 분명한 문장들. LLM 대본은 이 안에서만 사실을 가져와야 한다.
+    facts: list[str] = field(default_factory=list)
+    # 위키백과에서 보강한 문단(전설·일화 등). facts 와 구분해 대본에서 "전해지는 말로는"
+    # 식으로 표시하게 만든다.
+    wiki_excerpt: str = ""
     features: dict[str, float] = field(default_factory=dict)
     score: float = 0.0
-    # 픽스처(샘플) 데이터로 만들어진 후보. 실제 통계가 아니므로 업로드가 차단된다.
+    # 픽스처(샘플) 데이터로 만들어진 후보. 실제 해설문이 아니므로 업로드가 차단된다.
     is_sample: bool = False
 
     def to_dict(self) -> dict[str, Any]:

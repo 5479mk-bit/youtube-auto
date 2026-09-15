@@ -13,7 +13,7 @@ from ..text_ko import particle
 PROMPT = """다음 쇼츠 영상의 유튜브 제목 후보 3개와 설명을 쓴다.
 
 주제: {title_seed}
-핵심 숫자: {hook_number}
+화면 문구: {hook_number}
 대상: {subject}
 부: {part}부 (전체 2부작)
 내레이션: {narration}
@@ -86,9 +86,9 @@ def _template_metadata(
     titles = [
         _with_part_suffix(f"{part.hook_number}, {script.title_seed}", part.part),
         _with_part_suffix(f"{script.title_seed} ({part.hook_number})", part.part),
-        _with_part_suffix(f"데이터로 본 {candidate.subject}", part.part),
+        _with_part_suffix(f"{candidate.subject}에 얽힌 이야기", part.part),
     ]
-    description = f"{particle(candidate.subject, '을', '를')} 공공데이터로 들여다봤습니다."
+    description = f"{particle(candidate.subject, '을', '를')} 국가유산청 해설과 위키백과로 들여다봤습니다."
 
     return VideoMetadata(
         title=titles[0],
@@ -109,5 +109,5 @@ def _with_source(description: str, script: Script, candidate: StoryCandidate) ->
     if candidate.source_url:
         lines.append(candidate.source_url)
     if script.is_sample:
-        lines.insert(0, "[샘플 데이터로 만든 테스트 영상입니다. 실제 통계가 아닙니다.]")
+        lines.insert(0, "[샘플 데이터로 만든 테스트 영상입니다. 실제 해설문이 아닙니다.]")
     return "\n".join(lines)
