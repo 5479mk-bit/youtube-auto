@@ -44,7 +44,13 @@ def build_scene_clip(
 
     image_path, credit = found
 
-    if scene.engine == "veo" and veo_client is not None and veo_client.enabled:
+    if scene.engine == "official_video" and scene.official_video_path:
+        clip = _official_video_clip(Path(scene.official_video_path), scene, size)
+        if clip is not None:
+            return clip, credit
+        logger.warning("공식 동영상을 쓰지 못해 이 컷은 Veo/파랄랙스로 대체합니다")
+
+    if scene.engine in ("veo", "official_video") and veo_client is not None and veo_client.enabled:
         clip = _veo_clip(veo_client, image_path, scene, size)
         if clip is not None:
             return clip, credit
@@ -56,6 +62,35 @@ def build_scene_clip(
         ),
         credit,
     )
+
+
+def _official_video_clip(path: Path, scene: Scene, size: tuple[int, int]):
+    if not path.exists():
+        return None
+    try:
+        clip = VideoFileClip(str(path)).without_audio()
+    except Exception as exc:
+        logger.warning(f"공식 동영상 로드 실패({path}): {exc}")
+        return None
+
+    usable = min(clip.duration, scene.duration)
+    clip = clip.subclipped(0, usable)
+
+    # 공식 영상은 16:9 다큐 화면비일 가능성이 높다. 가운데를 기준으로 잘라 세로(9:16)에
+    # 맞춘다 — 피사체가 잘릴 수 있어 실제 응답을 보며 크롭 임계값을 다듬어야 한다.
+    width, height = clip.size
+    target_ratio = size[0] / size[1]
+    current_ratio = width / height
+    if current_ratio > target_ratio:
+        new_width = int(height * target_ratio)
+        x1 = max((width - new_width) // 2, 0)
+        clip = clip.cropped(x1=x1, width=new_width)
+    elif current_ratio < target_ratio:
+        new_height = int(width / target_ratio)
+        y1 = max((height - new_height) // 2, 0)
+        clip = clip.cropped(y1=y1, height=new_height)
+
+    return clip.resized(size)
 
 
 def _veo_clip(veo_client, image_path: Path, scene: Scene, size: tuple[int, int]):

@@ -25,7 +25,12 @@ class PhotoNotFound(RuntimeError):
 
 
 class ImageCollector:
-    def __init__(self, sources: list[PhotoSource], cache_dir: Path):
+    def __init__(
+        self,
+        sources: list[PhotoSource],
+        cache_dir: Path,
+        priority_images: list[PhotoResult] | None = None,
+    ):
         self.sources = sources
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -33,6 +38,9 @@ class ImageCollector:
         self.session.headers["User-Agent"] = USER_AGENT
         self.credits: list[PhotoCredit] = []
         self.failed_queries: list[str] = []
+        # 문화재 항목에 공식 매핑된 사진(식별자 기반 조회). 검색어와 무관하게 소스 체인보다
+        # 먼저 소진한다 — 텍스트 검색보다 화질·저작권이 확실하다.
+        self._priority_pool: list[PhotoResult] = list(priority_images or [])
 
     def collect(self, query_ko: str, query_en: str) -> tuple[Path, PhotoCredit] | None:
         """사진 한 장과 그 출처. 못 구하면 None 을 돌려주고 실패 검색어를 기록한다."""
@@ -40,6 +48,21 @@ class ImageCollector:
         cached = self._cached(label)
         if cached:
             return cached
+
+        while self._priority_pool:
+            photo = self._priority_pool.pop(0)
+            path = self._download(photo, label)
+            if path is None:
+                continue
+            credit = PhotoCredit(
+                query=label,
+                source_name=photo.source_name,
+                license_name=photo.license_name,
+                page_url=photo.page_url,
+                author=photo.author,
+            )
+            self._remember(credit)
+            return path, credit
 
         for source in self.sources:
             if not source.enabled:

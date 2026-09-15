@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 CameraMove = Literal["push_in", "pull_out", "pan_lr", "pan_rl", "pan_tb", "freeze"]
-# 컷을 움직이는 방식. veo 는 생성 영상, parallax 는 깊이 기반 2.5D 카메라 이동.
-MotionEngine = Literal["veo", "parallax"]
+# 컷을 움직이는 방식. veo 는 생성 영상, parallax 는 깊이 기반 2.5D 카메라 이동,
+# official_video 는 국가유산청이 항목별로 제공하는 공식 영상(비용 없이 실사 영상을 쓴다).
+MotionEngine = Literal["veo", "parallax", "official_video"]
 
 
 @dataclass
@@ -42,6 +43,11 @@ class StoryCandidate:
     # 위키백과에서 보강한 문단(전설·일화 등). facts 와 구분해 대본에서 "전해지는 말로는"
     # 식으로 표시하게 만든다.
     wiki_excerpt: str = ""
+    # 국가유산청 이미지/동영상/나레이션 API 는 이름이 아니라 이 세 값의 조합으로 조회한다.
+    # 문화재가 아닌 소스(픽스처 등)는 비워둔다.
+    heritage_ccba_kdcd: str = ""
+    heritage_ccba_asno: str = ""
+    heritage_ccba_ctcd: str = ""
     features: dict[str, float] = field(default_factory=dict)
     score: float = 0.0
     # 픽스처(샘플) 데이터로 만들어진 후보. 실제 해설문이 아니므로 업로드가 차단된다.
@@ -140,6 +146,8 @@ class Scene:
     show_chart: bool = False
     chart_step: int = 0  # 차트를 몇 항목까지 드러낼지
     is_hook: bool = False
+    # engine == "official_video" 일 때만 채워진다. 씬 배정 시점에 이미 내려받은 파일 경로다.
+    official_video_path: str = ""
 
 
 @dataclass

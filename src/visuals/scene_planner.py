@@ -22,8 +22,15 @@ def plan_scenes(
     freeze_last: bool,
     series_labels: list[str],
     veo_seconds: float = 0.0,
+    intro_engine: MotionEngine = "veo",
+    intro_video_path: str = "",
 ) -> list[Scene]:
-    """veo_seconds 만큼의 도입부를 Veo 씬 하나로 묶고, 나머지를 컷으로 쪼갠다."""
+    """veo_seconds 만큼의 도입부를 생성/공식 영상 씬 하나로 묶고, 나머지를 컷으로 쪼갠다.
+
+    intro_engine 이 "official_video" 면 국가유산청 공식 영상을 쓴다 — Veo 생성 없이 실사
+    영상을 그대로 쓸 수 있어 그만큼 과금을 건너뛴다. 영상이 없거나 부적합하면 호출하는
+    쪽(pipeline)이 intro_engine 을 "veo" 로 되돌려 지금까지의 동작과 같게 만든다.
+    """
     scenes: list[Scene] = []
     cursor = 0.0
     move_index = 0
@@ -37,10 +44,10 @@ def plan_scenes(
         # 프레임을 찾지 못해 렌더가 멈춘다. 화면에 보일 최소 길이는 보장한다.
         line_duration = max(line.duration, MIN_CUT_DURATION)
 
-        # 도입부 구간에 걸치는 문장은 쪼개지 않고 Veo 씬에 흡수시킨다.
+        # 도입부 구간에 걸치는 문장은 쪼개지 않고 도입부 씬에 흡수시킨다.
         if cursor < veo_seconds:
             take = min(line_duration, max(veo_seconds - cursor, 0.0))
-            if scenes and scenes[0].engine == "veo":
+            if scenes and scenes[0].engine == intro_engine:
                 scenes[0].duration += take
                 if line.show_chart:
                     scenes[0].show_chart = True
@@ -53,10 +60,11 @@ def plan_scenes(
                         image_query_ko=line.visual_query_ko,
                         image_query_en=line.visual_query_en,
                         camera="push_in",
-                        engine="veo",
+                        engine=intro_engine,
                         show_chart=line.show_chart,
                         chart_step=chart_step if line.show_chart else 0,
                         is_hook=True,
+                        official_video_path=intro_video_path,
                     )
                 )
             cursor += take
@@ -85,14 +93,14 @@ def plan_scenes(
             )
             cursor += cut_duration
 
-    if freeze_last and scenes and scenes[-1].engine != "veo":
+    if freeze_last and scenes and scenes[-1].engine not in ("veo", "official_video"):
         scenes[-1].camera = "freeze"
 
     return scenes
 
 
 def engine_counts(scenes: list[Scene]) -> dict[MotionEngine, int]:
-    counts: dict[MotionEngine, int] = {"veo": 0, "parallax": 0}
+    counts: dict[MotionEngine, int] = {"veo": 0, "parallax": 0, "official_video": 0}
     for scene in scenes:
         counts[scene.engine] += 1
     return counts

@@ -14,6 +14,7 @@ from pathlib import Path
 from loguru import logger
 
 from .datasource.datagokr import DataGoKrClient
+from .heritage import heritage_media
 from .models import PhotoCredit, RenderedPart, Script, ScriptPart, StoryCandidate, write_json
 from .motion.veo_budget import VeoBudget
 from .motion.veo_client import VeoClient
@@ -76,13 +77,52 @@ def write_script(settings: Settings, candidate: StoryCandidate) -> Script:
     )
 
 
-def build_collector(settings: Settings) -> ImageCollector:
+def build_collector(settings: Settings, candidate: StoryCandidate | None = None) -> ImageCollector:
     sources = build_chain(
         settings.secrets.data_go_kr_service_key,
         settings.get("visuals.allowed_licenses", []),
         settings.get("video.width", 1080),
     )
-    return ImageCollector(sources, CACHE_DIR / "images")
+    priority_images = []
+    if candidate is not None and candidate.heritage_ccba_kdcd:
+        client = DataGoKrClient(settings.secrets.data_go_kr_service_key)
+        priority_images = heritage_media.fetch_images(
+            client,
+            candidate.heritage_ccba_kdcd,
+            candidate.heritage_ccba_asno,
+            candidate.heritage_ccba_ctcd,
+        )
+    return ImageCollector(sources, CACHE_DIR / "images", priority_images=priority_images)
+
+
+def fetch_official_video(
+    settings: Settings, candidate: StoryCandidate, work_dir: Path
+) -> tuple[Path, float] | None:
+    """도입부에 쓸 국가유산청 공식 영상을 미리 내려받는다.
+
+    있으면 Veo 생성을 그만큼 건너뛴다. 식별자가 없거나(픽스처 등) 영상이 없으면 None을
+    돌려주고, 호출하는 쪽은 지금까지처럼 Veo → 파랄랙스 순으로 진행한다.
+    """
+    if not candidate.heritage_ccba_kdcd:
+        return None
+
+    client = DataGoKrClient(settings.secrets.data_go_kr_service_key)
+    videos = heritage_media.fetch_videos(
+        client,
+        candidate.heritage_ccba_kdcd,
+        candidate.heritage_ccba_asno,
+        candidate.heritage_ccba_ctcd,
+    )
+    chosen = heritage_media.select_video(videos)
+    if chosen is None:
+        return None
+
+    dest = heritage_media.download_video(chosen, work_dir / "official_intro.mp4")
+    if dest is None:
+        return None
+
+    duration = chosen.duration_seconds or float(settings.get("veo.duration_seconds", 8))
+    return dest, duration
 
 
 def build_tts_engines(settings: Settings) -> list:
@@ -139,20 +179,31 @@ def run(
         logger.info(f"dry-run: 텍스트 산출물만 생성했습니다 → {work_dir}")
         return PipelineResult(task_id, candidate, script, [], work_dir, [])
 
-    collector = build_collector(settings)
+    collector = build_collector(settings, candidate)
     veo_client = build_veo_client(settings) if use_veo else None
     provider = build_provider(
         settings.get("script.llm.provider", "gemini"),
         settings.get("script.llm.model", ""),
         settings.secrets,
     )
+    official_video = fetch_official_video(settings, candidate, work_dir)
+    if official_video:
+        logger.info(f"공식 동영상을 도입부에 씁니다 ({official_video[1]:.1f}초) — Veo 생략")
 
     parts: list[RenderedPart] = []
     credits: list[PhotoCredit] = []
     try:
         for part in (script.part1, script.part2):
             rendered, part_credits = _render_part(
-                settings, script, part, candidate, collector, provider, work_dir, veo_client
+                settings,
+                script,
+                part,
+                candidate,
+                collector,
+                provider,
+                work_dir,
+                veo_client,
+                official_video,
             )
             parts.append(rendered)
             credits.extend(
@@ -219,6 +270,7 @@ def _render_part(
     provider,
     work_dir: Path,
     veo_client,
+    official_video: tuple[Path, float] | None = None,
 ) -> tuple[RenderedPart, list[PhotoCredit]]:
     logger.info(f"{part.part}부 내레이션 합성")
     tts_engine.synthesize_part(part, build_tts_engines(settings), work_dir / "audio")
@@ -231,8 +283,16 @@ def _render_part(
     )
     subtitle_builder.write_srt(cues, work_dir / f"part{part.part}.srt")
 
+    # 공식 동영상이 있으면 그걸 도입부로 쓰고 Veo 호출 자체를 건너뛴다 — 없으면 지금까지처럼
+    # Veo(있을 때)로 도입부를 채운다.
     veo_seconds = 0.0
-    if veo_client is not None and veo_client.enabled and settings.get("veo.clips_per_part", 1):
+    intro_engine = "veo"
+    intro_video_path = ""
+    if official_video is not None:
+        intro_engine = "official_video"
+        intro_video_path = str(official_video[0])
+        veo_seconds = official_video[1]
+    elif veo_client is not None and veo_client.enabled and settings.get("veo.clips_per_part", 1):
         veo_seconds = float(veo_client.duration_seconds)
 
     scenes = plan_scenes(
@@ -241,6 +301,8 @@ def _render_part(
         freeze_last=part.part == 1,
         series_labels=[point.label for point in candidate.series],
         veo_seconds=veo_seconds,
+        intro_engine=intro_engine,
+        intro_video_path=intro_video_path,
     )
 
     _warn_if_off_target(settings, part)
@@ -248,7 +310,7 @@ def _render_part(
     counts = engine_counts(scenes)
     logger.info(
         f"{part.part}부 렌더 ({part.duration:.1f}초, 컷 {len(scenes)}개"
-        f" · Veo {counts['veo']} / 파랄랙스 {counts['parallax']})"
+        f" · 공식영상 {counts['official_video']} / Veo {counts['veo']} / 파랄랙스 {counts['parallax']})"
     )
     video_path = work_dir / f"part{part.part}.mp4"
     duration, credits = build_part(

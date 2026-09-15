@@ -52,7 +52,9 @@ class HeritageSource:
                     candidates.append(candidate)
         return candidates
 
-    def fetch_detail(self, name: str, category: str, region: str) -> StoryCandidate | None:
+    def fetch_detail(
+        self, name: str, category: str, region: str, kdcd: str = "", asno: str = "", ctcd: str = ""
+    ) -> StoryCandidate | None:
         """목록에서 고른 항목의 해설문을 상세 API 로 채운다."""
         try:
             rows = self.client.get(DETAIL_ENDPOINT, {"ccbaMnm1": name})
@@ -63,7 +65,10 @@ class HeritageSource:
 
         row = rows[0]
         explanation = str(row.get("content") or row.get("ccbaAsdt") or "").strip()
-        return self._build_candidate(name, category, region, explanation)
+        kdcd = str(row.get("ccbaKdcd") or kdcd or "").strip()
+        asno = str(row.get("ccbaAsno") or asno or "").strip()
+        ctcd = str(row.get("ccbaCtcd") or ctcd or "").strip()
+        return self._build_candidate(name, category, region, explanation, kdcd, asno, ctcd)
 
     def _row_to_candidate(self, row: dict) -> StoryCandidate | None:
         name = str(row.get("ccbaMnm1") or row.get("name") or "").strip()
@@ -72,10 +77,21 @@ class HeritageSource:
         category = str(row.get("ccmaName") or row.get("ccbaKdcd") or "").strip()
         region = str(row.get("ccbaCtcdNm") or row.get("region") or "").strip()
         explanation = str(row.get("content") or row.get("ccbaAsdt") or "").strip()
-        return self._build_candidate(name, category, region, explanation)
+        # 이미지·동영상·나레이션 API 는 이름이 아니라 이 세 값의 조합으로 조회한다.
+        kdcd = str(row.get("ccbaKdcd") or "").strip()
+        asno = str(row.get("ccbaAsno") or "").strip()
+        ctcd = str(row.get("ccbaCtcd") or "").strip()
+        return self._build_candidate(name, category, region, explanation, kdcd, asno, ctcd)
 
     def _build_candidate(
-        self, name: str, category: str, region: str, explanation: str
+        self,
+        name: str,
+        category: str,
+        region: str,
+        explanation: str,
+        kdcd: str = "",
+        asno: str = "",
+        ctcd: str = "",
     ) -> StoryCandidate:
         facts = extract_facts(explanation)
         return StoryCandidate(
@@ -90,6 +106,9 @@ class HeritageSource:
             image_queries_ko=[name, f"{name} {region}".strip(), region or name],
             image_queries_en=[name],
             facts=facts,
+            heritage_ccba_kdcd=kdcd,
+            heritage_ccba_asno=asno,
+            heritage_ccba_ctcd=ctcd,
             features={
                 "story_density": story_density(explanation),
                 "mystery_score": mystery_score(explanation),

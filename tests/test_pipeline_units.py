@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.datasource.base import load_fixture as load_stats_fixture
 from src.heritage.fixtures import load_fixture as load_heritage_fixture
+from src.heritage.heritage_media import HeritageVideo, select_video
 from src.heritage.story_scorer import mystery_score, prestige_score, story_density
 from src.models import DataPoint, ScriptLine, ScriptPart, StoryCandidate
 from src.script.script_writer import _template_script
@@ -22,6 +23,8 @@ from src.narration.pacing import HOOK_PAUSE, SENTENCE_PAUSE, apply_pacing
 from src.text_ko import particle, read_aloud, sino_korean
 from src.subtitles.subtitle_builder import build_cues, wrap_text
 from src.topics import topic_scorer
+from src.visuals.image_collector import ImageCollector
+from src.visuals.photo_sources.base import PhotoResult
 from src.motion.veo_budget import BudgetExceeded, ClipCost, VeoBudget
 from src.visuals.photo_sources.wikimedia import normalize_license
 from src.visuals.scene_planner import MIN_CUT_DURATION, engine_counts, plan_scenes
@@ -141,7 +144,27 @@ class TestMotionEngines:
     def test_without_veo_every_cut_is_parallax(self):
         part = make_part([(f"문장 {index}", 3.0, False) for index in range(4)])
         scenes = plan_scenes(part, 3.0, freeze_last=False, series_labels=[])
-        assert engine_counts(scenes) == {"veo": 0, "parallax": len(scenes)}
+        assert engine_counts(scenes) == {
+            "veo": 0,
+            "parallax": len(scenes),
+            "official_video": 0,
+        }
+
+    def test_official_video_intro_skips_veo(self):
+        part = make_part([(f"문장 {index}", 3.0, False) for index in range(8)])
+        scenes = plan_scenes(
+            part,
+            3.0,
+            freeze_last=True,
+            series_labels=[],
+            veo_seconds=6.0,
+            intro_engine="official_video",
+            intro_video_path="/tmp/official_intro.mp4",
+        )
+        assert scenes[0].engine == "official_video"
+        assert scenes[0].official_video_path == "/tmp/official_intro.mp4"
+        assert engine_counts(scenes)["veo"] == 0
+        assert engine_counts(scenes)["official_video"] == 1
 
 
 class TestVeoBudget:
@@ -300,3 +323,38 @@ class TestFixtures:
         assert candidates
         assert all(candidate.is_sample for candidate in candidates)
         assert all(candidate.facts for candidate in candidates)
+
+
+class TestHeritageMedia:
+    def test_select_video_prefers_higher_resolution_and_filters_short_clips(self):
+        too_short = HeritageVideo(url="a", width=1920, height=1080, duration_seconds=1.0)
+        low_res = HeritageVideo(url="b", width=320, height=240, duration_seconds=5.0)
+        high_res = HeritageVideo(url="c", width=1920, height=1080, duration_seconds=6.0)
+        chosen = select_video([too_short, low_res, high_res])
+        assert chosen is high_res
+
+    def test_select_video_returns_none_when_all_too_short(self):
+        assert select_video([HeritageVideo(url="a", duration_seconds=1.0)]) is None
+
+    def test_select_video_returns_none_for_empty_list(self):
+        assert select_video([]) is None
+
+
+class TestImageCollectorPriorityPool:
+    def test_official_photos_are_tried_before_the_source_chain(self, tmp_path, monkeypatch):
+        official = PhotoResult(url="http://example.com/official.jpg", source_name="국가유산청")
+        collector = ImageCollector([], tmp_path, priority_images=[official])
+        monkeypatch.setattr(collector, "_download", lambda photo, label: tmp_path / "fake.jpg")
+
+        result = collector.collect("아무 검색어", "")
+
+        assert result is not None
+        _, credit = result
+        assert credit.source_name == "국가유산청"
+
+    def test_falls_back_to_source_chain_once_pool_is_empty(self, tmp_path, monkeypatch):
+        collector = ImageCollector([], tmp_path, priority_images=[])
+        monkeypatch.setattr(collector, "_download", lambda photo, label: None)
+
+        assert collector.collect("빈 풀", "") is None
+        assert "빈 풀" in collector.failed_queries
