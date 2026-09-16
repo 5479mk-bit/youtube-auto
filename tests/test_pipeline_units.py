@@ -34,7 +34,7 @@ from src.visuals.photo_sources.base import PhotoResult
 from src.motion.veo_budget import BudgetExceeded, ClipCost, VeoBudget
 from src.review.telegram_bot import ReviewDecision, TelegramReviewer
 from src.topics import history
-from src.visuals.photo_sources.wikimedia import normalize_license
+from src.visuals.photo_sources.wikimedia import WikimediaSource, normalize_license
 from src.visuals.scene_planner import MIN_CUT_DURATION, engine_counts, plan_scenes
 
 WEIGHTS = {
@@ -238,6 +238,72 @@ class TestLicenseFilter:
         assert not any(
             normalize_license(item) in haystack for item in ["cc0", "cc-by", "cc-by-sa"]
         )
+
+
+class TestWikimediaRelevance:
+    def test_search_ranking_is_respected_not_pageid_order(self):
+        # MediaWiki 는 결과를 pageid 키 딕셔너리로 준다. 그대로 순회하면 검색 순위가 아니라
+        # pageid 순서로 읽혀, 실제로 "석굴암" 검색에서 엉뚱한 사진이 먼저 잡혔었다.
+        source = WikimediaSource(["cc0"], 1080)
+        payload = {
+            "query": {
+                "pages": {
+                    "999": _wiki_page(index=2, title="File:Second.jpg", url="http://x/2.jpg"),
+                    "111": _wiki_page(index=1, title="File:First.jpg", url="http://x/1.jpg"),
+                }
+            }
+        }
+        with patch.object(source, "_get_with_retry", return_value=_FakeResponse(payload)):
+            results = source.search("석굴암", "Seokguram", limit=2)
+
+        assert [r.url for r in results] == ["http://x/1.jpg", "http://x/2.jpg"]
+
+    def test_photos_of_somewhere_near_the_subject_are_rejected(self):
+        # 다른 유적을 띄워놓고 이 유적을 설명하는 게 이 채널에선 가장 치명적인 사고다.
+        source = WikimediaSource(["cc0"], 1080)
+        payload = {
+            "query": {
+                "pages": {
+                    "1": _wiki_page(
+                        index=1,
+                        title="File:Interior view of the Buddhist temple near Seokguram Grotto.jpg",
+                        url="http://x/near.jpg",
+                    ),
+                    "2": _wiki_page(index=2, title="File:Seokguram Grotto 03.jpg", url="http://x/real.jpg"),
+                }
+            }
+        }
+        with patch.object(source, "_get_with_retry", return_value=_FakeResponse(payload)):
+            results = source.search("석굴암", "Seokguram", limit=2)
+
+        assert [r.url for r in results] == ["http://x/real.jpg"]
+
+
+def _wiki_page(index: int, title: str, url: str) -> dict:
+    return {
+        "index": index,
+        "title": title,
+        "imageinfo": [
+            {
+                "width": 1600,
+                "height": 1200,
+                "url": url,
+                "descriptionurl": f"https://commons.wikimedia.org/wiki/{title}",
+                "extmetadata": {
+                    "LicenseShortName": {"value": "CC0"},
+                    "License": {"value": "cc0"},
+                },
+            }
+        ],
+    }
+
+
+class _FakeResponse:
+    def __init__(self, payload: dict):
+        self._payload = payload
+
+    def json(self) -> dict:
+        return self._payload
 
 
 class TestReadAloud:

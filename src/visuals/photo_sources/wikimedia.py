@@ -19,6 +19,11 @@ USER_AGENT = "youtube-auto/0.2 (public-data documentary shorts)"
 RETRY_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = 3
 
+# 위키미디어 검색은 "석굴암"으로 물었을 때 "석굴암 '근처' 절" 사진을 1순위로 주기도 한다.
+# 제목에 이 말이 있으면 그 사진은 주제 자체가 아니라 '주변'을 찍은 것이라 쓰면 안 된다 —
+# 다른 유적을 띄워놓고 이 유적을 설명하는 게 이 채널에선 가장 치명적인 사고다.
+OFF_SUBJECT_MARKERS = ("near ", "nearby", "view from", "근처", "인근", "가는 길")
+
 
 class WikimediaSource:
     name = "wikimedia"
@@ -57,7 +62,13 @@ class WikimediaSource:
             return []
 
         results: list[PhotoResult] = []
-        for page in pages.values():
+        # MediaWiki 는 결과를 pageid 키 딕셔너리로 준다. 그대로 순회하면 검색 순위가 아니라
+        # pageid 순서로 읽혀서, "석굴암"을 찾았는데 1순위 석굴암 대신 "석굴암 '근처' 절"
+        # 사진이 잡히는 일이 생긴다. 검색 순위(index)로 다시 정렬해야 한다.
+        ranked = sorted(pages.values(), key=lambda page: page.get("index", 10**6))
+        for page in ranked:
+            if _is_off_subject(str(page.get("title", ""))):
+                continue
             info = (page.get("imageinfo") or [{}])[0]
             if info.get("width", 0) < MIN_WIDTH:
                 continue
@@ -102,6 +113,11 @@ class WikimediaSource:
                 if attempt < RETRY_ATTEMPTS - 1:
                     time.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
         raise last_error  # type: ignore[misc]
+
+
+def _is_off_subject(title: str) -> bool:
+    lowered = title.lower().replace("_", " ")
+    return any(marker in lowered for marker in OFF_SUBJECT_MARKERS)
 
 
 def normalize_license(value: str) -> str:
