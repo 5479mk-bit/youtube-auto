@@ -25,6 +25,7 @@ from src.heritage.khs_client import _extract_items
 from src.heritage.story_scorer import mystery_score, prestige_score, story_density
 from src.models import DataPoint, ScriptLine, ScriptPart, StoryCandidate
 from src.script.script_writer import _template_script
+from src.sillok.event_keywords import scan
 from src.narration.pacing import HOOK_PAUSE, SENTENCE_PAUSE, apply_pacing
 from src.text_ko import particle, read_aloud, sino_korean
 from src.subtitles.subtitle_builder import build_cues, wrap_text
@@ -516,6 +517,39 @@ class TestInterleaveVeo:
         scenes = plan_scenes(short, 3.0, freeze_last=False, series_labels=[])
         out = interleave_veo(scenes, clip_seconds=8.0, still_seconds=6.0, max_clips=2)
         assert engine_counts(out)["veo"] == 0
+
+
+class TestSillokEventKeywords:
+    def test_finds_events_in_classical_chinese(self):
+        # 공개된 실록은 원문(한문)뿐이라, 사건 발굴은 한문에서 걸려야 한다.
+        assert scan("夜 彗星見于東方 光芒指西").matched
+        assert scan("有怪獸出沒 形如犬而大").matched
+
+    def test_finds_the_same_event_in_korean_translation(self):
+        match = scan("함경도에서 괴이한 짐승이 나타났는데 개와 비슷하나 크고")
+        assert match.matched
+        assert "괴물·요괴" in match.topics
+
+    def test_routine_personnel_records_are_filtered_out(self):
+        # 실록 기사 대부분은 인사 발령이라 영상으로 만들 게 없다.
+        match = scan("以李某爲吏曹判書 金某除授承旨 遞差前職 謝恩肅拜")
+        assert not match.matched
+        assert match.is_routine
+
+    def test_an_article_hitting_several_topics_scores_higher(self):
+        one = scan("夜 彗星見于東方")
+        many = scan("世子暴薨 中外疑其鴆毒 鞫問內人 告變")
+        assert many.score > one.score
+
+    def test_repeating_one_word_does_not_inflate_the_score(self):
+        # 같은 말이 열 번 나온다고 열 배 센 사건은 아니다.
+        once = scan("彗星")
+        many = scan("彗星 " * 20)
+        assert many.score <= once.score * 3 + 0.01
+
+    def test_empty_text_matches_nothing(self):
+        assert not scan("").matched
+        assert scan("").score == 0.0
 
 
 class TestKhsClient:
