@@ -3,14 +3,18 @@
 야사 콘텐츠의 1차 소스다. 해설문은 정식 설명이라 사실관계는 믿을 수 있지만, 그 자체로는
 "이야기"가 아닐 수 있어 위키백과 보강(wikipedia_enrich)과 합쳐서 쓴다.
 
-활용신청 후 실제 응답 스키마가 이 파일의 필드명과 다르면 여기만 맞추면 된다 — 통계 어댑터를
-쓸 때와 같은 패턴이다.
+khs.go.kr 는 apis.data.go.kr 포털과 다른 별도 호스트다 — 실제로 호출해본 결과 **인증키가
+필요 없고 응답은 항상 XML** 이라, 여기서는 `datasource/datagokr.DataGoKrClient`(JSON 전제)
+대신 `khs_client`를 쓴다. `ccbaMnm1`에 검색어(예: "첨성대")를 넣는 이름 검색은 실제로는
+결과가 비었다 — 대신 `ccbaKdcd`(지정 등급 종목코드)로 걸러야 목록이 온다. `KDCD_LABELS`의
+"11"(국보)은 직접 호출로 확인했고, 나머지 코드는 국가유산청이 공개한 종목코드 체계를 따른
+추정치다 — 실제 응답과 다르면 여기만 고치면 된다(통계 어댑터를 쓸 때와 같은 패턴).
 """
 
 from __future__ import annotations
 
-from ..datasource.datagokr import DataGoKrClient, DataGoKrError
 from ..models import StoryCandidate
+from . import khs_client
 from .story_scorer import extract_facts, mystery_score, prestige_score, story_density
 
 # 실제 freshness(최근에 다룬 시대·지역과 겹치는지)는 history 를 참조하는 pipeline 쪽에서
@@ -22,31 +26,33 @@ DETAIL_ENDPOINT = "http://www.khs.go.kr/cha/SearchKindOpenapiDt.do"
 SOURCE_NAME = "국가유산청 국가문화유산포털"
 SOURCE_URL = "https://www.heritage.go.kr"
 
-# 시대·지역이 겹치지 않게 훑을 기본 검색어. 실제로는 지정 등급별 목록 API 를 페이지네이션
-# 하는 편이 낫지만, 최소 동작을 위해 대표 키워드로 시작한다.
-DEFAULT_QUERIES = ["국보", "보물", "사적"]
+# 종목코드 → 표시 라벨. "11"(국보)만 직접 호출로 확인했고 나머지는 추정치다.
+KDCD_LABELS = {
+    "11": "국보",
+    "12": "보물",
+    "13": "사적",
+    "15": "명승",
+    "16": "천연기념물",
+    "17": "국가무형유산",
+}
+
+# 시대·지역이 겹치지 않게 훑을 기본 종목코드. 페이지네이션(pageUnit/pageIndex)은
+# 최소 동작을 위해 아직 안 쓴다 — 첫 페이지만 받는다.
+DEFAULT_KDCDS = list(KDCD_LABELS.keys())
 
 
 class HeritageSource:
     name = "heritage"
 
-    def __init__(self, client: DataGoKrClient):
-        self.client = client
-
-    def fetch(self, limit_per_query: int = 8) -> list[StoryCandidate]:
-        if not self.client.enabled:
-            return []
-
+    def fetch(self, limit_per_kdcd: int = 8) -> list[StoryCandidate]:
         candidates: list[StoryCandidate] = []
-        for query in DEFAULT_QUERIES:
+        for kdcd in DEFAULT_KDCDS:
             try:
-                rows = self.client.get(
-                    LIST_ENDPOINT, {"ccbaKdcd": "", "ccbaCtcd": "", "ccbaMnm1": query}
-                )
-            except DataGoKrError:
+                rows = khs_client.get(LIST_ENDPOINT, {"ccbaKdcd": kdcd, "ccbaCtcd": ""})
+            except khs_client.KhsApiError:
                 continue
 
-            for row in rows[:limit_per_query]:
+            for row in rows[:limit_per_kdcd]:
                 candidate = self._row_to_candidate(row)
                 if candidate:
                     candidates.append(candidate)
@@ -57,8 +63,10 @@ class HeritageSource:
     ) -> StoryCandidate | None:
         """목록에서 고른 항목의 해설문을 상세 API 로 채운다."""
         try:
-            rows = self.client.get(DETAIL_ENDPOINT, {"ccbaMnm1": name})
-        except DataGoKrError:
+            rows = khs_client.get(
+                DETAIL_ENDPOINT, {"ccbaKdcd": kdcd, "ccbaAsno": asno, "ccbaCtcd": ctcd}
+            )
+        except khs_client.KhsApiError:
             return None
         if not rows:
             return None
@@ -74,11 +82,11 @@ class HeritageSource:
         name = str(row.get("ccbaMnm1") or row.get("name") or "").strip()
         if not name:
             return None
-        category = str(row.get("ccmaName") or row.get("ccbaKdcd") or "").strip()
+        kdcd = str(row.get("ccbaKdcd") or "").strip()
+        category = KDCD_LABELS.get(kdcd, str(row.get("ccmaName") or "").strip())
         region = str(row.get("ccbaCtcdNm") or row.get("region") or "").strip()
         explanation = str(row.get("content") or row.get("ccbaAsdt") or "").strip()
         # 이미지·동영상·나레이션 API 는 이름이 아니라 이 세 값의 조합으로 조회한다.
-        kdcd = str(row.get("ccbaKdcd") or "").strip()
         asno = str(row.get("ccbaAsno") or "").strip()
         ctcd = str(row.get("ccbaCtcd") or "").strip()
         return self._build_candidate(name, category, region, explanation, kdcd, asno, ctcd)

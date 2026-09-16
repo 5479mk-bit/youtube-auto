@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.datasource.base import load_fixture as load_stats_fixture
 from src.heritage.fixtures import load_fixture as load_heritage_fixture
 from src.heritage.heritage_media import HeritageVideo, select_video
+from src.heritage.khs_client import _extract_items
 from src.heritage.story_scorer import mystery_score, prestige_score, story_density
 from src.models import DataPoint, ScriptLine, ScriptPart, StoryCandidate
 from src.script.script_writer import _template_script
@@ -338,6 +339,47 @@ class TestHeritageMedia:
 
     def test_select_video_returns_none_for_empty_list(self):
         assert select_video([]) is None
+
+
+class TestKhsClient:
+    def test_extract_items_reads_nested_item_tags_from_real_response_shape(self):
+        # khs.go.kr 를 실제로 호출해 확인한 응답 구조(직접 호출 결과 캡처)를 그대로 본떴다:
+        # 인증키 없이도 <result><body><items><item>...</item></items></body></result> 형태의
+        # XML로 온다. DataGoKrClient(JSON 전제)로는 이 응답을 전부 오류로 처리해버려 별도
+        # 클라이언트가 필요했다.
+        sample = """<?xml version="1.0" encoding="UTF-8"?>
+        <result>
+          <header><resultCode>0000</resultCode><resultMsg>NORMAL SERVICE</resultMsg></header>
+          <body>
+            <items>
+              <item>
+                <ccbaMnm1>서울 숭례문</ccbaMnm1>
+                <ccbaKdcd>11</ccbaKdcd>
+                <ccbaAsno>0000010000000</ccbaAsno>
+                <ccbaCtcd>11</ccbaCtcd>
+                <ccbaCtcdNm>서울</ccbaCtcdNm>
+              </item>
+              <item>
+                <ccbaMnm1>원각사지 십층석탑</ccbaMnm1>
+                <ccbaKdcd>11</ccbaKdcd>
+                <ccbaAsno>0000020000000</ccbaAsno>
+                <ccbaCtcd>11</ccbaCtcd>
+              </item>
+            </items>
+            <totalCnt>163</totalCnt>
+          </body>
+        </result>""".encode("utf-8")
+
+        items = _extract_items(sample)
+
+        assert len(items) == 2
+        assert items[0]["ccbaMnm1"] == "서울 숭례문"
+        assert items[0]["ccbaCtcdNm"] == "서울"
+        assert items[1]["ccbaMnm1"] == "원각사지 십층석탑"
+
+    def test_extract_items_returns_empty_list_when_no_items(self):
+        sample = b"<result><body><items/><totalCnt>0</totalCnt></body></result>"
+        assert _extract_items(sample) == []
 
 
 class TestImageCollectorPriorityPool:

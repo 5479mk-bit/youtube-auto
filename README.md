@@ -141,12 +141,17 @@ cp .env.example .env    # 키를 채운다
 
 | 키 | 발급처 | 없으면 |
 |---|---|---|
-| `DATA_GO_KR_SERVICE_KEY` | [공공데이터포털](https://www.data.go.kr) 국가유산청/관광공사 API 활용신청 | 번들 샘플 문화재 데이터로 동작하고, 업로드는 차단된다 |
+| `DATA_GO_KR_SERVICE_KEY` | [공공데이터포털](https://www.data.go.kr) 한국관광공사 관광정보서비스(TourAPI 4.0) 활용신청 | 관광공사 사진·overview 보강만 안 되고, 국가유산청 해설문/사진/동영상은 그대로 동작한다 |
 | `GEMINI_API_KEY` | Google AI Studio | 대본은 템플릿으로, 내레이션은 edge-tts 로, 영상은 무료 파랄랙스로 간다. TTS 는 무료 티어가 있지만 **Veo 는 유료 결제가 필요하다** |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | @BotFather | 검수를 건너뛰고 업로드하지 않는다 |
 | `YOUTUBE_CLIENT_SECRET_FILE` | Google Cloud Console OAuth 데스크톱 클라이언트 | 업로드 단계만 실패한다 |
 
 TTS(edge-tts)는 키가 필요 없다. 프록시 뒤에서는 `HTTPS_PROXY`를 읽어 자동으로 사용한다.
+
+**국가유산청(khs.go.kr) 목록/상세/이미지/동영상 API는 인증키가 필요 없다** — 실제로 호출해
+확인했다(`src/heritage/khs_client.py`). `DATA_GO_KR_SERVICE_KEY`는 관광공사 overview·사진
+보강(2차 소스)에만 쓰이므로, 이 키가 없어도 국가유산청 해설문만으로 픽스처가 아닌 **실제
+데이터**로 파이프라인이 돈다.
 
 ## 사용법
 
@@ -187,18 +192,21 @@ python main.py run --review            # 생성 후 텔레그램 검수 → 승�
 
 | 파일 | 역할 |
 |---|---|
+| `khs_client.py` | khs.go.kr 전용 클라이언트. 인증키 없이 XML로 응답한다(직접 호출로 확인) — `DataGoKrClient`(JSON 전제)와는 다른 클라이언트가 필요했다 |
 | `heritage_source.py` | 국가유산청 문화재 목록 + 해설문(1차 소스), 이미지/동영상 조회용 식별자(`ccbaKdcd`/`ccbaAsno`/`ccbaCtcd`)도 여기서 받아둔다 |
 | `heritage_media.py` | 그 식별자로 공식 이미지·동영상 조회(`SearchImageOpenapi.do`/`SearchVideoOpenapi.do`) |
-| `tour_overview.py` | 해설문이 얇을 때 관광공사 overview 로 보강 |
+| `tour_overview.py` | 해설문이 얇을 때 관광공사 overview 로 보강 (`DATA_GO_KR_SERVICE_KEY` 필요) |
 | `wikipedia_enrich.py` | 전설·설화·논란 섹션을 찾아 `wiki_excerpt` 로 채움 |
 | `story_scorer.py` | `story_density`/`mystery_score`/`prestige` 계산 |
-| `fixtures/heritage.json` | 서비스키 없을 때 쓰는 샘플 문화재 (실존 유적 기반, `is_sample=True`) |
+| `fixtures/heritage.json` | 국가유산청 응답이 비었을 때(네트워크 문제 등) 쓰는 샘플 문화재 (실존 유적 기반, `is_sample=True`) |
 
 각 후보는 네 가지 축(`story_density`, `mystery_score`, `prestige`, `freshness`)으로
 점수가 매겨진다 (`src/topics/topic_scorer.py`).
 
-국가유산청 API는 활용신청 후 실제 응답 스키마가 `heritage_source.py`의 필드명과 다르면
-그 파일만 맞추면 된다.
+`heritage_source.py`의 `KDCD_LABELS`(종목코드 → 국보/보물/사적 등 라벨)는 "11"(국보)만 직접
+호출로 확인했고 나머지는 국가유산청이 공개한 종목코드 체계를 따른 추정치다. 실제 응답이 다르면
+그 딕셔너리만 고치면 된다 — 이름 검색(`ccbaMnm1`)은 실제로 결과가 비어, 종목코드로 걸러야
+목록이 온다는 것도 직접 호출로 확인했다.
 
 ## 테스트
 

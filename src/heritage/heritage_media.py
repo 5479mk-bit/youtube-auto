@@ -1,8 +1,9 @@
 """국가유산청 공식 이미지·동영상 — 항목 식별자(ccbaKdcd/ccbaAsno/ccbaCtcd)로 조회한다.
 
-목록/상세 API(`heritage_source.py`)는 이름으로 검색하지만, 이미지·동영상·나레이션 API는
-그렇지 않다. 반드시 (종목코드, 지정번호, 시도코드) 조합이 있어야 조회된다. 이 조합은
-`heritage_source.py`가 목록 API 응답에서 받아 `StoryCandidate.heritage_ccba_*` 에 채워둔다.
+목록/상세 API(`heritage_source.py`)와 마찬가지로 khs.go.kr 는 인증키가 필요 없다(직접
+호출로 확인). 이미지·동영상·나레이션 API는 이름이 아니라 (종목코드, 지정번호, 시도코드)
+조합으로만 조회된다 — 이 조합은 `heritage_source.py`가 목록 API 응답에서 받아
+`StoryCandidate.heritage_ccba_*` 에 채워둔다.
 
 나레이션(SearchVoiceOpenapi.do)은 이번 단계에서 다루지 않는다 — 정보 전달용 해설 낭독이라
 지금 대본 말투와 안 맞을 수 있어 따로 검토하기로 했다.
@@ -16,7 +17,7 @@ from pathlib import Path
 import requests
 from loguru import logger
 
-from ..datasource.datagokr import DataGoKrClient, DataGoKrError
+from . import khs_client
 from ..visuals.photo_sources.base import MIN_WIDTH, PhotoResult
 
 IMAGE_ENDPOINT = "http://www.khs.go.kr/cha/SearchImageOpenapi.do"
@@ -42,18 +43,16 @@ def _identifiers_ok(kdcd: str, asno: str, ctcd: str) -> bool:
     return bool(kdcd and asno and ctcd)
 
 
-def fetch_images(
-    client: DataGoKrClient, kdcd: str, asno: str, ctcd: str, limit: int = 10
-) -> list[PhotoResult]:
+def fetch_images(kdcd: str, asno: str, ctcd: str, limit: int = 10) -> list[PhotoResult]:
     """항목에 공식 매핑된 이미지 목록. 식별자가 없으면 아예 호출하지 않는다."""
-    if not client.enabled or not _identifiers_ok(kdcd, asno, ctcd):
+    if not _identifiers_ok(kdcd, asno, ctcd):
         return []
 
     try:
-        rows = client.get(
+        rows = khs_client.get(
             IMAGE_ENDPOINT, {"ccbaKdcd": kdcd, "ccbaAsno": asno, "ccbaCtcd": ctcd}
         )
-    except DataGoKrError as exc:
+    except khs_client.KhsApiError as exc:
         logger.warning(f"[heritage_media] 이미지 조회 실패({kdcd}/{asno}/{ctcd}): {exc}")
         return []
 
@@ -77,16 +76,16 @@ def fetch_images(
     return results
 
 
-def fetch_videos(client: DataGoKrClient, kdcd: str, asno: str, ctcd: str) -> list[HeritageVideo]:
+def fetch_videos(kdcd: str, asno: str, ctcd: str) -> list[HeritageVideo]:
     """항목에 공식 매핑된 동영상 목록. 화면비·해상도는 응답을 실제로 봐야 확정된다."""
-    if not client.enabled or not _identifiers_ok(kdcd, asno, ctcd):
+    if not _identifiers_ok(kdcd, asno, ctcd):
         return []
 
     try:
-        rows = client.get(
+        rows = khs_client.get(
             VIDEO_ENDPOINT, {"ccbaKdcd": kdcd, "ccbaAsno": asno, "ccbaCtcd": ctcd}
         )
-    except DataGoKrError as exc:
+    except khs_client.KhsApiError as exc:
         logger.warning(f"[heritage_media] 동영상 조회 실패({kdcd}/{asno}/{ctcd}): {exc}")
         return []
 

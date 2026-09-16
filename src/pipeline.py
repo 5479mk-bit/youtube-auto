@@ -85,9 +85,7 @@ def build_collector(settings: Settings, candidate: StoryCandidate | None = None)
     )
     priority_images = []
     if candidate is not None and candidate.heritage_ccba_kdcd:
-        client = DataGoKrClient(settings.secrets.data_go_kr_service_key)
         priority_images = heritage_media.fetch_images(
-            client,
             candidate.heritage_ccba_kdcd,
             candidate.heritage_ccba_asno,
             candidate.heritage_ccba_ctcd,
@@ -106,9 +104,7 @@ def fetch_official_video(
     if not candidate.heritage_ccba_kdcd:
         return None
 
-    client = DataGoKrClient(settings.secrets.data_go_kr_service_key)
     videos = heritage_media.fetch_videos(
-        client,
         candidate.heritage_ccba_kdcd,
         candidate.heritage_ccba_asno,
         candidate.heritage_ccba_ctcd,
