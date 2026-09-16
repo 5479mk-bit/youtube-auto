@@ -34,7 +34,7 @@ from .render.motion_sources import PhotoMissing
 from .render.video_builder import photo_credit_line
 from .visuals.image_collector import ImageCollector
 from .visuals.photo_sources import build_chain
-from .visuals.scene_planner import engine_counts, plan_scenes
+from .visuals.scene_planner import engine_counts, interleave_veo, plan_scenes
 
 
 @dataclass
@@ -169,8 +169,8 @@ def build_veo_client(settings: Settings) -> VeoClient:
     budget = VeoBudget(
         cache_dir=CACHE_DIR / "veo",
         tier=tier,
-        max_clips_per_episode=settings.get("veo.max_clips_per_episode", 2),
-        max_clips_per_day=settings.get("veo.max_clips_per_day", 6),
+        max_clips_per_episode=settings.get("veo.max_clips_per_episode", 4),
+        max_clips_per_day=settings.get("veo.max_clips_per_day", 12),
     )
     return VeoClient(
         api_key=settings.secrets.gemini_api_key,
@@ -328,6 +328,15 @@ def _render_part(
         intro_engine=intro_engine,
         intro_video_path=intro_video_path,
     )
+
+    # 사진 → 그 사진이 움직이는 Veo 컷 → 다음 사진 … 으로 리듬을 만든다.
+    if veo_client is not None and veo_client.enabled:
+        scenes = interleave_veo(
+            scenes,
+            clip_seconds=float(veo_client.duration_seconds),
+            still_seconds=settings.get("veo.still_seconds", 6.0),
+            max_clips=settings.get("veo.clips_per_part", 2),
+        )
 
     _warn_if_off_target(settings, part)
 

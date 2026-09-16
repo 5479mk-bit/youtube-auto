@@ -35,7 +35,12 @@ from src.motion.veo_budget import BudgetExceeded, ClipCost, VeoBudget
 from src.review.telegram_bot import ReviewDecision, TelegramReviewer
 from src.topics import history
 from src.visuals.photo_sources.wikimedia import WikimediaSource, normalize_license
-from src.visuals.scene_planner import MIN_CUT_DURATION, engine_counts, plan_scenes
+from src.visuals.scene_planner import (
+    MIN_CUT_DURATION,
+    engine_counts,
+    interleave_veo,
+    plan_scenes,
+)
 
 WEIGHTS = {
     "story_density": 0.30,
@@ -443,6 +448,74 @@ class TestHeritageSourceDetail:
         assert "19621220" not in candidate.context
         assert candidate.heritage_ccba_kdcd == "11"
         assert candidate.heritage_ccba_asno == "0000030000000"
+
+
+class TestInterleaveVeo:
+    def _part(self, count: int = 10) -> ScriptPart:
+        return ScriptPart(
+            part=1,
+            hook_number="훅",
+            lines=[
+                ScriptLine(
+                    text=f"문장{i}",
+                    visual_query_ko=f"사진{i // 3}",
+                    visual_query_en=f"photo{i // 3}",
+                    duration=3.0,
+                )
+                for i in range(count)
+            ],
+        )
+
+    def test_veo_cut_reuses_the_photo_from_the_still_before_it(self):
+        # "사진 → 그 사진이 움직이는 컷" 이 되려면 Veo 컷이 앞 사진과 같은 검색어여야 한다
+        # (ImageCollector 가 검색어로 캐시하므로 같은 파일이 쓰인다).
+        scenes = plan_scenes(self._part(), 3.0, freeze_last=False, series_labels=[])
+        out = interleave_veo(scenes, clip_seconds=8.0, still_seconds=6.0, max_clips=2)
+
+        for index, scene in enumerate(out):
+            if scene.engine == "veo":
+                assert index > 0
+                assert out[index - 1].image_query_ko == scene.image_query_ko
+
+    def test_veo_cuts_are_exactly_one_billing_unit_long(self):
+        # 생성 클립은 정확히 8초다. 씬을 9초로 잡으면 1초가 비고, 3초로 잡으면 8초 값을
+        # 내고 5초를 버린다.
+        scenes = plan_scenes(self._part(), 3.0, freeze_last=False, series_labels=[])
+        out = interleave_veo(scenes, clip_seconds=8.0, still_seconds=6.0, max_clips=2)
+
+        veo_cuts = [scene for scene in out if scene.engine == "veo"]
+        assert veo_cuts
+        assert all(scene.duration == pytest.approx(8.0) for scene in veo_cuts)
+
+    def test_total_duration_is_preserved(self):
+        scenes = plan_scenes(self._part(), 3.0, freeze_last=False, series_labels=[])
+        before = sum(scene.duration for scene in scenes)
+        out = interleave_veo(scenes, clip_seconds=8.0, still_seconds=6.0, max_clips=2)
+        assert sum(scene.duration for scene in out) == pytest.approx(before)
+
+    def test_max_clips_is_respected(self):
+        scenes = plan_scenes(self._part(20), 3.0, freeze_last=False, series_labels=[])
+        out = interleave_veo(scenes, clip_seconds=8.0, still_seconds=6.0, max_clips=1)
+        assert engine_counts(out)["veo"] == 1
+
+    def test_zero_clips_leaves_scenes_untouched(self):
+        scenes = plan_scenes(self._part(), 3.0, freeze_last=False, series_labels=[])
+        assert interleave_veo(scenes, 8.0, 6.0, max_clips=0) is scenes
+
+    def test_too_short_to_fill_a_billing_unit_makes_no_clip(self):
+        # 남은 길이가 8초를 못 채우면 아예 만들지 않는다 — 3초 쓰자고 8초 값을 낼 순 없다.
+        short = ScriptPart(
+            part=1,
+            hook_number="훅",
+            lines=[
+                ScriptLine(text="하나", visual_query_ko="사진", visual_query_en="p", duration=3.0),
+                ScriptLine(text="둘", visual_query_ko="사진", visual_query_en="p", duration=3.0),
+                ScriptLine(text="셋", visual_query_ko="사진", visual_query_en="p", duration=3.0),
+            ],
+        )
+        scenes = plan_scenes(short, 3.0, freeze_last=False, series_labels=[])
+        out = interleave_veo(scenes, clip_seconds=8.0, still_seconds=6.0, max_clips=2)
+        assert engine_counts(out)["veo"] == 0
 
 
 class TestKhsClient:

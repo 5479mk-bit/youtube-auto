@@ -99,6 +99,89 @@ def plan_scenes(
     return scenes
 
 
+def interleave_veo(
+    scenes: list[Scene],
+    clip_seconds: float,
+    still_seconds: float,
+    max_clips: int,
+) -> list[Scene]:
+    """사진 컷 뒤에 '그 사진이 움직이는' Veo 컷이 오도록 번갈아 배치한다.
+
+    정지 사진만 계속 훑으면 지루하고, 전부 Veo 로 만들면 편당 5천원이 넘는다. 사진을 먼저
+    보여주고 같은 사진이 살아나는 컷을 붙이면 리듬이 생기면서 비용은 클립 수만큼만 든다.
+
+    Veo 컷은 바로 앞 사진 컷과 같은 검색어를 물려받는다 — ImageCollector 가 검색어로
+    캐시하므로 실제로 '방금 그 사진'이 움직이는 클립이 된다.
+
+    Veo 는 clip_seconds(보통 8초) 단위로 과금되므로, 남은 길이가 그만큼 안 되면 아예
+    만들지 않는다. 3초 쓰자고 8초 값을 내는 게 제일 아까운 낭비다.
+    """
+    if max_clips <= 0 or clip_seconds <= 0:
+        return scenes
+
+    result: list[Scene] = []
+    index = 0
+    clips_used = 0
+    still_elapsed = 0.0
+
+    while index < len(scenes):
+        scene = scenes[index]
+        result.append(scene)
+        index += 1
+
+        # 도입부(생성 영상/공식 영상)는 이미 배정된 구간이라 건드리지 않는다.
+        if scene.engine != "parallax":
+            continue
+
+        still_elapsed += scene.duration
+        if clips_used >= max_clips or still_elapsed < still_seconds:
+            continue
+
+        taken, total, cursor = [], 0.0, index
+        while cursor < len(scenes) and total < clip_seconds and scenes[cursor].engine == "parallax":
+            taken.append(scenes[cursor])
+            total += scenes[cursor].duration
+            cursor += 1
+
+        if total < clip_seconds:
+            continue
+
+        # 생성 클립은 정확히 clip_seconds 다. 씬을 그보다 길게 잡으면 그 차이만큼 화면이
+        # 빈다 — 넘치는 만큼은 사진 컷으로 되돌려준다.
+        result.append(
+            Scene(
+                start=taken[0].start,
+                duration=clip_seconds,
+                image_query_ko=scene.image_query_ko,
+                image_query_en=scene.image_query_en,
+                camera="push_in",
+                engine="veo",
+                show_chart=taken[0].show_chart,
+                chart_step=taken[0].chart_step,
+            )
+        )
+        leftover = total - clip_seconds
+        if leftover > 0.05:
+            tail = taken[-1]
+            result.append(
+                Scene(
+                    start=taken[0].start + clip_seconds,
+                    duration=leftover,
+                    image_query_ko=tail.image_query_ko,
+                    image_query_en=tail.image_query_en,
+                    camera=tail.camera,
+                    engine="parallax",
+                    show_chart=tail.show_chart,
+                    chart_step=tail.chart_step,
+                )
+            )
+        clips_used += 1
+        still_elapsed = leftover
+        index = cursor
+
+    return result
+
+
 def engine_counts(scenes: list[Scene]) -> dict[MotionEngine, int]:
     counts: dict[MotionEngine, int] = {"veo": 0, "parallax": 0, "official_video": 0}
     for scene in scenes:

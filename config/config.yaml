@@ -66,14 +66,18 @@ publish:
     - 야사
     - 쇼츠
 
-# 사진을 실제로 움직이는 영상으로 만드는 유료 경로. 8초 단위로 과금되므로 도입부에 몰아준다.
+# 사진을 실제로 움직이는 영상으로 만드는 유료 경로. 8초 단위로 과금된다.
+# 배치는 "사진 → 그 사진이 움직이는 Veo 컷 → 다음 사진" 교차식이라, 정지 사진만 훑는
+# 지루함은 피하면서 비용은 클립 수만큼만 든다.
 veo:
   tier: lite            # lite | fast | standard — 단가가 8배까지 벌어진다
   resolution: 720p
   duration_seconds: 8
-  clips_per_part: 1     # 부당 Veo 클립 수. 0 이면 전부 무료 파랄랙스로 간다
-  max_clips_per_episode: 2
-  max_clips_per_day: 6
+  clips_per_part: 2     # 부당 Veo 클립 수. 0 이면 전부 무료 파랄랙스로 간다
+  still_seconds: 6.0    # Veo 컷 사이에 사진을 몇 초 보여줄지
+  # lite 8초 기준 클립당 약 590원. 편당 4클립이면 약 2,400원, 하루 1편이면 월 약 7만원.
+  max_clips_per_episode: 4
+  max_clips_per_day: 12
 
 # 무료 경로. 깊이를 추정해 카메라가 장면 안으로 들어간다.
 parallax:
