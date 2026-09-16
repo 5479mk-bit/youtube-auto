@@ -9,6 +9,7 @@ credentials/
 *.sqlite3
 
 output/
+logs/
 resource/bgm/*
 !resource/bgm/.gitkeep
 resource/fonts/*

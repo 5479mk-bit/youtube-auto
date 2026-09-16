@@ -9,10 +9,24 @@ from pathlib import Path
 from loguru import logger
 
 from src import pipeline
-from src.settings import OUTPUT_DIR, load_settings
+from src.settings import OUTPUT_DIR, PROJECT_ROOT, load_settings
+
+
+def _add_file_log() -> None:
+    """작업 스케줄러 같은 무인 실행에서 콘솔이 없어도 나중에 원인을 볼 수 있게 한다."""
+    log_dir = PROJECT_ROOT / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    logger.add(
+        log_dir / "run_{time:YYYY-MM-DD}.log",
+        rotation="1 day",
+        retention="30 days",
+        encoding="utf-8",
+        level="INFO",
+    )
 
 
 def main() -> int:
+    _add_file_log()
     parser = argparse.ArgumentParser(description="공공데이터 쇼츠 자동 생성")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
