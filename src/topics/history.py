@@ -73,3 +73,21 @@ def set_review_status(db_path: Path, task_id: str, status: str) -> None:
             "UPDATE pending_reviews SET status = ?, updated_at = datetime('now') WHERE task_id = ?",
             (status, task_id),
         )
+
+
+def list_pending_reviews(db_path: Path) -> list[dict[str, Any]]:
+    """아직 승인/거절 응답을 못 받은 회차들. PC가 꺼져 검수 대기가 끊긴 회차를
+    다시 확인할 때 쓴다(`review-pending` 명령)."""
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT task_id, payload, created_at FROM pending_reviews WHERE status = 'pending'"
+            " ORDER BY created_at"
+        ).fetchall()
+    return [
+        {
+            "task_id": row["task_id"],
+            "payload": json.loads(row["payload"]),
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]

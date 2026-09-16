@@ -50,6 +50,14 @@ def main() -> int:
 
     subparsers.add_parser("topics", help="주제 후보 순위만 확인한다")
 
+    review_pending_parser = subparsers.add_parser(
+        "review-pending",
+        help="PC가 꺼지는 등으로 끊긴 검수 대기를 다시 확인하고, 승인됐으면 업로드한다",
+    )
+    review_pending_parser.add_argument(
+        "--wait", type=int, default=300, help="응답을 기다릴 최대 시간(초)"
+    )
+
     photos_parser = subparsers.add_parser(
         "photos", help="검색어로 어떤 사진이 오는지 미리 본다 (Veo 호출 없음)"
     )
@@ -80,6 +88,8 @@ def main() -> int:
         return _voice_test(settings, args.text)
     if args.command == "veo-test":
         return _veo_test(settings, Path(args.image), args.prompt)
+    if args.command == "review-pending":
+        return _review_pending(settings, args.wait)
 
     result = pipeline.run(
         settings, render=not args.dry_run, use_veo=not args.no_veo
@@ -181,6 +191,29 @@ def _veo_test(settings, image_path: Path, prompt: str) -> int:
     logger.info(f"생성 완료: {clip_path}")
     logger.info(cost.summary() if cost.clips else "캐시 적중 — 과금 없음")
     return 0
+
+
+def _review_pending(settings, wait_seconds: int) -> int:
+    """`run --review` 가 응답을 못 받고 끊긴 회차들을 다시 확인한다(재렌더 없음)."""
+    from src.publish.youtube_uploader import SampleDataUploadBlocked
+
+    try:
+        results = pipeline.resume_pending_reviews(settings, wait_seconds)
+    except SampleDataUploadBlocked as exc:
+        logger.warning(f"샘플 데이터라 업로드가 차단됐습니다: {exc}")
+        return 1
+
+    if not results:
+        return 0
+
+    failed = 0
+    for task_id, video_ids in results.items():
+        if video_ids:
+            logger.info(f"{task_id}: 업로드 완료 ({len(video_ids)}편)")
+        else:
+            logger.info(f"{task_id}: 업로드되지 않았습니다(거절 또는 무응답)")
+            failed += 1
+    return 1 if failed == len(results) else 0
 
 
 if __name__ == "__main__":

@@ -59,9 +59,23 @@ class TelegramReviewer:
         )
 
     def wait_for_decision(self, task_id: str, timeout_seconds: int) -> ReviewDecision | None:
+        return self.wait_for_decisions([task_id], timeout_seconds).get(task_id)
+
+    def wait_for_decisions(
+        self, task_ids: list[str], timeout_seconds: int
+    ) -> dict[str, ReviewDecision]:
+        """여러 회차의 응답을 한 번에 기다린다.
+
+        회차 하나씩 따로 기다리면(wait_for_decision 반복 호출) 먼저 기다리는 회차를
+        찾다가 다른 회차의 콜백을 그냥 지나쳐버린다 — getUpdates 는 offset 을 넘긴
+        업데이트를 다시 안 돌려주므로, 그 회차는 실제로 눌렀는데도 나중엔 응답을 놓친
+        것처럼 보인다. 그래서 대기 중인 회차 전부를 한 번의 폴링 루프에서 같이 본다.
+        """
+        remaining = set(task_ids)
+        resolved: dict[str, ReviewDecision] = {}
         deadline = time.time() + timeout_seconds
 
-        while time.time() < deadline:
+        while remaining and time.time() < deadline:
             updates = self._call(
                 "getUpdates",
                 {
@@ -78,7 +92,8 @@ class TelegramReviewer:
                     continue
 
                 data = str(query.get("data", ""))
-                if not data.startswith(f"{task_id}:"):
+                matched = next((t for t in remaining if data.startswith(f"{t}:")), None)
+                if matched is None:
                     continue
 
                 action = data.split(":", 1)[1]
@@ -89,12 +104,16 @@ class TelegramReviewer:
                         "text": "승인했습니다" if action.startswith("a") else "거절했습니다",
                     },
                 )
-                if action.startswith("a"):
-                    return ReviewDecision(approved=True, title_index=int(action[1:] or 0))
-                return ReviewDecision(approved=False)
+                resolved[matched] = (
+                    ReviewDecision(approved=True, title_index=int(action[1:] or 0))
+                    if action.startswith("a")
+                    else ReviewDecision(approved=False)
+                )
+                remaining.discard(matched)
 
-        logger.warning("검수 응답을 기다리다 시간이 초과되었습니다")
-        return None
+        if remaining:
+            logger.warning(f"검수 응답을 기다리다 시간이 초과되었습니다: {', '.join(remaining)}")
+        return resolved
 
     def notify(self, text: str) -> None:
         self._call("sendMessage", {"chat_id": self.chat_id, "text": text})

@@ -6,14 +6,16 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src import pipeline
 from src.datasource.base import load_fixture as load_stats_fixture
 from src.heritage import khs_client
 from src.heritage.fixtures import load_fixture as load_heritage_fixture
@@ -30,6 +32,8 @@ from src.topics import topic_scorer
 from src.visuals.image_collector import ImageCollector
 from src.visuals.photo_sources.base import PhotoResult
 from src.motion.veo_budget import BudgetExceeded, ClipCost, VeoBudget
+from src.review.telegram_bot import ReviewDecision, TelegramReviewer
+from src.topics import history
 from src.visuals.photo_sources.wikimedia import normalize_license
 from src.visuals.scene_planner import MIN_CUT_DURATION, engine_counts, plan_scenes
 
@@ -434,3 +438,95 @@ class TestImageCollectorPriorityPool:
 
         assert collector.collect("빈 풀", "") is None
         assert "빈 풀" in collector.failed_queries
+
+
+class TestTelegramReviewerMultiWait:
+    def test_a_callback_for_one_task_does_not_get_consumed_while_waiting_for_another(self):
+        # 회차 두 개가 동시에 대기 중일 때, task2 콜백이 먼저 도착해도 task1 을 기다리다
+        # 놓치면 안 된다 — wait_for_decision 을 따로따로 부르면 이게 실제로 깨졌었다.
+        reviewer = TelegramReviewer("token", "chat")
+        updates = {
+            "result": [
+                {
+                    "update_id": 1,
+                    "callback_query": {"id": "q1", "data": "task2:a0"},
+                },
+            ]
+        }
+        with patch.object(reviewer, "_call", return_value=updates) as mock_call:
+            decisions = reviewer.wait_for_decisions(["task1", "task2"], timeout_seconds=1)
+
+        assert "task2" in decisions
+        assert decisions["task2"].approved is True
+        assert "task1" not in decisions
+        # answerCallbackQuery 가 실제로 불렸는지도 확인한다.
+        assert any(call.args[0] == "answerCallbackQuery" for call in mock_call.call_args_list)
+
+
+class TestResumePendingReviews:
+    def test_resolved_approval_reaches_upload_and_clears_pending_status(self, tmp_path):
+        task_id = "test-task-1"
+        part_dir = tmp_path / "output" / task_id
+        part_dir.mkdir(parents=True)
+        for part_num in (1, 2):
+            (part_dir / f"part{part_num}.mp4").write_bytes(b"fake")
+            (part_dir / f"part{part_num}_thumb.jpg").write_bytes(b"fake")
+
+        result_json = {
+            "task_id": task_id,
+            "topic_key": "heritage:테스트",
+            "is_sample": False,
+            "parts": [
+                {
+                    "part": 1,
+                    "video": str(part_dir / "part1.mp4"),
+                    "thumbnail": str(part_dir / "part1_thumb.jpg"),
+                    "duration": 30.0,
+                    "title": "테스트 제목",
+                    "title_alternatives": ["대안1"],
+                    "description": "설명",
+                    "tags": ["tag1"],
+                },
+                {
+                    "part": 2,
+                    "video": str(part_dir / "part2.mp4"),
+                    "thumbnail": str(part_dir / "part2_thumb.jpg"),
+                    "duration": 30.0,
+                    "title": "테스트 제목 (2부)",
+                    "title_alternatives": [],
+                    "description": "설명2",
+                    "tags": ["tag1"],
+                },
+            ],
+        }
+        (part_dir / "result.json").write_text(
+            json.dumps(result_json, ensure_ascii=False), encoding="utf-8"
+        )
+
+        fake_db = tmp_path / "state.sqlite3"
+        history.save_pending(
+            fake_db, task_id, {"topic_key": "heritage:테스트", "titles": ["테스트 제목", "대안1"]}
+        )
+
+        settings = MagicMock()
+        settings.secrets.telegram_bot_token = "x"
+        settings.secrets.telegram_chat_id = "y"
+        settings.get.side_effect = lambda key, default=None: default
+
+        with patch.object(pipeline, "STATE_DB", fake_db), patch.object(
+            pipeline, "OUTPUT_DIR", tmp_path / "output"
+        ), patch("src.review.telegram_bot.TelegramReviewer") as MockReviewer, patch(
+            "src.publish.youtube_uploader.get_service", return_value=object()
+        ), patch(
+            "src.publish.youtube_uploader.upload_series", return_value=["vid1", "vid2"]
+        ):
+            reviewer = MockReviewer.return_value
+            reviewer.enabled = True
+            reviewer.wait_for_decisions.return_value = {
+                task_id: ReviewDecision(approved=True, title_index=0)
+            }
+
+            results = pipeline.resume_pending_reviews(settings, 5)
+
+        assert results == {task_id: ["vid1", "vid2"]}
+        assert history.list_pending_reviews(fake_db) == []

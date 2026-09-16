@@ -380,7 +380,6 @@ def _warn_if_off_target(settings: Settings, part: ScriptPart) -> None:
 def review_and_publish(
     settings: Settings, result: PipelineResult, wait_seconds: int
 ) -> list[str]:
-    from .publish.youtube_uploader import SampleDataUploadBlocked, get_service, upload_series
     from .review.telegram_bot import TelegramReviewer, build_summary
 
     reviewer = TelegramReviewer(
@@ -410,34 +409,119 @@ def review_and_publish(
     )
 
     decision = reviewer.wait_for_decision(result.task_id, wait_seconds)
+    return _finish_review(
+        settings, reviewer, result.task_id, result.script.is_sample, result.parts, titles, decision
+    )
+
+
+def resume_pending_reviews(settings: Settings, wait_seconds: int) -> dict[str, list[str]]:
+    """PC 가 꺼지는 등으로 검수 대기가 끊긴 회차들을 다시 확인한다.
+
+    렌더된 영상과 텔레그램 메시지는 이미 나가 있는 상태이므로(review_and_publish 가
+    `history.save_pending` 으로 남겨둠), 여기서는 다시 렌더하지 않고 그때 저장해둔
+    output/<task_id>/result.json 을 읽어 업로드에 필요한 정보만 재구성한다. 사용자가
+    PC를 끄기 전에 이미 승인 버튼을 눌렀어도, 텔레그램은 getUpdates 로 가져가기 전까지
+    그 콜백을 들고 있으므로 다음에 실행했을 때 그대로 받아진다.
+    """
+    import json
+
+    from .models import RenderedPart, VideoMetadata
+    from .review.telegram_bot import TelegramReviewer
+
+    reviewer = TelegramReviewer(
+        settings.secrets.telegram_bot_token, settings.secrets.telegram_chat_id
+    )
+    if not reviewer.enabled:
+        logger.warning("텔레그램 설정이 없어 대기 중인 승인을 확인할 수 없습니다")
+        return {}
+
+    pending = history.list_pending_reviews(STATE_DB)
+    if not pending:
+        logger.info("대기 중인 승인이 없습니다")
+        return {}
+
+    tasks: dict[str, dict] = {}
+    for row in pending:
+        task_id = row["task_id"]
+        result_path = OUTPUT_DIR / task_id / "result.json"
+        if not result_path.exists():
+            logger.warning(f"{task_id}: 산출물(result.json)이 없어 건너뜁니다")
+            history.set_review_status(STATE_DB, task_id, "missing_output")
+            continue
+        data = json.loads(result_path.read_text(encoding="utf-8"))
+        data["titles"] = row["payload"].get("titles") or [data["parts"][0]["title"]]
+        tasks[task_id] = data
+
+    if not tasks:
+        return {}
+
+    logger.info(f"대기 중인 승인 {len(tasks)}건을 확인합니다: {', '.join(tasks)}")
+    decisions = reviewer.wait_for_decisions(list(tasks), wait_seconds)
+
+    results: dict[str, list[str]] = {}
+    for task_id, data in tasks.items():
+        decision = decisions.get(task_id)
+        if decision is None:
+            logger.info(f"{task_id}: 아직 응답이 없습니다 — 다음에 다시 확인하세요")
+            continue
+
+        parts = [
+            RenderedPart(
+                part=part["part"],
+                video_path=part["video"],
+                thumbnail_path=part["thumbnail"],
+                duration=part["duration"],
+                metadata=VideoMetadata(
+                    title=part["title"],
+                    title_alternatives=part["title_alternatives"],
+                    description=part["description"],
+                    tags=part["tags"],
+                ),
+            )
+            for part in data["parts"]
+        ]
+        results[task_id] = _finish_review(
+            settings, reviewer, task_id, data["is_sample"], parts, data["titles"], decision
+        )
+    return results
+
+
+def _finish_review(
+    settings: Settings,
+    reviewer,
+    task_id: str,
+    is_sample: bool,
+    parts: list[RenderedPart],
+    titles: list[str],
+    decision,
+) -> list[str]:
+    from .publish.youtube_uploader import SampleDataUploadBlocked, get_service, upload_series
+
     if decision is None or not decision.approved:
-        history.set_review_status(STATE_DB, result.task_id, "rejected")
-        logger.info("승인되지 않아 업로드하지 않습니다")
+        history.set_review_status(STATE_DB, task_id, "rejected")
+        logger.info(f"{task_id}: 승인되지 않아 업로드하지 않습니다")
         return []
 
-    if result.script.is_sample:
-        history.set_review_status(STATE_DB, result.task_id, "blocked_sample")
+    if is_sample:
+        history.set_review_status(STATE_DB, task_id, "blocked_sample")
         reviewer.notify("샘플 데이터로 만든 영상이라 업로드를 차단했습니다.")
-        raise SampleDataUploadBlocked(result.task_id)
+        raise SampleDataUploadBlocked(task_id)
 
     # 사람이 고른 제목을 1부에 반영하고, 2부는 같은 어투로 맞춘다.
     chosen = titles[min(decision.title_index, len(titles) - 1)]
-    result.parts[0].metadata.title = chosen
+    parts[0].metadata.title = chosen
 
     service = get_service(
         settings.secrets.youtube_client_secret_file, settings.secrets.youtube_token_file
     )
     video_ids = upload_series(
         service,
-        [
-            (Path(part.video_path), part.metadata, Path(part.thumbnail_path))
-            for part in result.parts
-        ],
+        [(Path(part.video_path), part.metadata, Path(part.thumbnail_path)) for part in parts],
         settings.get("publish.privacy_status", "private"),
         settings.get("publish.category_id", "25"),
     )
 
-    history.set_review_status(STATE_DB, result.task_id, "uploaded")
+    history.set_review_status(STATE_DB, task_id, "uploaded")
     reviewer.notify(
         "업로드 완료\n"
         + "\n".join(
