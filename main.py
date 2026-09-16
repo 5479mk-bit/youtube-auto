@@ -91,10 +91,19 @@ def main() -> int:
     if args.command == "review-pending":
         return _review_pending(settings, args.wait)
 
-    result = pipeline.run(
-        settings, render=not args.dry_run, use_veo=not args.no_veo
-    )
+    try:
+        result = pipeline.run(
+            settings, render=not args.dry_run, use_veo=not args.no_veo
+        )
+    except Exception as exc:
+        # 작업 스케줄러로 무인 실행될 때는 아무도 콘솔을 안 본다. 조용히 죽으면 며칠 뒤에야
+        # "왜 영상이 없지" 하고 알게 되므로, 실패 자체를 텔레그램으로 알린다.
+        logger.exception("회차 생성 중 예외로 중단됐습니다")
+        _notify_failure(settings, f"예외로 중단: {type(exc).__name__}: {exc}")
+        return 1
+
     if result is None:
+        _notify_failure(settings, "주제를 못 고르거나 사진을 못 구해 중단됐습니다 (logs/ 확인)")
         return 1
 
     logger.info(f"산출물: {result.work_dir}")
@@ -107,6 +116,21 @@ def main() -> int:
         pipeline.review_and_publish(settings, result, args.wait)
 
     return 0
+
+
+def _notify_failure(settings, reason: str) -> None:
+    """실패를 텔레그램으로 알린다. 알림 자체가 실패해도 원래 오류를 덮지 않는다."""
+    from src.review.telegram_bot import TelegramReviewer
+
+    reviewer = TelegramReviewer(
+        settings.secrets.telegram_bot_token, settings.secrets.telegram_chat_id
+    )
+    if not reviewer.enabled:
+        return
+    try:
+        reviewer.notify(f"⚠️ 오늘 회차를 만들지 못했습니다\n{reason}")
+    except Exception as exc:
+        logger.warning(f"실패 알림 전송도 실패했습니다: {exc}")
 
 
 def _topics(settings) -> int:
