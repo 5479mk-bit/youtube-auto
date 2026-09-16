@@ -278,13 +278,31 @@ def _load_bgm(settings, duration: float):
         return None
 
     track = random.choice(tracks)
-    volume_db = settings.get("audio.bgm_volume_db")
-    gain = 10 ** (volume_db / 20)
-
     clip = AudioFileClip(str(track))
-    if clip.duration > duration:
-        clip = clip.subclipped(0, duration)
-    return clip.with_volume_scaled(gain)
+
+    # 음원이 영상보다 짧으면 뒤쪽이 통째로 무음이 된다. 길이를 채울 때까지 이어 붙인다.
+    if clip.duration < duration:
+        clip = concatenate_audioclips([clip] * (int(duration // clip.duration) + 1))
+    clip = clip.subclipped(0, duration)
+
+    base_gain = _db_to_gain(settings.get("audio.bgm_volume_db", -18))
+    hook_gain = _db_to_gain(settings.get("audio.bgm_hook_volume_db", -18))
+    hook_seconds = min(float(settings.get("video.hook_duration", 3.0)), duration)
+
+    if hook_seconds <= 0 or hook_gain == base_gain:
+        return clip.with_volume_scaled(base_gain)
+
+    # 시청 이탈은 첫 몇 초에서 갈린다. 그 구간만 음악을 크게 깔아 붙잡는다.
+    return concatenate_audioclips(
+        [
+            clip.subclipped(0, hook_seconds).with_volume_scaled(hook_gain),
+            clip.subclipped(hook_seconds).with_volume_scaled(base_gain),
+        ]
+    )
+
+
+def _db_to_gain(volume_db: float) -> float:
+    return 10 ** (float(volume_db) / 20)
 
 
 def photo_credit_line(credits: list[PhotoCredit]) -> str:
