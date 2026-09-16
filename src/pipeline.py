@@ -117,7 +117,21 @@ def fetch_official_video(
     if dest is None:
         return None
 
-    duration = chosen.duration_seconds or float(settings.get("veo.duration_seconds", 8))
+    # 실제 응답엔 재생시간 정보가 없다(url 뿐) — 받은 파일을 직접 열어 길이를 잰다.
+    max_seconds = float(settings.get("veo.duration_seconds", 8))
+    try:
+        from moviepy import VideoFileClip
+
+        with VideoFileClip(str(dest)) as clip:
+            duration = min(clip.duration, max_seconds)
+    except Exception as exc:
+        logger.warning(f"공식 동영상을 열지 못해 이번엔 건너뜁니다: {exc}")
+        return None
+
+    if duration < 1.0:
+        logger.warning("공식 동영상이 너무 짧아(1초 미만) 건너뜁니다")
+        return None
+
     return dest, duration
 
 

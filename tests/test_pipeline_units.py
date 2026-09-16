@@ -8,14 +8,17 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.datasource.base import load_fixture as load_stats_fixture
+from src.heritage import khs_client
 from src.heritage.fixtures import load_fixture as load_heritage_fixture
-from src.heritage.heritage_media import HeritageVideo, select_video
+from src.heritage.heritage_media import HeritageVideo, fetch_images, select_video
+from src.heritage.heritage_source import HeritageSource
 from src.heritage.khs_client import _extract_items
 from src.heritage.story_scorer import mystery_score, prestige_score, story_density
 from src.models import DataPoint, ScriptLine, ScriptPart, StoryCandidate
@@ -327,18 +330,49 @@ class TestFixtures:
 
 
 class TestHeritageMedia:
-    def test_select_video_prefers_higher_resolution_and_filters_short_clips(self):
-        too_short = HeritageVideo(url="a", width=1920, height=1080, duration_seconds=1.0)
-        low_res = HeritageVideo(url="b", width=320, height=240, duration_seconds=5.0)
-        high_res = HeritageVideo(url="c", width=1920, height=1080, duration_seconds=6.0)
-        chosen = select_video([too_short, low_res, high_res])
-        assert chosen is high_res
-
-    def test_select_video_returns_none_when_all_too_short(self):
-        assert select_video([HeritageVideo(url="a", duration_seconds=1.0)]) is None
+    def test_select_video_returns_first_when_available(self):
+        # 실제 응답엔 url 뿐이라(해상도·재생시간 필드가 없음) 순서대로 첫 항목을 쓴다 —
+        # 부적합하면 다운로드 후 pipeline.fetch_official_video 가 걸러낸다.
+        first = HeritageVideo(url="a")
+        second = HeritageVideo(url="b")
+        assert select_video([first, second]) is first
 
     def test_select_video_returns_none_for_empty_list(self):
         assert select_video([]) is None
+
+    def test_fetch_images_reads_real_field_names(self):
+        # 사용자가 실제로 호출해 확인한 이미지 API 응답 형태(item: sn/imageNuri/imageUrl/
+        # ccimDesc, ccbaMnm1 같은 이름 필드는 item 밖에 있어 안 옴)를 그대로 본떴다.
+        rows = [
+            {"sn": "1", "imageNuri": "A", "imageUrl": "http://example/1.jpg", "ccimDesc": "전경"},
+        ]
+        with patch.object(khs_client, "get", return_value=rows):
+            photos = fetch_images("11", "0000030000000", "11")
+        assert photos[0].url == "http://example/1.jpg"
+        assert photos[0].author == "전경"
+
+
+class TestHeritageSourceDetail:
+    def test_fetch_detail_reads_real_field_names(self):
+        # 사용자가 실제로 호출해 확인한 상세 API 응답 형태를 그대로 본떴다. ccbaAsdt 는
+        # 지정일자(날짜 문자열)라 해설문으로 쓰면 안 된다 — content 만 써야 한다.
+        row = {
+            "ccmaName": "국보",
+            "ccbaMnm1": "서울 북한산 신라 진흥왕 순수비",
+            "ccbaAsdt": "19621220",
+            "ccbaLcad": "서울 용산구 서빙고로 137, 국립중앙박물관 (용산동6가)",
+            "content": "신라 진흥왕이 세운 순수척경비 중 하나다.",
+        }
+        with patch.object(khs_client, "get", return_value=[row]):
+            candidate = HeritageSource().fetch_detail(
+                "서울 북한산 신라 진흥왕 순수비", "문화유산", "", "11", "0000030000000", "11"
+            )
+        assert candidate is not None
+        assert candidate.headline_number == "국보"
+        assert candidate.context == "신라 진흥왕이 세운 순수척경비 중 하나다."
+        assert "19621220" not in candidate.context
+        assert candidate.heritage_ccba_kdcd == "11"
+        assert candidate.heritage_ccba_asno == "0000030000000"
 
 
 class TestKhsClient:

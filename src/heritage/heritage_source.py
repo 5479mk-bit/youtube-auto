@@ -9,6 +9,12 @@ khs.go.kr 는 apis.data.go.kr 포털과 다른 별도 호스트다 — 실제로
 결과가 비었다 — 대신 `ccbaKdcd`(지정 등급 종목코드)로 걸러야 목록이 온다. `KDCD_LABELS`의
 "11"(국보)은 직접 호출로 확인했고, 나머지 코드는 국가유산청이 공개한 종목코드 체계를 따른
 추정치다 — 실제 응답과 다르면 여기만 고치면 된다(통계 어댑터를 쓸 때와 같은 패턴).
+
+상세 API(`ccbaKdcd`+`ccbaAsno`+`ccbaCtcd` 조합, 실제 예시로 확인)의 item 필드:
+`ccmaName`(카테고리, 예: "국보" — 목록 API 엔 없는 필드라 상세를 받으면 이걸로 갱신한다),
+`ccbaMnm1`/`ccbaMnm2`(국문/한문 명칭), `ccbaAsdt`(지정일자 — 날짜 문자열이지 해설문이
+아니다, 예: "19621220"), `ccbaLcad`(소재지 상세 주소), `ccceName`(시대), `content`(해설문
+본문, 실제로 약 500자 분량 확인), `imageUrl`(대표 이미지 하나).
 """
 
 from __future__ import annotations
@@ -72,7 +78,11 @@ class HeritageSource:
             return None
 
         row = rows[0]
-        explanation = str(row.get("content") or row.get("ccbaAsdt") or "").strip()
+        explanation = str(row.get("content") or "").strip()
+        # ccmaName 은 상세 API 에만 있는 정확한 카테고리명이다. 목록에서 넘어온
+        # KDCD_LABELS 기반 category 보다 이게 있으면 이걸 우선한다.
+        category = str(row.get("ccmaName") or "").strip() or category
+        region = str(row.get("ccbaLcad") or region or "").strip()
         kdcd = str(row.get("ccbaKdcd") or kdcd or "").strip()
         asno = str(row.get("ccbaAsno") or asno or "").strip()
         ctcd = str(row.get("ccbaCtcd") or ctcd or "").strip()
@@ -85,7 +95,9 @@ class HeritageSource:
         kdcd = str(row.get("ccbaKdcd") or "").strip()
         category = KDCD_LABELS.get(kdcd, str(row.get("ccmaName") or "").strip())
         region = str(row.get("ccbaCtcdNm") or row.get("region") or "").strip()
-        explanation = str(row.get("content") or row.get("ccbaAsdt") or "").strip()
+        # 목록 API 엔 해설문이 없다(ccbaMnm1/ccbaKdcd/ccbaCtcd 등 기본 정보만 옴) —
+        # 해설문은 fetch_detail() 이 상세 API 로 따로 채운다.
+        explanation = str(row.get("content") or "").strip()
         # 이미지·동영상·나레이션 API 는 이름이 아니라 이 세 값의 조합으로 조회한다.
         asno = str(row.get("ccbaAsno") or "").strip()
         ctcd = str(row.get("ccbaCtcd") or "").strip()

@@ -7,6 +7,13 @@
 
 나레이션(SearchVoiceOpenapi.do)은 이번 단계에서 다루지 않는다 — 정보 전달용 해설 낭독이라
 지금 대본 말투와 안 맞을 수 있어 따로 검토하기로 했다.
+
+실제 호출로 확인한 item 필드:
+- 이미지: `sn`(순번), `imageNuri`(라이선스 구분으로 보이는 A/D 플래그 — 정확한 의미는
+  아직 미확인, 실제 공공누리 유형표와 대조 필요), `imageUrl`, `ccimDesc`(이미지 설명).
+  `ccbaMnm1` 같은 이름 필드는 item 안에 없다(응답 최상위에만 있음).
+- 동영상: `sn`, `videoUrl` 뿐이다. 해상도·재생시간 필드는 응답에 아예 없다 — 화면비·길이는
+  실제로 내려받아 확인하는 수밖에 없다(`render/motion_sources.py`가 다운로드 후 크롭한다).
 """
 
 from __future__ import annotations
@@ -26,17 +33,12 @@ SOURCE_NAME = "국가유산청 국가문화유산포털"
 SOURCE_URL = "https://www.heritage.go.kr"
 LICENSE_NAME = "공공누리 제1유형"
 DOWNLOAD_TIMEOUT = 60
-# 너무 짧은 영상은 도입부(보통 3~8초)를 못 채운다. 해상도는 0(정보 없음)이면 걸러내지 않는다
-# — 실제 응답을 봐야 알 수 있어 일단 통과시키고 크롭 단계에서 가운데를 잘라 쓴다.
-MIN_DURATION_SECONDS = 3.0
 
 
 @dataclass
 class HeritageVideo:
+    # 실제 응답엔 url 외엔 아무 메타데이터도 없다(해상도·재생시간 필드 자체가 없음).
     url: str
-    width: int = 0
-    height: int = 0
-    duration_seconds: float = 0.0
 
 
 def _identifiers_ok(kdcd: str, asno: str, ctcd: str) -> bool:
@@ -58,7 +60,7 @@ def fetch_images(kdcd: str, asno: str, ctcd: str, limit: int = 10) -> list[Photo
 
     results: list[PhotoResult] = []
     for row in rows:
-        url = str(row.get("imageUrl") or row.get("ccimgUrl") or "").strip()
+        url = str(row.get("imageUrl") or "").strip()
         if not url.startswith("http"):
             continue
         results.append(
@@ -67,7 +69,7 @@ def fetch_images(kdcd: str, asno: str, ctcd: str, limit: int = 10) -> list[Photo
                 source_name=SOURCE_NAME,
                 license_name=LICENSE_NAME,
                 page_url=SOURCE_URL,
-                author=str(row.get("ccbaMnm1") or "").strip(),
+                author=str(row.get("ccimDesc") or "").strip(),
                 width=MIN_WIDTH,
             )
         )
@@ -91,27 +93,23 @@ def fetch_videos(kdcd: str, asno: str, ctcd: str) -> list[HeritageVideo]:
 
     videos: list[HeritageVideo] = []
     for row in rows:
-        url = str(row.get("videoUrl") or row.get("ccbaVdUrl") or "").strip()
+        url = str(row.get("videoUrl") or "").strip()
         if not url.startswith("http"):
             continue
-        videos.append(
-            HeritageVideo(
-                url=url,
-                width=_to_int(row.get("width")),
-                height=_to_int(row.get("height")),
-                duration_seconds=_to_float(row.get("playTime") or row.get("duration")),
-            )
-        )
+        # 실제 응답엔 sn/videoUrl 뿐이라 해상도·재생시간은 항상 0(정보 없음)이다 —
+        # 적합성은 다운로드 후 render/motion_sources.py 가 실제 파일을 열어서 판단한다.
+        videos.append(HeritageVideo(url=url))
     return videos
 
 
 def select_video(videos: list[HeritageVideo]) -> HeritageVideo | None:
-    """도입부에 쓸 영상 하나를 고른다. 길이 정보가 있으면 너무 짧은 건 거른다."""
-    usable = [v for v in videos if v.duration_seconds == 0 or v.duration_seconds >= MIN_DURATION_SECONDS]
-    if not usable:
-        return None
-    # 해상도가 큰 걸 우선한다 — 세로로 크롭해도 화질이 덜 깨진다.
-    return max(usable, key=lambda v: v.width * v.height)
+    """도입부에 쓸 영상 하나를 고른다.
+
+    실제 응답엔 해상도·재생시간 메타데이터가 없어(url 뿐) 미리 걸러낼 수 없다 — 첫 번째
+    항목을 그대로 쓰고, 부적합하면(너무 짧거나 다운로드 실패) 호출하는 쪽이 Veo/파랄랙스로
+    내려간다.
+    """
+    return videos[0] if videos else None
 
 
 def download_video(video: HeritageVideo, dest_path: Path) -> Path | None:
@@ -125,17 +123,3 @@ def download_video(video: HeritageVideo, dest_path: Path) -> Path | None:
         logger.warning(f"[heritage_media] 동영상 다운로드 실패({video.url[:60]}): {exc}")
         dest_path.unlink(missing_ok=True)
         return None
-
-
-def _to_int(value: object) -> int:
-    try:
-        return int(str(value).strip())
-    except (TypeError, ValueError):
-        return 0
-
-
-def _to_float(value: object) -> float:
-    try:
-        return float(str(value).strip())
-    except (TypeError, ValueError):
-        return 0.0
