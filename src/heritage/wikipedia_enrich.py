@@ -19,6 +19,9 @@ API_URL = "https://ko.wikipedia.org/w/api.php"
 SOURCE_NAME = "위키백과"
 TIMEOUT = 15
 MAX_EXCERPT_CHARS = 1200
+# 위키미디어는 User-Agent 없는 요청(파이썬 requests 기본값 포함)을 403 으로 막는다.
+# 이걸 빠뜨려서 wiki_excerpt 가 늘 비어 있었다 — 야사 콘텐츠의 재료가 통째로 없던 셈이다.
+HEADERS = {"User-Agent": "youtube-auto/0.2 (heritage documentary shorts)"}
 
 # 이 이름이 붙은 섹션은 통째로 미스터리 후보다. 제목이 정확히 일치하지 않아도
 # 부분 일치로 잡는다 ("전설과 설화" 같은 변형 대응).
@@ -33,7 +36,7 @@ def fetch_summary(title: str) -> str:
         response = requests.get(
             f"https://ko.wikipedia.org/api/rest_v1/page/summary/{requests.utils.quote(title)}",
             timeout=TIMEOUT,
-            headers={"accept": "application/json"},
+            headers={**HEADERS, "accept": "application/json"},
         )
         if response.status_code != 200:
             return ""
@@ -84,6 +87,7 @@ def _fetch_plaintext(title: str) -> str:
                 "redirects": 1,
             },
             timeout=TIMEOUT,
+            headers=HEADERS,
         )
         response.raise_for_status()
         data = response.json()

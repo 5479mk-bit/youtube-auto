@@ -84,13 +84,27 @@ def build_collector(settings: Settings, candidate: StoryCandidate | None = None)
         settings.get("video.width", 1080),
     )
     priority_images = []
-    if candidate is not None and candidate.heritage_ccba_kdcd:
-        priority_images = heritage_media.fetch_images(
-            candidate.heritage_ccba_kdcd,
-            candidate.heritage_ccba_asno,
-            candidate.heritage_ccba_ctcd,
+    fallback_queries: list[tuple[str, str]] = []
+    if candidate is not None:
+        if candidate.heritage_ccba_kdcd:
+            priority_images = heritage_media.fetch_images(
+                candidate.heritage_ccba_kdcd,
+                candidate.heritage_ccba_asno,
+                candidate.heritage_ccba_ctcd,
+            )
+        # 컷 전용 검색어(LLM 이 지어낸 것)가 빗나갔을 때 쓸 주제 대표 검색어.
+        fallback_queries = list(
+            zip(
+                candidate.image_queries_ko,
+                candidate.image_queries_en + [""] * len(candidate.image_queries_ko),
+            )
         )
-    return ImageCollector(sources, CACHE_DIR / "images", priority_images=priority_images)
+    return ImageCollector(
+        sources,
+        CACHE_DIR / "images",
+        priority_images=priority_images,
+        fallback_queries=fallback_queries,
+    )
 
 
 def fetch_official_video(
