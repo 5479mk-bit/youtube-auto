@@ -15,9 +15,15 @@ FEATURE_KEYS = ("story_density", "mystery_score", "prestige", "freshness")
 
 
 def score_candidate(candidate: StoryCandidate, weights: dict[str, float]) -> float:
+    """가중치에 적힌 축만 본다.
+
+    소스마다 축이 다르다 — 문화재는 위 네 축, 실록은 event_score(사건성)가 중심이다.
+    축 이름을 여기 고정해두면 실록 후보가 전부 0점이 되므로 weights 를 따라간다.
+    """
+    keys = tuple(weights) or FEATURE_KEYS
     return sum(
         weights.get(key, 0.0) * min(max(candidate.features.get(key, 0.0), 0.0), 1.0)
-        for key in FEATURE_KEYS
+        for key in keys
     )
 
 

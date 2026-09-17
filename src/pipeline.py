@@ -28,7 +28,7 @@ from .script import script_writer
 from .script.llm_client import build_provider
 from .settings import CACHE_DIR, OUTPUT_DIR, STATE_DB, Settings
 from .subtitles import subtitle_builder
-from . import heritage
+from . import heritage, sillok
 from .topics import history, topic_scorer
 from .render.motion_sources import PhotoMissing
 from .render.video_builder import photo_credit_line
@@ -50,16 +50,23 @@ class PipelineResult:
 
 
 def select_topic(settings: Settings) -> StoryCandidate | None:
-    client = DataGoKrClient(settings.secrets.data_go_kr_service_key)
-    candidates = heritage.collect_candidates(
-        client,
-        settings.get("topics.candidates_per_dataset", 8),
-    )
-    return topic_scorer.pick(
-        candidates,
-        settings.get("topics.weights", {}),
-        history.used_topic_keys(STATE_DB),
-    )
+    """이번 회차 주제 하나. 소스는 `topics.source` 로 고른다.
+
+    문화재 경로는 지우지 않았다 — 궁궐·유물 화면이 필요할 때 그대로 다시 쓴다.
+    """
+    source = settings.get("topics.source", "heritage")
+    if source == "sillok":
+        candidates = sillok.collect_candidates(settings.get("topics.sillok.article_ids", []))
+        weights = settings.get("topics.sillok.weights", {})
+    else:
+        client = DataGoKrClient(settings.secrets.data_go_kr_service_key)
+        candidates = heritage.collect_candidates(
+            client,
+            settings.get("topics.candidates_per_dataset", 8),
+        )
+        weights = settings.get("topics.weights", {})
+
+    return topic_scorer.pick(candidates, weights, history.used_topic_keys(STATE_DB))
 
 
 def write_script(settings: Settings, candidate: StoryCandidate) -> Script:

@@ -25,6 +25,7 @@ from src.heritage.khs_client import _extract_items
 from src.heritage.story_scorer import mystery_score, prestige_score, story_density
 from src.models import DataPoint, ScriptLine, ScriptPart, StoryCandidate
 from src.script.script_writer import _template_script
+from src.sillok import article as sillok_article
 from src.sillok.event_keywords import scan
 from src.narration.pacing import HOOK_PAUSE, SENTENCE_PAUSE, apply_pacing
 from src.text_ko import particle, read_aloud, sino_korean
@@ -703,3 +704,49 @@ class TestResumePendingReviews:
 
         assert results == {task_id: ["vid1", "vid2"]}
         assert history.list_pending_reviews(fake_db) == []
+
+
+class TestSillokArticle:
+    """실록 기사 페이지 파싱. 실제 응답을 잘라 픽스처로 넣어뒀다."""
+
+    @staticmethod
+    def _article():
+        html = (
+            Path(__file__).parent / "fixtures" / "sillok_kob_10109025_003.html"
+        ).read_text(encoding="utf-8")
+        return sillok_article.parse("kob_10109025_003", html)
+
+    def test_국역과_원문을_각각_뽑는다(self):
+        article = self._article()
+        assert article.translation.startswith("강원 감사 이형욱(李馨郁)이 치계하였다.")
+        assert "杆城郡" in article.original
+        assert article.title.endswith("이형욱이 치계하다")
+        assert article.categories == ["과학-천기(天氣)"]
+
+    def test_인명을_감싼_태그를_지워도_조사가_붙어_있다(self):
+        # <a>이형욱(李馨郁)</a>이 → "이형욱(李馨郁) 이" 로 벌어지면 읽을 때 어색해진다.
+        assert "이형욱(李馨郁)이" in self._article().translation
+
+    def test_서지_저작권_표시는_본문에서_뺀다(self):
+        article = self._article()
+        assert "정족산사고본" not in article.translation
+        assert "한국고전번역원" not in article.translation
+
+    def test_화면에_띄울_날짜는_짧게_줄인다(self):
+        assert self._article().article_id == "kob_10109025_003"
+        assert sillok_article.to_candidate(self._article()).headline_number == (
+            "광해 1년 9월 25일 (1609년)"
+        )
+
+    def test_후보로_옮기면_사건_점수가_붙는다(self):
+        candidate = sillok_article.to_candidate(self._article())
+        assert candidate.dataset == "sillok"
+        assert candidate.topic_key == "sillok:kob_10109025_003"
+        # 하늘의 이변 그물에 걸려야 한다 — 처음엔 하나도 안 걸려서 키워드를 보강했다.
+        assert candidate.features["event_score"] > 0.5
+        assert candidate.facts
+        assert candidate.image_queries_ko
+
+    def test_국역이_없으면_조용히_넘어가지_않는다(self):
+        with pytest.raises(sillok_article.SillokError):
+            sillok_article.parse("x", "<div class='detail-view'></div>")

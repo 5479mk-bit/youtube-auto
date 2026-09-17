@@ -88,7 +88,15 @@ def _template_metadata(
         _with_part_suffix(f"{script.title_seed} ({part.hook_number})", part.part),
         _with_part_suffix(f"{candidate.subject}에 얽힌 이야기", part.part),
     ]
-    description = f"{particle(candidate.subject, '을', '를')} 국가유산청 해설과 위키백과로 들여다봤습니다."
+    if candidate.dataset == "sillok":
+        description = (
+            f"{candidate.headline_number} 실록에 적힌 기록. "
+            "조선왕조실록 국역(국사편찬위원회)을 그대로 따라 정리했습니다."
+        )
+    else:
+        description = (
+            f"{particle(candidate.subject, '을', '를')} 국가유산청 해설과 위키백과로 들여다봤습니다."
+        )
 
     return VideoMetadata(
         title=titles[0],

@@ -15,7 +15,7 @@ from ..text_ko import particle as _particle
 from ..text_ko import read_aloud
 from .llm_client import LLMProvider
 
-PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 작가입니다.
+HERITAGE_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 작가입니다.
 아래 유적/문화재 하나를 30~40초짜리 세로 쇼츠 2편으로 나눠 씁니다.
 
 시청자는 3초 안에 넘길지 말지 정합니다. 교양 프로그램 해설이 아니라, 친구한테 "야 이거
@@ -78,6 +78,74 @@ PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 작가�
 """
 
 
+SILLOK_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 작가입니다.
+아래는 조선왕조실록에 실제로 실린 기사 하나입니다. 이걸 30~40초짜리 세로 쇼츠 2편으로
+나눠 씁니다.
+
+시청자는 3초 안에 넘길지 말지 정합니다. 교양 프로그램 해설이 아니라, 친구한테 "야 이거
+실록에 진짜 적혀 있는 거야" 하고 말 거는 톤으로 씁니다.
+
+[실록 기사]
+제목: {headline}
+때: {headline_number}
+분류: {categories}
+국역 전문(공식 번역, 이게 유일한 사실 재료다):
+{context}
+
+[사실 검증 규칙 — 반드시 지킬 것]
+- 국역 전문에 없는 사실을 지어내지 않는다. 날짜·지명·인명·숫자를 바꾸지 않는다.
+- 실록은 "보고받은 내용"을 적은 기록이다. 기사에 적힌 것이 곧 실제로 일어난 일이라고
+  단정하지 않는다. "기록에는 이렇게 적혀 있다"는 층위를 지킨다.
+- 현대적 해석(외계인, UFO, 초자연 등)을 사실처럼 말하지 않는다. 궁금증은 던지되 답을
+  지어내지 않는다. 기록에 없는 건 "실록은 여기까지만 적어놨다"고 말한다.
+- 목격자·장소·시각처럼 원문에 박힌 구체적인 것이 가장 센 재료다. 그걸 앞으로 꺼낸다.
+
+[작성 규칙]
+- 1부: 첫 문장이 전부다. 기사에서 가장 믿기 힘든 장면 하나를 배경 설명 없이 바로 던진다.
+  "조선시대에는~" 같은 시대 소개로 시작하면 실패다. 이어서 언제·어디서·누가 보고했는지
+  짧게 짚고, 마지막은 답을 주지 않고 끊는다.
+- 2부: 1부의 의문을 한 문장으로 되짚고 바로 본론. 기사에 남은 나머지 내용을 들려주고,
+  기록이 어디서 끊기는지 분명히 말한 뒤 시청자에게 묻고 끝낸다.
+- **1부가 던진 질문에 2부는 반드시 정면으로 답한다.** 답이 기록에 없으면 "실록은 답을
+  안 적어놨다"고 분명히 말한 뒤 이어간다. 질문을 던져놓고 다른 주제로 바꾸면 안 된다.
+- 1부 합계 약 {part1_chars}자, 2부 합계 약 {part2_chars}자.
+
+[말투 — 이게 제일 중요하다]
+글이 아니라 말을 쓴다. 소리 내어 읽었을 때 어색하면 틀린 것이다.
+- 짧게 끊는다. 한 문장에 정보 하나. 20자 넘어가면 자를 데가 있는지 본다.
+- 문장 길이를 섞는다. "근데 이상하죠." 같은 6자 문장과 25자 문장이 번갈아 나와야 말이 된다.
+- 같은 어미를 세 번 연속 쓰지 않는다.
+- 백과사전 문체 금지: "~로 알려져 있다", "~라 할 수 있다", "~을 자랑한다" 같은 말은 안 쓴다.
+- **반말로 쓴다.** "~했어", "~거든", "~였을까?" 처럼. "~습니다"로 끝내지 않는다.
+- 국역의 옛 표현은 그대로 읽지 말고 지금 말로 바꾼다. 단, 뜻을 바꾸면 안 된다.
+  (예: "치계하였다" → "장계를 올렸다", "사시(巳時)" → "오전 아홉 시에서 열한 시 사이")
+- 기록에 적힌 사물 이름을 다른 물건으로 바꾸지 않는다. "동이"를 "항아리"로, "세숫대야"를
+  "접시"로 바꾸면 그 순간 실록이 아니라 창작이 된다. 모르면 원문 표현을 그대로 쓴다.
+- emphasis 에는 그 문장에서 자막으로 크게 강조할 짧은 조각만 넣는다.
+
+[사진 검색어 — 이번 소재의 가장 어려운 부분]
+실록 사건에는 사진이 없다. 하늘에 나타난 물체를 찍은 사진은 존재하지 않는다.
+그러니 **사건과 연결된 실존 대상**으로 검색어를 만든다.
+- 쓸 수 있는 것: 궁궐 이름("경복궁", "창덕궁"), 실록 책자("조선왕조실록", "정족산사고"),
+  옛 그림·고지도("동궐도", "대동여지도"), 기사에 나오는 실제 지명("강릉", "춘천").
+- 쓰면 안 되는 것: 장면을 묘사한 말("하늘의 붉은 물체", "밤하늘의 괴광"). 그런 사진은
+  존재하지 않아 화면이 비거나 엉뚱한 사진이 들어간다.
+- visual_query_en 은 같은 대상의 영어 표기 2~4단어 (예: "Gyeongbokgung", "Donggwoldo").
+
+[출력 형식] 아래 JSON 만 출력한다.
+{{
+  "title_seed": "채널 제목에 쓸 한 줄",
+  "part1": {{"hook_number": "화면에 크게 띄울 짧은 문구 (예: \"1609년 강원도\", \"광해 1년\").
+                              \"01\" 같은 회차 번호가 아니다", "lines": [
+    {{"text": "", "visual_query_ko": "", "visual_query_en": "", "emphasis": [""]}}
+  ]}},
+  "part2": {{"hook_number": "", "lines": [
+    {{"text": "", "visual_query_ko": "", "visual_query_en": "", "emphasis": [""]}}
+  ]}}
+}}
+"""
+
+
 def generate(
     candidate: StoryCandidate,
     provider: LLMProvider | None,
@@ -86,22 +154,44 @@ def generate(
     temperature: float,
 ) -> Script:
     if provider is not None:
-        prompt = PROMPT.format(
-            headline=candidate.headline,
-            headline_number=candidate.headline_number,
-            subject=candidate.subject,
-            facts="\n".join(f"- {fact}" for fact in candidate.facts) or "(없음)",
-            wiki_excerpt=candidate.wiki_excerpt or "(없음)",
-            source_name=candidate.source_name,
-            part1_chars=part1_chars,
-            part2_chars=part2_chars,
-        )
-        raw = provider.complete_json(prompt, temperature)
+        raw = provider.complete_json(_prompt(candidate, part1_chars, part2_chars), temperature)
         script = _parse(raw, candidate)
         if script is not None:
             return script
 
-    return _template_script(candidate)
+    return (
+        _sillok_template_script(candidate)
+        if candidate.dataset == "sillok"
+        else _template_script(candidate)
+    )
+
+
+def _prompt(candidate: StoryCandidate, part1_chars: int, part2_chars: int) -> str:
+    """소재에 맞는 프롬프트를 고른다.
+
+    문화재는 "이름/지정 등급/해설문", 실록은 "왕대·날짜/국역 전문"이라 재료의 모양이
+    아예 다르다. `dataset` 하나로 갈린다.
+    """
+    if candidate.dataset == "sillok":
+        return SILLOK_PROMPT.format(
+            headline=candidate.headline,
+            headline_number=candidate.headline_number,
+            categories=", ".join(candidate.topic_tags) or "(없음)",
+            context=candidate.context,
+            part1_chars=part1_chars,
+            part2_chars=part2_chars,
+        )
+
+    return HERITAGE_PROMPT.format(
+        headline=candidate.headline,
+        headline_number=candidate.headline_number,
+        subject=candidate.subject,
+        facts="\n".join(f"- {fact}" for fact in candidate.facts) or "(없음)",
+        wiki_excerpt=candidate.wiki_excerpt or "(없음)",
+        source_name=candidate.source_name,
+        part1_chars=part1_chars,
+        part2_chars=part2_chars,
+    )
 
 
 def _parse(raw: dict | None, candidate: StoryCandidate) -> Script | None:
@@ -147,9 +237,17 @@ def _parse_part(raw: dict, part: int, candidate: StoryCandidate) -> ScriptPart:
     ]
     return ScriptPart(
         part=part,
-        hook_number=str(raw.get("hook_number") or candidate.headline_number),
+        hook_number=_hook_number(raw.get("hook_number"), candidate),
         lines=lines,
     )
+
+
+def _hook_number(raw: object, candidate: StoryCandidate) -> str:
+    """화면에 크게 띄울 문구. LLM 이 "01" 같은 회차 번호를 주는 일이 있어 걸러낸다."""
+    text = str(raw or "").strip()
+    if not text or text.isdigit():
+        return candidate.headline_number
+    return text
 
 
 def _first(items: list[str]) -> str:
@@ -228,6 +326,47 @@ def _template_script(candidate: StoryCandidate) -> Script:
         title_seed=candidate.headline,
         part1=part1,
         part2=part2,
+        source_note=f"출처: {candidate.source_name}",
+        is_sample=candidate.is_sample,
+    )
+
+
+def _sillok_template_script(candidate: StoryCandidate) -> Script:
+    """LLM 없이 실록 기사만으로 짜는 대본.
+
+    국역 문장을 그대로 나눠 쓴다 — 여기서 말을 바꾸면 그게 곧 오역이 된다. 다듬는 건
+    LLM 이 할 일이고, 이 폴백은 "사실을 안 건드리는 것"만 지킨다.
+    """
+    queries_ko = candidate.image_queries_ko or ["조선왕조실록"]
+    queries_en = candidate.image_queries_en or ["Annals of the Joseon Dynasty"]
+    when = candidate.headline_number or "조선"
+    facts = [fact for fact in candidate.facts if fact]
+
+    def line(index: int, text: str, emphasis: list[str] | None = None) -> ScriptLine:
+        return ScriptLine(
+            text=text,
+            spoken_text=read_aloud(text),
+            visual_query_ko=queries_ko[index % len(queries_ko)],
+            visual_query_en=queries_en[index % len(queries_en)],
+            show_chart=False,
+            emphasis=emphasis or [],
+        )
+
+    part1_lines = [line(0, f"{when}, 실록에 이런 게 적혀 있어.", emphasis=[when])]
+    part1_lines += [line(i, fact) for i, fact in enumerate(facts[:3], start=1)]
+    part1_lines.append(line(4, "지어낸 얘기가 아니야. 실록 원문에 있는 말이야.", emphasis=["실록 원문"]))
+    part1_lines.append(line(5, "그래서 이게 뭐였을까?", emphasis=["뭐였을까"]))
+
+    part2_lines = [line(0, "1부에서 남긴 질문이었지.")]
+    part2_lines += [line(i, fact) for i, fact in enumerate(facts[3:7], start=1)]
+    part2_lines.append(line(5, "실록은 여기까지만 적어놨어. 답은 안 남겼고.", emphasis=["여기까지만"]))
+    part2_lines.append(line(6, "너는 이게 뭐였을 것 같아?"))
+
+    return Script(
+        topic_key=candidate.topic_key,
+        title_seed=candidate.headline,
+        part1=ScriptPart(part=1, hook_number=when, lines=part1_lines),
+        part2=ScriptPart(part=2, hook_number=when, lines=part2_lines),
         source_note=f"출처: {candidate.source_name}",
         is_sample=candidate.is_sample,
     )

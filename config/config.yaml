@@ -42,6 +42,17 @@ script:
   part2_target_chars: 200
 
 topics:
+  # sillok(조선왕조실록) | heritage(국가유산청 해설문). 해설문은 서사가 없어 실록으로 옮겼고,
+  # 문화재 경로는 궁궐·유물 화면이 필요할 때 다시 쓰려고 남겨둔다.
+  source: sillok
+  sillok:
+    # 샘플 단계라 기사를 사람이 지목한다. 왕대 전체 색인은 샘플을 보고 판단한다.
+    article_ids:
+      - kob_10109025_003   # 1609년 강원도 기이한 자연현상 보고 (광해 1년 9월 25일)
+    weights:
+      event_score: 0.55     # 사관이 놀라서 적은 사건일수록 높다 (src/sillok/event_keywords.py)
+      story_density: 0.25
+      freshness: 0.20
   candidates_per_dataset: 12
   # 문화유산 야사 스코어 가중치. 축 설명은 src/heritage/story_scorer.py 참고.
   weights:

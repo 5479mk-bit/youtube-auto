@@ -43,6 +43,9 @@ class StoryCandidate:
     # 위키백과에서 보강한 문단(전설·일화 등). facts 와 구분해 대본에서 "전해지는 말로는"
     # 식으로 표시하게 만든다.
     wiki_excerpt: str = ""
+    # 소스가 붙여둔 갈래 표시. 실록은 기사마다 【분류】(예: "과학-천기(天氣)")가 달려 있어
+    # 대본 프롬프트에 사건의 성격을 알려주는 단서가 된다.
+    topic_tags: list[str] = field(default_factory=list)
     # 국가유산청 이미지/동영상/나레이션 API 는 이름이 아니라 이 세 값의 조합으로 조회한다.
     # 문화재가 아닌 소스(픽스처 등)는 비워둔다.
     heritage_ccba_kdcd: str = ""
