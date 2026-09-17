@@ -99,18 +99,22 @@ class VeoClient:
             "instances": [
                 {
                     "prompt": prompt,
+                    # predictLongRunning 은 Gemini 생성 API 의 inlineData 형식을 안 받는다
+                    # ("`inlineData` isn't supported by this model"). 이 엔드포인트는
+                    # bytesBase64Encoded 를 쓴다.
                     "image": {
-                        "inlineData": {
-                            "mimeType": mime_type,
-                            "data": base64.b64encode(image_path.read_bytes()).decode("ascii"),
-                        }
+                        "bytesBase64Encoded": base64.b64encode(
+                            image_path.read_bytes()
+                        ).decode("ascii"),
+                        "mimeType": mime_type,
                     },
                 }
             ],
             "parameters": {
                 "aspectRatio": params["aspectRatio"],
                 "resolution": params["resolution"],
-                "durationSeconds": params["durationSeconds"],
+                # 문자열로 보내면 400 이다. 캐시 키는 문자열이라도 요청은 숫자로 나간다.
+                "durationSeconds": int(params["durationSeconds"]),
             },
         }
 
