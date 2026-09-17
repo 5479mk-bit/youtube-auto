@@ -8,12 +8,16 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Protocol
 
 import requests
 from loguru import logger
 
 TIMEOUT = 60
+# 키를 한 바퀴 도는 것을 몇 번 반복할지, 그 사이에 얼마나 쉴지.
+ROTATION_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 4
 
 
 def _safe(error: Exception) -> str:
@@ -32,6 +36,8 @@ class GeminiProvider:
     def __init__(self, api_keys: list[str], model: str):
         self.api_keys = [key for key in api_keys if key]
         self.model = model
+        # 403(프로젝트 접근 거부)이 뜬 키. 이번 실행 동안 다시 쓰지 않는다.
+        self._denied: set[str] = set()
 
     def complete_json(self, prompt: str, temperature: float) -> dict | None:
         url = (
@@ -46,24 +52,36 @@ class GeminiProvider:
             },
         }
 
-        for key in self.api_keys:
-            try:
-                # 키는 헤더로만 보낸다. 쿼리로 붙이면 실패 로그에 URL 이 찍히면서
-                # 키가 그대로 남는다.
-                response = requests.post(
-                    url,
-                    headers={"x-goog-api-key": key},
-                    json=payload,
-                    timeout=TIMEOUT,
-                )
-                if response.status_code == 429:
-                    logger.warning("LLM 키 하나가 한도에 걸려 다음 키로 넘어갑니다")
+        # 503(과부하)은 잠깐 뒤에 다시 하면 되는 실패다. 키를 한 바퀴 돌고 끝내면
+        # 대본이 통째로 템플릿으로 떨어지므로, 한 바퀴를 몇 번 더 돈다.
+        for attempt in range(ROTATION_ATTEMPTS):
+            if attempt:
+                time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+            for key in self.api_keys:
+                if key in self._denied:
                     continue
-                response.raise_for_status()
-                text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-                return json.loads(text)
-            except Exception as exc:
-                logger.warning(f"Gemini 호출 실패 ({self.model}): {_safe(exc)}")
+                try:
+                    # 키는 헤더로만 보낸다. 쿼리로 붙이면 실패 로그에 URL 이 찍히면서
+                    # 키가 그대로 남는다.
+                    response = requests.post(
+                        url,
+                        headers={"x-goog-api-key": key},
+                        json=payload,
+                        timeout=TIMEOUT,
+                    )
+                    if response.status_code == 429:
+                        logger.warning("LLM 키 하나가 한도에 걸려 다음 키로 넘어갑니다")
+                        continue
+                    if response.status_code == 403:
+                        # 프로젝트 자체가 막힌 키다. 다시 시도해도 늘 403 이라 빼둔다.
+                        logger.warning("LLM 키 하나가 권한 거부(403)라 이번 실행에서 제외합니다")
+                        self._denied.add(key)
+                        continue
+                    response.raise_for_status()
+                    text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    return json.loads(text)
+                except Exception as exc:
+                    logger.warning(f"Gemini 호출 실패 ({self.model}): {_safe(exc)}")
 
         return None
 
