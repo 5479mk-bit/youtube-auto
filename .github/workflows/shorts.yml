@@ -65,6 +65,35 @@ jobs:
       - name: 에셋 준비
         run: ./download_assets.sh
 
+      # 시크릿이 비어 있으면 인증 액션은 "둘 중 하나를 지정하라"는 알쏭달쏭한 메시지만
+      # 남기고 죽는다. 어느 값이 비었는지 여기서 이름으로 짚어준다(값은 찍지 않는다).
+      - name: 시크릿 점검
+        env:
+          WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          SA: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          PROJECT: ${{ secrets.VERTEX_PROJECT_ID }}
+          GEMINI: ${{ secrets.GEMINI_API_KEY }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          missing=""
+          for name in WIF SA PROJECT GEMINI; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::비어 있는 시크릿:$missing"
+            echo "  WIF     = GCP_WORKLOAD_IDENTITY_PROVIDER (Cloud Shell 출력 첫 줄)"
+            echo "  SA      = GCP_SERVICE_ACCOUNT            (Cloud Shell 출력 둘째 줄)"
+            echo "  PROJECT = VERTEX_PROJECT_ID              (vid115)"
+            echo "  GEMINI  = GEMINI_API_KEY                 (대본·TTS 용)"
+            echo "저장소 Settings > Secrets and variables > Actions 에서 채우세요."
+            exit 1
+          fi
+          if [ -z "$TG_TOKEN" ] || [ -z "$TG_CHAT" ]; then
+            echo "::warning::텔레그램 시크릿이 비어 있어 검수 전송은 건너뜁니다"
+          fi
+          echo "필요한 시크릿이 모두 있습니다."
+
       # 키 파일 없이 GCP 에 로그인한다. GitHub 이 OIDC 토큰으로 신원을 증명하고,
       # GCP 가 그 신원에 서비스 계정 권한을 빌려준다 — 저장되는 키가 없다.
       - name: GCP 인증 (Workload Identity)
