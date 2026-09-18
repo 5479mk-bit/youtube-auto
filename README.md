@@ -314,3 +314,81 @@ cloud:
 여기 적히는 금액은 **우리가 계산한 추정치**다. 실제 청구액은 GCP 만 안다(크레딧 잔액을
 주는 API 가 없다). 그래서 마지막 방어선으로 **GCP 콘솔의 예산 알림**도 같이 걸어두길
 권한다.
+
+## GitHub Actions 로 돌리기 (로컬 PC 없이)
+
+로컬 PC 없이 이 저장소만으로 회차를 만든다. 자격증명은 **GitHub Secrets 와 GCP 안에만**
+있고, 파일로 어디에도 저장되지 않는다.
+
+`Actions → 쇼츠 한 회차 만들기 → Run workflow` 로 실행한다. 결과 mp4 는 텔레그램으로
+가고, 워크플로 아티팩트로도 내려받을 수 있다.
+
+### 1. GCP: 키 파일 없이 인증 붙이기 (Workload Identity)
+
+서비스 계정 **키 JSON 을 만들지 않는다.** GitHub 이 OIDC 로 신원을 증명하고 GCP 가 그
+신원에 권한을 빌려주는 방식이라, 유출될 파일 자체가 없다. 이미 키를 받아두셨다면 아래를
+마친 뒤 그 키는 삭제하는 게 좋다.
+
+GCP 콘솔 오른쪽 위 **Cloud Shell**(브라우저 터미널)에서 그대로 붙여넣는다. 로컬에
+gcloud 를 깔 필요가 없다.
+
+```bash
+PROJECT_ID=vid115
+REPO=5479mk-bit/youtube-auto
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+
+gcloud services enable aiplatform.googleapis.com iamcredentials.googleapis.com --project=$PROJECT_ID
+
+gcloud iam service-accounts create shorts-runner \
+  --project=$PROJECT_ID --display-name="youtube-auto runner"
+
+# 권한은 Vertex 호출 하나만 준다.
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:shorts-runner@$PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/aiplatform.user"
+
+gcloud iam workload-identity-pools create github --project=$PROJECT_ID --location=global \
+  --display-name="GitHub Actions"
+
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --project=$PROJECT_ID --location=global --workload-identity-pool=github \
+  --display-name="GitHub" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository=='$REPO'" \
+  --issuer-uri="https://token.actions.githubusercontent.com"
+
+# 이 저장소에서 온 요청에만 서비스 계정을 빌려준다.
+gcloud iam service-accounts add-iam-policy-binding \
+  shorts-runner@$PROJECT_ID.iam.gserviceaccount.com --project=$PROJECT_ID \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/$REPO"
+
+echo "GCP_WORKLOAD_IDENTITY_PROVIDER=projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github-provider"
+echo "GCP_SERVICE_ACCOUNT=shorts-runner@$PROJECT_ID.iam.gserviceaccount.com"
+```
+
+마지막 두 줄이 그대로 시크릿 값이다.
+
+### 2. GitHub: 시크릿 넣기
+
+저장소 `Settings → Secrets and variables → Actions → New repository secret`.
+
+| 이름 | 값 |
+|---|---|
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | 위 출력 그대로 |
+| `GCP_SERVICE_ACCOUNT` | 위 출력 그대로 |
+| `VERTEX_PROJECT_ID` | `vid115` |
+| `GEMINI_API_KEY` | 대본·TTS 용 (Vertex 와 별개) |
+| `GEMINI_API_KEY_BACKUP` | 있으면 쉼표로 여러 개 |
+| `DATA_GO_KR_SERVICE_KEY` | 문화재 소재를 쓸 때만 필요 |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | 검수 알림용 |
+
+### 3. 알아둘 것
+
+- **승인 후 업로드는 아직 이 워크플로 밖이다.** 렌더 → 텔레그램 전송까지만 자동이고,
+  승인 대기 상태는 러너가 사라지면 같이 사라진다(상태 DB 가 러너 안에 있다).
+  유튜브 업로드까지 자동화하려면 상태를 저장소 밖에 두는 작업이 따로 필요하다.
+- 생성물 캐시(`.cache`)는 회차 사이에 물려받는다. 같은 프롬프트를 두 번 만들지 않아
+  그만큼 과금이 줄고, 실록 사이트가 끊겨도 받아둔 기사로 돌아간다.
+- 크레딧 상한은 러너에서도 그대로 동작한다. 매 실행 끝에 `python main.py credits`
+  결과가 로그에 남는다.
