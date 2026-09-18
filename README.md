@@ -270,3 +270,47 @@ schtasks /create /tn "YoutubeAutoDaily" ^
 ```bash
 python -m pytest tests/ -q
 ```
+
+## Vertex AI 설정 (생성 비용을 GCP 크레딧으로 내기)
+
+AI Studio 키는 **선불 잔액**으로 과금된다. GCP 콘솔에 보이는 크레딧은 **Cloud Billing
+계정**에 붙어 있는 다른 지갑이라, 그 크레딧을 쓰려면 Veo·Imagen 을 Vertex 로 불러야 한다.
+
+자격증명은 **이 PC 밖으로 내보내지 않는다.** 아래는 전부 사용자 PC에서 한 번만 하면 된다.
+
+1. GCP 콘솔에서 프로젝트에 **Vertex AI API**(`aiplatform.googleapis.com`)를 켠다.
+2. 서비스 계정을 만들고 역할은 **`roles/aiplatform.user` 하나만** 준다.
+   (이 키로 할 수 있는 일을 Vertex 호출로만 묶어두는 게 중요하다.)
+3. 키를 JSON 으로 내려받아 `credentials/vertex-sa.json` 에 둔다. `credentials/` 는
+   `.gitignore` 에 있어 저장소에 올라가지 않는다.
+4. `.env` 에 경로를 적는다.
+   ```
+   VERTEX_PROJECT_ID=vid115
+   VERTEX_SERVICE_ACCOUNT_FILE=credentials/vertex-sa.json
+   ```
+5. 점검한다. 기본은 **과금 없이** 인증·권한까지만 본다.
+   ```
+   python main.py cloud-check              # 과금 없음
+   python main.py cloud-check --generate   # 이미지 1장까지 확인 (약 30원)
+   ```
+   막히면 단계별로 무엇을 고쳐야 하는지 로그에 찍힌다
+   (403 = 역할 없음, 404 = API 안 켜짐).
+
+### 크레딧이 떨어지면 자동으로 멈춘다
+
+`config/config.yaml` 의 `cloud` 항목이 상한을 쥔다.
+
+```yaml
+cloud:
+  credit_krw: 354417      # 가진 크레딧
+  reserve_krw: 20000      # 이 금액은 아예 안 쓴다 (추정 오차 완충)
+  stop_when_exhausted: true
+```
+
+호출 **전에** 남은 금액으로 감당되는지 보고, 안 되면 호출하지 않는다 — 크레딧이 바닥난
+뒤의 호출은 그때부터 카드로 청구되기 때문이다. 누적 지출은 `.cache/spend_ledger.json`
+에 쌓이고 `python main.py credits` 로 언제든 볼 수 있다.
+
+여기 적히는 금액은 **우리가 계산한 추정치**다. 실제 청구액은 GCP 만 안다(크레딧 잔액을
+주는 API 가 없다). 그래서 마지막 방어선으로 **GCP 콘솔의 예산 알림**도 같이 걸어두길
+권한다.

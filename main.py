@@ -59,6 +59,16 @@ def main() -> int:
         "credits", help="생성에 쓴 추정 금액과 남은 크레딧을 본다 (호출 없음)"
     )
 
+    cloud_parser = subparsers.add_parser(
+        "cloud-check",
+        help="Vertex 인증·권한·연결을 점검한다 (기본은 과금 없음)",
+    )
+    cloud_parser.add_argument(
+        "--generate",
+        action="store_true",
+        help="이미지 1장을 실제로 만들어 끝까지 확인한다 (약 30원 과금)",
+    )
+
     review_pending_parser = subparsers.add_parser(
         "review-pending",
         help="PC가 꺼지는 등으로 끊긴 검수 대기를 다시 확인하고, 승인됐으면 업로드한다",
@@ -93,6 +103,8 @@ def main() -> int:
         return _topics(settings)
     if args.command == "credits":
         return _credits(settings)
+    if args.command == "cloud-check":
+        return _cloud_check(settings, args.generate)
     if args.command == "photos":
         return _photos(settings, args.query, args.en)
     if args.command == "voice-test":
@@ -149,6 +161,68 @@ def _credits(settings) -> int:
     ledger = guard.ledger_path
     if ledger.exists():
         logger.info(f"원장: {ledger}")
+    return 0
+
+
+def _cloud_check(settings, generate: bool) -> int:
+    """Vertex 를 쓸 준비가 됐는지 단계별로 점검한다.
+
+    자격증명은 이 PC 밖으로 나갈 이유가 없다 — 그래서 점검도 여기서 끝나게 만들었다.
+    막히는 지점이 있으면 무엇을 고쳐야 하는지까지 같이 찍는다.
+    """
+    project_id = settings.get("cloud.project_id", "") or pipeline.project_from_env()
+    if not project_id:
+        logger.error(
+            "1) 프로젝트 ID 없음 → config/config.yaml 의 cloud.project_id 또는 "
+            "환경변수 VERTEX_PROJECT_ID 를 채우세요"
+        )
+        return 1
+    logger.info(f"1) 프로젝트: {project_id}")
+
+    vertex, auth = pipeline.build_vertex(settings)
+    if vertex is None or auth is None:
+        logger.error(
+            "2) 인증 실패 → 서비스 계정 키 파일 경로(VERTEX_SERVICE_ACCOUNT_FILE)를 "
+            "확인하거나 `gcloud auth application-default login` 을 하세요"
+        )
+        return 1
+
+    try:
+        token = auth.token()
+    except Exception as exc:
+        logger.error(f"2) 토큰 발급 실패: {exc}")
+        return 1
+    logger.info(f"2) 토큰 발급 성공 (앞 8자리 {token[:8]}…, 이 값은 저장하지 않습니다)")
+
+    guard = pipeline.build_spend_guard(settings)
+    logger.info(f"3) {guard.summary()}")
+
+    if not generate:
+        logger.info(
+            "4) 실제 생성은 건너뜁니다. 끝까지 확인하려면 "
+            "`python main.py cloud-check --generate` (약 30원)"
+        )
+        return 0
+
+    client = pipeline.build_ai_image_client(settings, guard)
+    if client.backend != "vertex":
+        logger.error("4) Vertex 경로가 아닙니다 → config cloud.backend 를 vertex 로 두세요")
+        return 1
+
+    logger.info("4) 이미지 1장을 실제로 만들어 봅니다…")
+    path = client.generate(
+        "dark historical Joseon dynasty night sky over a mountain village, "
+        "chiaroscuro lighting, heavy volumetric fog, eerie atmosphere, 35mm film grain, 8k"
+    )
+    if path is None:
+        logger.error(
+            "4) 생성 실패 → 위 경고를 보세요. 403 이면 서비스 계정에 "
+            "roles/aiplatform.user 가 없고, 404 면 프로젝트에 Vertex AI API 가 꺼져 있습니다"
+        )
+        return 1
+
+    logger.info(f"4) 성공: {path}")
+    logger.info(f"5) {guard.summary()}")
     return 0
 
 

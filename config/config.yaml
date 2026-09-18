@@ -90,7 +90,7 @@ cloud:
   # vertex = GCP 크레딧(₩354,417)으로 결제. aistudio = AI Studio 선불 잔액.
   # 선불 잔액이 0 이라 vertex 로 간다.
   backend: vertex
-  project_id: ""        # 비우면 VERTEX_PROJECT_ID / GOOGLE_CLOUD_PROJECT 환경변수
+  project_id: "vid115"  # 비우면 VERTEX_PROJECT_ID / GOOGLE_CLOUD_PROJECT 환경변수
   location: us-central1
   image_model: imagen-4.0-fast-generate-001
   image_cost_krw: 30    # Imagen 4 fast 장당 약 0.02달러
