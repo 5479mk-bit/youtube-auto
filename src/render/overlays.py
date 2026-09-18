@@ -10,12 +10,39 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from .. import assets
 from ..subtitles.subtitle_builder import SubtitleCue
 from ..visuals.fonts import ensure_korean_font
 
 
 def _font(size: int) -> ImageFont.FreeTypeFont:
-    return ImageFont.truetype(str(ensure_korean_font()), size)
+    """자막·배지용 폰트. 있으면 프리텐다드(자막체), 없으면 기존 노토 산스."""
+    path = assets.FONT_SANS if assets.FONT_SANS.exists() else ensure_korean_font()
+    return ImageFont.truetype(str(path), size)
+
+
+def _shadow_offsets(blur: int) -> list[tuple[int, int]]:
+    """드롭 섀도우를 흉내 낼 오프셋들.
+
+    PIL 에는 그림자가 없어서 같은 글자를 조금씩 밀어 여러 번 옅게 그린다. 외곽선(stroke)과
+    달리 글자가 두꺼워지지 않아 촌스럽지 않다.
+    """
+    return [(dx, dy) for dy in range(1, blur + 1) for dx in (-1, 0, 1)]
+
+
+def _draw_text_with_shadow(
+    draw: ImageDraw.ImageDraw,
+    position: tuple[float, float],
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    fill: str,
+    shadow_blur: int = 6,
+    shadow_alpha: int = 150,
+) -> None:
+    x, y = position
+    for dx, dy in _shadow_offsets(shadow_blur):
+        draw.text((x + dx, y + dy), text, font=font, fill=(0, 0, 0, shadow_alpha // shadow_blur))
+    draw.text((x, y), text, font=font, fill=fill)
 
 
 def render_subtitle(
@@ -32,8 +59,10 @@ def render_subtitle(
 
     line_height = int(style["font_size"] * 1.35)
     block_height = line_height * len(cue.lines)
-    # 자막 블록의 아래끝을 하단 안전선 바로 위에 붙인다.
-    baseline = int(height * (1 - safe_bottom)) - block_height
+    # 자막 블록의 아래끝을 화면 하단 22~25% 지점에 둔다. 쇼츠 UI(하단 버튼)를 피하면서도
+    # 너무 위로 붕 뜨지 않는 자리다. safe_bottom 이 더 크면 그쪽을 따른다.
+    bottom_ratio = max(float(style.get("bottom_ratio", 0.24)), float(safe_bottom))
+    baseline = int(height * (1 - bottom_ratio)) - block_height
 
     for index, text in enumerate(cue.lines):
         y = baseline + index * line_height
@@ -59,13 +88,10 @@ def _draw_line_with_emphasis(
 
     for segment, highlighted in segments:
         color = style["emphasis_color"] if highlighted else style["font_color"]
-        draw.text(
-            (x, y),
-            segment,
-            font=font,
-            fill=color,
-            stroke_width=style["stroke_width"],
-            stroke_fill=style["stroke_color"],
+        # 외곽선은 쓰지 않는다 — 글자가 굵어지고 촌스러워진다. 대신 반투명 그림자로
+        # 어떤 배경 위에서도 읽히게 한다.
+        _draw_text_with_shadow(
+            draw, (x, y), segment, font, color, shadow_blur=style.get("shadow_blur", 6)
         )
         x += draw.textlength(segment, font=font)
 
@@ -96,21 +122,28 @@ def render_hook_number(
     image = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
 
-    font_size = int(width * 0.30)
-    font = _font(font_size)
-    while draw.textlength(number, font=font) > width * 0.86 and font_size > 40:
+    # 훅 문구는 기록체(명조)로 띄운다 — 다큐 톤의 첫인상이 여기서 정해진다.
+    serif = assets.FONT_SERIF_HANJA if assets.FONT_SERIF_HANJA.exists() else None
+    font_size = int(width * 0.16)
+    font = (
+        ImageFont.truetype(str(serif), font_size) if serif else _font(font_size)
+    )
+    while draw.textlength(number, font=font) > width * 0.82 and font_size > 40:
         font_size = int(font_size * 0.9)
-        font = _font(font_size)
+        font = (
+            ImageFont.truetype(str(serif), font_size) if serif else _font(font_size)
+        )
 
     text_width = draw.textlength(number, font=font)
     # 화면 중앙보다 살짝 위. 그래야 아래쪽 자막과 겹치지 않는다.
-    draw.text(
+    _draw_text_with_shadow(
+        draw,
         ((width - text_width) / 2, height * 0.36),
         number,
-        font=font,
-        fill=color,
-        stroke_width=int(font_size * 0.06),
-        stroke_fill="#000000",
+        font,
+        color,
+        shadow_blur=10,
+        shadow_alpha=190,
     )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -132,13 +165,8 @@ def render_banner(
     font = _font(font_size)
 
     text_width = draw.textlength(text, font=font)
-    draw.text(
-        ((width - text_width) / 2, height * y_ratio),
-        text,
-        font=font,
-        fill=color,
-        stroke_width=max(2, font_size // 12),
-        stroke_fill="#000000",
+    _draw_text_with_shadow(
+        draw, ((width - text_width) / 2, height * y_ratio), text, font, color, shadow_blur=5
     )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)

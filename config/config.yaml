@@ -13,11 +13,12 @@ video:
   zoom_amount: 0.08
 
 subtitle:
-  font_size: 64
-  font_color: "#FFFFFF"
-  emphasis_color: "#FFD84D"
-  stroke_color: "#000000"
-  stroke_width: 6
+  # 외곽선을 버리고 드롭 섀도우로 바꿨다. 글자가 얇아진 만큼 크기도 줄인다.
+  font_size: 52
+  font_color: "#F2EFE8"
+  emphasis_color: "#D9A441"   # 형광 노랑 대신 낡은 금박 톤
+  shadow_blur: 6
+  bottom_ratio: 0.24          # 자막 블록 아래끝을 화면 하단 24% 지점에
   max_chars_per_line: 16
 
 audio:
@@ -29,8 +30,10 @@ audio:
   gemini_style_prompt: "에너지 있게, 자연스러운 속도로, 숏폼 내레이터처럼"
   gemini_min_request_interval: 1.5   # preview 모델의 분당 요청 한도를 피한다
   edge_voice: hyunsu          # hyunsu | injoon | sunhi
-  bgm_volume_db: -18
+  # 다크 앰비언트 드론을 전체에 깔고, 사건이 터지는 문장에 초저음 타격음을 얹는다.
+  bgm_volume_db: -16
   bgm_hook_volume_db: -12
+  sfx_volume_db: -6
 
 script:
   llm:
@@ -62,6 +65,8 @@ topics:
     freshness: 0.15
 
 visuals:
+  # 장면 생성 모델. 빈 값이면 기본값(gemini-2.5-flash-image).
+  ai_image_model: ""
   allowed_licenses:
     - cc0
     - cc-by

@@ -15,6 +15,7 @@ from loguru import logger
 
 from .datasource.datagokr import DataGoKrClient
 from .heritage import heritage_media
+from . import assets
 from .models import PhotoCredit, RenderedPart, Script, ScriptPart, StoryCandidate, write_json
 from .motion.veo_budget import VeoBudget
 from .motion.veo_client import VeoClient
@@ -34,7 +35,13 @@ from .render.motion_sources import PhotoMissing
 from .render.video_builder import photo_credit_line
 from .visuals.image_collector import ImageCollector
 from .visuals.photo_sources import build_chain
-from .visuals.scene_planner import engine_counts, interleave_veo, plan_scenes
+from .visuals.ai_image import AiImageClient
+from .visuals.scene_planner import (
+    engine_summary,
+    interleave_veo,
+    plan_scenes,
+    plan_typed_scenes,
+)
 
 
 @dataclass
@@ -85,6 +92,16 @@ def write_script(settings: Settings, candidate: StoryCandidate) -> Script:
 
 
 def build_collector(settings: Settings, candidate: StoryCandidate | None = None) -> ImageCollector:
+    """사진 소스 체인. 실록 소재에서는 **웹 검색을 아예 끈다.**
+
+    "하늘에 호리병 같은 게 떠올랐다"를 텍스트로 검색하면 현대 우체국·카페 사진이 끌려
+    들어온다. 조선 사건의 화면은 사료·지도·생성으로 만들고, 실사 검색은 문화재 소재에서만
+    쓴다.
+    """
+    if candidate is not None and candidate.dataset == "sillok":
+        logger.info("[visuals] 실록 소재 — 웹 이미지 검색을 사용하지 않습니다")
+        return ImageCollector([], CACHE_DIR / "images")
+
     sources = build_chain(
         settings.secrets.data_go_kr_service_key,
         settings.get("visuals.allowed_licenses", []),
@@ -188,6 +205,15 @@ def build_veo_client(settings: Settings) -> VeoClient:
     )
 
 
+def build_ai_image_client(settings: Settings) -> AiImageClient:
+    """장면 생성용 이미지 클라이언트. 키가 없거나 할당량이 0 이면 알아서 비활성이 된다."""
+    return AiImageClient(
+        settings.secrets.gemini_api_keys,
+        CACHE_DIR / "ai_images",
+        settings.get("visuals.ai_image_model", ""),
+    )
+
+
 def run(
     settings: Settings, render: bool = True, use_veo: bool = True
 ) -> PipelineResult | None:
@@ -210,8 +236,10 @@ def run(
         logger.info(f"dry-run: 텍스트 산출물만 생성했습니다 → {work_dir}")
         return PipelineResult(task_id, candidate, script, [], work_dir, [])
 
+    assets.warn_if_missing()
     collector = build_collector(settings, candidate)
     veo_client = build_veo_client(settings) if use_veo else None
+    ai_client = build_ai_image_client(settings)
     provider = build_provider(
         settings.get("script.llm.provider", "gemini"),
         settings.get("script.llm.model", ""),
@@ -235,6 +263,7 @@ def run(
                 work_dir,
                 veo_client,
                 official_video,
+                ai_client,
             )
             parts.append(rendered)
             credits.extend(
@@ -302,6 +331,7 @@ def _render_part(
     work_dir: Path,
     veo_client,
     official_video: tuple[Path, float] | None = None,
+    ai_client=None,
 ) -> tuple[RenderedPart, list[PhotoCredit]]:
     logger.info(f"{part.part}부 내레이션 합성")
     tts_engine.synthesize_part(part, build_tts_engines(settings), work_dir / "audio")
@@ -313,6 +343,15 @@ def _render_part(
         suppress_texts=[part.hook_number],
     )
     subtitle_builder.write_srt(cues, work_dir / f"part{part.part}.srt")
+
+    # 대본이 문장마다 화면 종류를 정해줬으면(실록 경로) 그대로 따른다. 사진 검색을 아예
+    # 하지 않는 경로라 아래 Veo 도입부·교차 배치 로직을 타지 않는다.
+    if _has_scene_types(part):
+        scenes = plan_typed_scenes(part, freeze_last=part.part == 1)
+        return _finish_part(
+            settings, script, part, candidate, collector, provider, work_dir,
+            veo_client, ai_client, scenes, cues,
+        )
 
     # 공식 동영상이 있으면 그걸 도입부로 쓰고 Veo 호출 자체를 건너뛴다 — 없으면 지금까지처럼
     # Veo(있을 때)로 도입부를 채운다.
@@ -345,12 +384,35 @@ def _render_part(
             max_clips=settings.get("veo.clips_per_part", 2),
         )
 
+    return _finish_part(
+        settings, script, part, candidate, collector, provider, work_dir,
+        veo_client, ai_client, scenes, cues,
+    )
+
+
+def _has_scene_types(part: ScriptPart) -> bool:
+    """문장에 화면 종류가 실려 있나. 문화재 경로는 전부 기본값(AI_IMAGE)이 아니다."""
+    return any(line.scene_type in ("HISTORICAL_DOC", "MAP_MOTION", "VEO") for line in part.lines)
+
+
+def _finish_part(
+    settings: Settings,
+    script: Script,
+    part: ScriptPart,
+    candidate: StoryCandidate,
+    collector: ImageCollector,
+    provider,
+    work_dir: Path,
+    veo_client,
+    ai_client,
+    scenes,
+    cues,
+) -> tuple[RenderedPart, list[PhotoCredit]]:
+    """씬 배정이 끝난 뒤는 두 경로가 같다 — 렌더하고 썸네일·메타데이터를 붙인다."""
     _warn_if_off_target(settings, part)
 
-    counts = engine_counts(scenes)
     logger.info(
-        f"{part.part}부 렌더 ({part.duration:.1f}초, 컷 {len(scenes)}개"
-        f" · 공식영상 {counts['official_video']} / Veo {counts['veo']} / 파랄랙스 {counts['parallax']})"
+        f"{part.part}부 렌더 ({part.duration:.1f}초, 컷 {len(scenes)}개 · {engine_summary(scenes)})"
     )
     video_path = work_dir / f"part{part.part}.mp4"
     duration, credits = build_part(
@@ -364,6 +426,7 @@ def _render_part(
         work_dir,
         video_path,
         veo_client=veo_client,
+        ai_client=ai_client,
     )
 
     thumbnail_path = build_thumbnail(

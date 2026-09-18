@@ -159,11 +159,9 @@ class TestMotionEngines:
     def test_without_veo_every_cut_is_parallax(self):
         part = make_part([(f"문장 {index}", 3.0, False) for index in range(4)])
         scenes = plan_scenes(part, 3.0, freeze_last=False, series_labels=[])
-        assert engine_counts(scenes) == {
-            "veo": 0,
-            "parallax": len(scenes),
-            "official_video": 0,
-        }
+        counts = engine_counts(scenes)
+        assert counts["parallax"] == len(scenes)
+        assert not any(count for name, count in counts.items() if name != "parallax")
 
     def test_official_video_intro_skips_veo(self):
         part = make_part([(f"문장 {index}", 3.0, False) for index in range(8)])

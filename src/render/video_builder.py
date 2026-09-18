@@ -20,6 +20,7 @@ from moviepy import (
     concatenate_videoclips,
 )
 
+from .. import assets
 from ..models import PhotoCredit, Scene, Script, ScriptPart, StoryCandidate
 from ..settings import RESOURCE_DIR
 from ..subtitles.subtitle_builder import SubtitleCue
@@ -44,13 +45,16 @@ def build_part(
     work_dir: Path,
     out_path: Path,
     veo_client=None,
+    ai_client=None,
 ) -> tuple[float, list[PhotoCredit]]:
     width = settings.get("video.width")
     height = settings.get("video.height")
     fps = settings.get("video.fps")
     size = (width, height)
 
-    background, credits = _build_background(scenes, collector, veo_client, settings, size)
+    background, credits = _build_background(
+        scenes, collector, veo_client, settings, size, ai_client
+    )
     background = apply_film_look(
         background,
         size,
@@ -72,7 +76,7 @@ def build_part(
     # 인덱스 오류가 난다. 끝을 아주 살짝 당겨 그 경계를 피한다.
     total_duration = max(background.duration - 1e-3, 0.1)
     video = CompositeVideoClip(layers, size=size).with_duration(total_duration)
-    audio = _build_audio(part, settings, background.duration)
+    audio = _build_audio(part, settings, background.duration, scenes)
     if audio is not None:
         video = video.with_audio(audio)
 
@@ -98,6 +102,7 @@ def _build_background(
     veo_client,
     settings,
     size: tuple[int, int],
+    ai_client=None,
 ):
     parallax_amount = settings.get("parallax.shift", 0.06)
     dolly_amount = settings.get("parallax.dolly", 0.12)
@@ -106,7 +111,7 @@ def _build_background(
     credits: list[PhotoCredit] = []
     for scene in scenes:
         clip, credit = build_scene_clip(
-            scene, collector, veo_client, size, parallax_amount, dolly_amount
+            scene, collector, veo_client, size, parallax_amount, dolly_amount, ai_client
         )
         clips.append(clip.with_duration(scene.duration))
         if credit not in credits:
@@ -251,7 +256,8 @@ def _badge_layers(
     return layers
 
 
-def _build_audio(part: ScriptPart, settings, duration: float):
+def _build_audio(part: ScriptPart, settings, duration: float, scenes: list[Scene] | None = None):
+    """내레이션 + 배경 드론 + 효과음(더킹)을 한 트랙으로 섞는다."""
     clips = [
         AudioFileClip(line.audio_path) for line in part.lines if line.audio_path
     ]
@@ -259,25 +265,66 @@ def _build_audio(part: ScriptPart, settings, duration: float):
         return None
 
     narration = concatenate_audioclips(clips)
-    bgm = _load_bgm(settings, duration)
-    if bgm is None:
-        return narration.with_duration(min(narration.duration, duration))
+    total = min(narration.duration, duration)
 
-    return CompositeAudioClip([narration, bgm]).with_duration(
-        min(narration.duration, duration)
-    )
+    layers = [narration]
+    bed = _load_bgm(settings, duration)
+    if bed is not None:
+        layers.append(bed)
+    layers.extend(_sfx_layers(scenes or [], settings, total))
+
+    if len(layers) == 1:
+        return narration.with_duration(total)
+    return CompositeAudioClip(layers).with_duration(total)
+
+
+def _sfx_layers(scenes: list[Scene], settings, total: float):
+    """`sfx` 태그가 붙은 컷이 시작될 때 타격음을 얹는다.
+
+    타격음은 초저역(80Hz)이라 내레이션과 주파수가 겹치지 않는다 — 그래서 말이 묻히지 않고,
+    대신 배경 드론을 그 구간만 눌러(더킹) 자리를 비워준다.
+    """
+    if not assets.AUDIO_SUB_BOOM.exists():
+        return []
+
+    gain = _db_to_gain(settings.get("audio.sfx_volume_db", -6))
+    layers = []
+    for scene in scenes:
+        if scene.sfx in ("none", "") or scene.start >= total:
+            continue
+        try:
+            hit = AudioFileClip(str(assets.AUDIO_SUB_BOOM))
+        except Exception as exc:
+            logger.warning(f"효과음을 쓰지 못했습니다: {exc}")
+            return layers
+
+        room = max(total - scene.start, 0.05)
+        # braam 은 여운을 길게, sub_boom·paper_rustle 은 짧게 때린다.
+        length = min(hit.duration if scene.sfx == "braam" else hit.duration * 0.7, room)
+        layers.append(
+            hit.subclipped(0, length).with_start(scene.start).with_volume_scaled(gain)
+        )
+    return layers
 
 
 def _load_bgm(settings, duration: float):
-    bgm_dir = RESOURCE_DIR / "bgm"
-    tracks = sorted(
-        path for path in bgm_dir.glob("*") if path.suffix.lower() in {".mp3", ".m4a", ".wav"}
-    )
-    if not tracks:
-        logger.info("resource/bgm 에 배경음악이 없어 내레이션만 사용합니다")
-        return None
+    """배경 베드. 다크 드론이 있으면 그걸 쓰고, 없으면 예전 BGM 폴더로 내려간다.
 
-    track = random.choice(tracks)
+    드론은 45Hz 룸블링이라 멜로디가 없다 — 말과 부딪히지 않으면서 긴장만 남는다.
+    예전에 쓰던 잔잔한 BGM 은 이 톤과 안 맞아 우선순위를 뒤로 뺐다.
+    """
+    if assets.AUDIO_DRONE.exists():
+        track = assets.AUDIO_DRONE
+    else:
+        bgm_dir = RESOURCE_DIR / "bgm"
+        tracks = sorted(
+            path for path in bgm_dir.glob("*") if path.suffix.lower() in {".mp3", ".m4a", ".wav"}
+        )
+        if not tracks:
+            logger.info("배경음이 없어 내레이션만 사용합니다 (./download_assets.sh)")
+            return None
+        track = random.choice(tracks)
+
     clip = AudioFileClip(str(track))
 
     # 음원이 영상보다 짧으면 뒤쪽이 통째로 무음이 된다. 길이를 채울 때까지 이어 붙인다.

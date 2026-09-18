@@ -35,6 +35,15 @@ fetch "https://raw.githubusercontent.com/google/fonts/main/ofl/nanummyeongjo/Nan
       "assets/fonts/NanumMyeongjo-Bold.ttf"
 fetch "https://cdn.jsdelivr.net/gh/orioncactus/pretendard/packages/pretendard/dist/public/static/Pretendard-Bold.otf" \
       "assets/fonts/Pretendard-Bold.otf"
+# 나눔명조에도 프리텐다드에도 **한자가 한 글자도 없다**(직접 확인함). 사료 컷은 실록 원문을
+# 한자로 띄우는 게 전부라 한자가 있는 명조가 따로 필요하다. 노토 세리프 KR 은 23,000자를
+# 담고 있어 실록 원문에 나오는 한자를 거의 다 덮는다(23MB).
+fetch "https://raw.githubusercontent.com/google/fonts/main/ofl/notoserifkr/NotoSerifKR%5Bwght%5D.ttf" \
+      "assets/fonts/NotoSerifKR.ttf"
+# 노토 세리프 KR 로도 실록의 벽자(예: 壼)는 빠진다. 한자만 담당할 보조 폰트를 하나 더 둔다
+# (한글은 없고 한자는 3만 자). 글자마다 있는 폰트를 골라 그린다.
+fetch "https://raw.githubusercontent.com/google/fonts/main/ofl/notoserifsc/NotoSerifSC%5Bwght%5D.ttf" \
+      "assets/fonts/NotoSerifSC.ttf"
 
 echo ">>> [3/5] 한지 텍스처(생성) + 대동여지도(위키미디어, 퍼블릭 도메인)"
 if have assets/textures/hanji.jpg; then

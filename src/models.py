@@ -10,7 +10,33 @@ from typing import Any, Literal
 CameraMove = Literal["push_in", "pull_out", "pan_lr", "pan_rl", "pan_tb", "freeze"]
 # 컷을 움직이는 방식. veo 는 생성 영상, parallax 는 깊이 기반 2.5D 카메라 이동,
 # official_video 는 국가유산청이 항목별로 제공하는 공식 영상(비용 없이 실사 영상을 쓴다).
-MotionEngine = Literal["veo", "parallax", "official_video"]
+MotionEngine = Literal["veo", "parallax", "official_video", "ai_image", "historical_doc", "map_motion"]
+
+# 대본이 문장마다 지정하는 화면 종류. 조선 사건에는 사진이 존재하지 않아서, 실사 검색
+# 대신 이 네 갈래로 화면을 만든다.
+#   VEO            생성 영상 (영상 전체에서 가장 센 훅 한 컷)
+#   AI_IMAGE       생성 정지화 + 시네마틱 무빙 (사건·상황 묘사)
+#   HISTORICAL_DOC 한지 위에 실록 원문을 얹고 붉은 먹줄을 긋는다 (사료 인용)
+#   MAP_MOTION     대동여지도를 파고들며 고을에 핏빛 잉크가 번진다 (위치 언급)
+SceneType = Literal["VEO", "AI_IMAGE", "HISTORICAL_DOC", "MAP_MOTION"]
+SCENE_TYPES: tuple[str, ...] = ("VEO", "AI_IMAGE", "HISTORICAL_DOC", "MAP_MOTION")
+# 씬 종류를 실제 렌더 엔진으로 옮기는 표.
+SCENE_TYPE_ENGINE: dict[str, str] = {
+    "VEO": "veo",
+    "AI_IMAGE": "ai_image",
+    "HISTORICAL_DOC": "historical_doc",
+    "MAP_MOTION": "map_motion",
+}
+# 충격적 사실·전환에 때리는 효과음.
+SfxName = Literal["sub_boom", "braam", "paper_rustle", "none"]
+ENGINE_NAMES: tuple[str, ...] = (
+    "veo",
+    "parallax",
+    "official_video",
+    "ai_image",
+    "historical_doc",
+    "map_motion",
+)
 
 
 @dataclass
@@ -74,6 +100,18 @@ class ScriptLine:
     audio_path: str = ""
     duration: float = 0.0
     camera: CameraMove = "push_in"
+    # 이 문장을 어떤 화면으로 만들지. 대본 LLM 이 문장마다 직접 정한다.
+    scene_type: str = "AI_IMAGE"
+    # VEO/AI_IMAGE 생성에 쓸 영문 프롬프트.
+    prompt: str = ""
+    # HISTORICAL_DOC 용: 사료 이름(예: 光海君日記)과 밑줄 그을 원문 구절.
+    doc_title: str = ""
+    doc_highlight: str = ""
+    # MAP_MOTION 용: 지역과 표시할 고을들.
+    map_region: str = ""
+    map_spots: list[str] = field(default_factory=list)
+    # 이 문장 시작 지점에 때릴 효과음.
+    sfx: str = "none"
     # 이 문장을 읽고 나서 쉬는 시간. 숨 쉴 틈이 없으면 기계가 읽는 것처럼 들린다.
     pause_after: float = 0.0
     speech_rate: str = "+0%"
@@ -151,6 +189,14 @@ class Scene:
     is_hook: bool = False
     # engine == "official_video" 일 때만 채워진다. 씬 배정 시점에 이미 내려받은 파일 경로다.
     official_video_path: str = ""
+    # 아래는 문장(ScriptLine)에서 그대로 물려받는다 — 어떤 화면을 만들지가 전부 여기 있다.
+    scene_type: str = "AI_IMAGE"
+    prompt: str = ""
+    doc_title: str = ""
+    doc_highlight: str = ""
+    map_region: str = ""
+    map_spots: list[str] = field(default_factory=list)
+    sfx: str = "none"
 
 
 @dataclass

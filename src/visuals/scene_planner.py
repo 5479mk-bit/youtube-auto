@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 
-from ..models import CameraMove, MotionEngine, Scene, ScriptPart
+from ..models import ENGINE_NAMES, SCENE_TYPE_ENGINE, CameraMove, Scene, ScriptPart
 
 MOVE_CYCLE: list[CameraMove] = ["push_in", "pan_lr", "pull_out", "pan_rl", "push_in", "pan_tb"]
 MIN_CUT_DURATION = 0.5
@@ -22,7 +22,7 @@ def plan_scenes(
     freeze_last: bool,
     series_labels: list[str],
     veo_seconds: float = 0.0,
-    intro_engine: MotionEngine = "veo",
+    intro_engine: str = "veo",
     intro_video_path: str = "",
 ) -> list[Scene]:
     """veo_seconds 만큼의 도입부를 생성/공식 영상 씬 하나로 묶고, 나머지를 컷으로 쪼갠다.
@@ -182,11 +182,60 @@ def interleave_veo(
     return result
 
 
-def engine_counts(scenes: list[Scene]) -> dict[MotionEngine, int]:
-    counts: dict[MotionEngine, int] = {"veo": 0, "parallax": 0, "official_video": 0}
+def plan_typed_scenes(part: ScriptPart, freeze_last: bool) -> list[Scene]:
+    """대본이 문장마다 지정한 화면 종류(scene_type)를 그대로 컷으로 옮긴다.
+
+    문화재 경로(`plan_scenes`)는 사진 한 장을 여러 컷으로 쪼개 무빙만 바꿔 지루함을 덜었다.
+    실록 경로는 그럴 필요가 없다 — 컷마다 만들 화면이 아예 다르다(생성 영상 / 생성 정지화 /
+    사료 / 지도). 문장 하나가 컷 하나다. 문장을 쪼개면 사료 컷 중간에 지도가 끼어드는
+    이상한 그림이 된다.
+    """
+    scenes: list[Scene] = []
+    cursor = 0.0
+    move_index = 0
+
+    for line in part.lines:
+        duration = max(line.duration, MIN_CUT_DURATION)
+        camera, move_index = _next_move(move_index, scenes[-1].camera if scenes else None)
+        scenes.append(
+            Scene(
+                start=cursor,
+                duration=duration,
+                image_query_ko=line.visual_query_ko,
+                image_query_en=line.visual_query_en,
+                camera=camera,
+                engine=SCENE_TYPE_ENGINE.get(line.scene_type, "ai_image"),
+                is_hook=not scenes,
+                scene_type=line.scene_type,
+                prompt=line.prompt,
+                doc_title=line.doc_title,
+                doc_highlight=line.doc_highlight,
+                map_region=line.map_region,
+                map_spots=list(line.map_spots),
+                sfx=line.sfx,
+            )
+        )
+        cursor += duration
+
+    # 생성 영상 컷은 자체 모션이 있어 카메라를 멈추면 안 된다.
+    if freeze_last and scenes and scenes[-1].engine not in ("veo", "official_video"):
+        scenes[-1].camera = "freeze"
+
+    return scenes
+
+
+def engine_counts(scenes: list[Scene]) -> dict[str, int]:
+    """엔진별 컷 수. 안 쓰인 엔진도 0 으로 남긴다 — 호출하는 쪽이 키를 그대로 읽는다."""
+    counts: dict[str, int] = {engine: 0 for engine in ENGINE_NAMES}
     for scene in scenes:
-        counts[scene.engine] += 1
+        counts[scene.engine] = counts.get(scene.engine, 0) + 1
     return counts
+
+
+def engine_summary(scenes: list[Scene]) -> str:
+    """로그 한 줄용. 실제로 쓰인 엔진만 보여준다."""
+    used = [(name, count) for name, count in engine_counts(scenes).items() if count]
+    return " / ".join(f"{name} {count}" for name, count in used) or "없음"
 
 
 def _next_move(move_index: int, previous: CameraMove | None) -> tuple[CameraMove, int]:

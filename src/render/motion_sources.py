@@ -17,6 +17,16 @@ from moviepy import VideoFileClip
 from ..models import PhotoCredit, Scene
 from ..motion.parallax import make_parallax_clip
 from ..visuals.image_collector import ImageCollector
+from . import scene_renderers
+
+# 화면 아래 출처 배지에 쓸 이름. 생성 컷은 "우리가 만든 그림"이라는 걸 밝혀야 한다.
+_CREDIT_NAMES = {
+    "historical_doc": "조선왕조실록 원문",
+    "map_motion": "대동여지도 (퍼블릭 도메인)",
+    "ai_image": "AI 생성 이미지",
+    "veo": "AI 생성 영상",
+    "fallback": "연출 배경",
+}
 
 VEO_PROMPT = (
     "다큐멘터리 영상. {subject}. 카메라가 아주 천천히 움직이고, 장면 속 사람과 차량이"
@@ -37,7 +47,17 @@ def build_scene_clip(
     size: tuple[int, int],
     parallax_amount: float,
     dolly_amount: float,
+    ai_client=None,
 ) -> tuple[object, PhotoCredit]:
+    """컷 하나를 클립으로. 씬 종류에 따라 만드는 방식이 완전히 갈린다.
+
+    실록 경로(사료·지도·생성)는 웹 사진을 아예 건드리지 않는다 — 조선 사건을 텍스트로
+    검색하면 현대 우체국·카페 사진이 끌려 들어오기 때문이다. 문화재 경로(파랄랙스/공식
+    영상)는 지금까지처럼 사진을 쓴다.
+    """
+    if scene.engine in ("historical_doc", "map_motion", "ai_image", "veo"):
+        return _build_generated_clip(scene, veo_client, ai_client, size)
+
     found = collector.collect(scene.image_query_ko, scene.image_query_en)
     if found is None:
         raise PhotoMissing([scene.image_query_ko or scene.image_query_en])
@@ -61,6 +81,52 @@ def build_scene_clip(
             image_path, scene.duration, scene.camera, size, parallax_amount, dolly_amount
         ),
         credit,
+    )
+
+
+def _build_generated_clip(scene: Scene, veo_client, ai_client, size: tuple[int, int]):
+    """사진을 검색하지 않는 컷들.
+
+    생성(Veo/이미지)이 막히면 대체 화면(먹빛 플레이트)으로 내려간다. 무료 티어는 영상·
+    이미지 할당량이 0 이라 지금은 이 경로를 자주 탄다 — 그래도 톤은 유지된다.
+    """
+    credit = PhotoCredit(query=scene.scene_type, source_name=_CREDIT_NAMES[scene.engine])
+
+    if scene.engine == "historical_doc":
+        return (
+            scene_renderers.render_doc_scene(
+                scene.duration, size, scene.doc_title, scene.doc_highlight
+            ),
+            credit,
+        )
+
+    if scene.engine == "map_motion":
+        return (
+            scene_renderers.render_map_scene(
+                scene.duration, size, scene.map_region, scene.map_spots
+            ),
+            credit,
+        )
+
+    # 여기부터는 생성 컷(AI_IMAGE / VEO). 먼저 그림 한 장을 만든다.
+    image_path = None
+    if ai_client is not None and scene.prompt:
+        image_path = ai_client.generate(scene.prompt)
+
+    if image_path is not None and scene.engine == "veo" and veo_client is not None and veo_client.enabled:
+        clip = _veo_clip(veo_client, image_path, scene, size)
+        if clip is not None:
+            return clip, PhotoCredit(query=scene.scene_type, source_name=_CREDIT_NAMES["veo"])
+        logger.warning("Veo 클립을 만들지 못해 이 컷은 생성 이미지로 대체합니다")
+
+    if image_path is not None:
+        return scene_renderers.render_ai_image_motion(image_path, scene.duration, size), credit
+
+    logger.warning(f"생성이 막혀 대체 화면을 씁니다 ({scene.scene_type})")
+    seed = scene.prompt or scene.image_query_ko or scene.scene_type
+    return (
+        scene_renderers.render_fallback_plate(scene.duration, size, seed, scene.camera),
+        PhotoCredit(query=scene.scene_type, source_name=_CREDIT_NAMES["fallback"]),
     )
 
 
@@ -96,7 +162,12 @@ def _official_video_clip(path: Path, scene: Scene, size: tuple[int, int]):
 def _veo_clip(veo_client, image_path: Path, scene: Scene, size: tuple[int, int]):
     from ..motion.veo_client import VeoError
 
-    prompt = VEO_PROMPT.format(subject=scene.image_query_ko or scene.image_query_en)
+    # 실록 컷은 대본이 만든 영문 시네마틱 프롬프트를 그대로 쓴다. 문화재 컷은 검색어를
+    # 넣어 만든 한국어 프롬프트를 쓴다 — 실사 사진을 자연스럽게 움직이는 게 목적이라 톤이
+    # 다르다.
+    prompt = scene.prompt or VEO_PROMPT.format(
+        subject=scene.image_query_ko or scene.image_query_en
+    )
     try:
         clip_path = veo_client.animate(image_path, prompt)
     except VeoError as exc:

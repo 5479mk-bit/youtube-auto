@@ -10,7 +10,9 @@ LLM 이 지어내지 못하게 프롬프트에서 못박는다 — 대본은 이
 
 from __future__ import annotations
 
-from ..models import Script, ScriptLine, ScriptPart, StoryCandidate
+import re
+
+from ..models import SCENE_TYPES, Script, ScriptLine, ScriptPart, StoryCandidate
 from ..text_ko import particle as _particle
 from ..text_ko import read_aloud
 from .llm_client import LLMProvider
@@ -136,30 +138,47 @@ SILLOK_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 �
   똑같은 규칙이다 — 감정은 눈에 잘 안 띄어서 더 잘 새어 나간다.
 - emphasis 에는 그 문장에서 자막으로 크게 강조할 짧은 조각만 넣는다.
 
-[사진 검색어 — 이번 소재의 가장 어려운 부분]
-실록 사건에는 사진이 없다. 하늘에 나타난 물체를 찍은 사진은 존재하지 않는다.
-그러니 **사건과 연결된 실존 대상**으로 검색어를 만든다.
-- 안전한 것(사진이 실제로 오는 걸 확인한 것들): "경복궁", "창덕궁", "숭례문", "동궐도",
-  "대동여지도", 기사에 나오는 실제 지명("강릉", "춘천", "원주").
-- 쓰면 안 되는 것 1 — 장면을 묘사한 말("하늘의 붉은 물체", "밤하늘의 괴광"). 그런 사진은
-  존재하지 않아 화면이 비거나 엉뚱한 사진이 들어간다.
-- 쓰면 안 되는 것 2 — **뭉뚱그린 말**("조선시대 그림", "조선시대 고지도", "옛 문서").
-  사진 검색은 고유명사로만 걸린다. 그림이 필요하면 그림 이름을 쓴다("동궐도").
-- 쓰면 안 되는 것 3 — 있을 법하지만 사진이 없는 것("정족산사고", "조선왕조실록",
-  "승정원일기"). 책·사고 이름은 피하고 위 안전 목록에서 고른다.
-- 건물 안 특정 전각까지 좁히지 않는다. "경복궁 근정전" 보다 "경복궁" 이 안전하다.
-- visual_query_en 은 같은 대상의 영어 표기 2~4단어 (예: "Gyeongbokgung", "Donggwoldo").
+[화면 — 사진을 검색하지 않는다]
+조선 사건에는 사진이 존재하지 않는다. 그래서 웹 이미지 검색은 아예 쓰지 않고, 문장마다
+아래 네 갈래 중 하나를 **네가 직접 정해서** 화면을 만든다(`scene_type`).
+
+- "VEO": 영상 전체를 통틀어 **딱 한 문장**에만 준다. 가장 센 장면(훅)이다. 보통 1부 첫 문장.
+- "AI_IMAGE": 사건·상황 묘사. 부마다 **2~3문장**.
+- "HISTORICAL_DOC": 실록 원문을 화면에 띄우는 컷. 부마다 **1~2문장**. "실록에 이렇게 적혀
+  있어" 류의 문장에 준다. `doc_title`(예: 光海君日記)과 `doc_highlight`(밑줄 그을 한자
+  원문 구절, 5~12자)를 같이 채운다. **원문에 실제로 있는 구절만 쓴다.**
+- "MAP_MOTION": 지명이 나오는 문장. 부마다 **1문장**. `map_region` 과 `map_spots`(고을
+  이름 한글)를 채운다.
+
+`prompt` 는 VEO/AI_IMAGE 일 때만 채우는 **영문** 프롬프트다. 아래 스타일 문구를 반드시
+끝에 그대로 붙인다:
+  "dark historical Joseon dynasty, chiaroscuro lighting, heavy volumetric fog,
+   eerie atmosphere, 35mm film grain, 8k"
+사람 얼굴을 클로즈업하지 않는다(생성물이 어색해진다). 하늘·산·기와지붕·횃불·안개처럼
+형체가 단순한 것을 시킨다.
+
+`sfx` 는 그 문장이 시작될 때 때릴 소리다. 부마다 **한두 문장에만** 준다 — 매 문장에 넣으면
+아무 문장도 안 센 게 된다.
+- "sub_boom": 충격적인 사실이 나오는 문장
+- "paper_rustle": 사료(HISTORICAL_DOC) 컷
+- "braam": 1부 마지막 클리프행어
+- "none": 나머지 전부
 
 [출력 형식] 아래 JSON 만 출력한다.
 {{
   "title_seed": "채널 제목에 쓸 한 줄",
   "part1": {{"hook_number": "화면에 크게 띄울 짧은 문구 (예: \"1609년 강원도\", \"광해 1년\").
                               \"01\" 같은 회차 번호가 아니다", "lines": [
-    {{"text": "", "visual_query_ko": "", "visual_query_en": "", "emphasis": [""]}}
+    {{"text": "내레이션 한 문장",
+     "scene_type": "VEO | AI_IMAGE | HISTORICAL_DOC | MAP_MOTION",
+     "prompt": "VEO/AI_IMAGE 일 때만: 위 스타일 문구로 끝나는 영문 프롬프트",
+     "doc_data": {{"title": "光海君日記", "highlight_text": "밑줄 그을 한자 원문 구절"}},
+     "map_data": {{"region": "GANGWON | HANYANG | GYEONGSANG | JEOLLA | PYEONGAN",
+                  "spots": ["강릉", "춘천"]}},
+     "sfx": "sub_boom | braam | paper_rustle | none",
+     "emphasis": ["자막에서 크게 강조할 조각"]}}
   ]}},
-  "part2": {{"hook_number": "", "lines": [
-    {{"text": "", "visual_query_ko": "", "visual_query_en": "", "emphasis": [""]}}
-  ]}}
+  "part2": {{"hook_number": "", "lines": [ ...위와 같은 구조... ]}}
 }}
 """
 
@@ -236,20 +255,7 @@ def _parse(raw: dict | None, candidate: StoryCandidate) -> Script | None:
 
 def _parse_part(raw: dict, part: int, candidate: StoryCandidate) -> ScriptPart:
     lines = [
-        ScriptLine(
-            text=str(line["text"]).strip(),
-            visual_query_ko=str(
-                line.get("visual_query_ko") or _first(candidate.image_queries_ko)
-            ),
-            visual_query_en=str(
-                line.get("visual_query_en") or _first(candidate.image_queries_en)
-            ),
-            # 낭독문은 LLM 이 준 걸 쓰지 않고 직접 만든다. 큰 수를 소리대로 적게 하면
-            # 틀리기 쉬운데, 숫자 읽기는 규칙이 정해져 있으니 계산하는 편이 맞다.
-            spoken_text=read_aloud(str(line["text"]).strip()),
-            show_chart=False,
-            emphasis=[str(item) for item in line.get("emphasis", []) if str(item).strip()],
-        )
+        _parse_line(line, candidate)
         for line in raw["lines"]
         if str(line.get("text", "")).strip()
     ]
@@ -258,6 +264,43 @@ def _parse_part(raw: dict, part: int, candidate: StoryCandidate) -> ScriptPart:
         hook_number=_hook_number(raw.get("hook_number"), candidate),
         lines=lines,
     )
+
+
+def _parse_line(raw: dict, candidate: StoryCandidate) -> ScriptLine:
+    """문장 하나. 화면 종류(scene_type)와 그에 딸린 값들을 같이 받는다.
+
+    LLM 이 갈래 이름을 틀리게 주는 일이 있어(소문자, 없는 이름) 모르는 값은 AI_IMAGE 로
+    떨어뜨린다 — 화면이 비는 것보다 낫다.
+    """
+    text = str(raw["text"]).strip()
+    doc = raw.get("doc_data") or {}
+    map_data = raw.get("map_data") or {}
+    scene_type = str(raw.get("scene_type", "")).strip().upper()
+    if scene_type not in SCENE_TYPES:
+        scene_type = "AI_IMAGE"
+
+    return ScriptLine(
+        text=text,
+        visual_query_ko=str(raw.get("visual_query_ko") or _first(candidate.image_queries_ko)),
+        visual_query_en=str(raw.get("visual_query_en") or _first(candidate.image_queries_en)),
+        # 낭독문은 LLM 이 준 걸 쓰지 않고 직접 만든다. 큰 수를 소리대로 적게 하면
+        # 틀리기 쉬운데, 숫자 읽기는 규칙이 정해져 있으니 계산하는 편이 맞다.
+        spoken_text=read_aloud(text),
+        show_chart=False,
+        emphasis=[str(item) for item in raw.get("emphasis", []) if str(item).strip()],
+        scene_type=scene_type,
+        prompt=str(raw.get("prompt") or "").strip(),
+        doc_title=str(doc.get("title") or "").strip(),
+        doc_highlight=str(doc.get("highlight_text") or "").strip(),
+        map_region=str(map_data.get("region") or "").strip().upper(),
+        map_spots=[str(spot).strip() for spot in map_data.get("spots", []) if str(spot).strip()],
+        sfx=_sfx(raw.get("sfx")),
+    )
+
+
+def _sfx(raw: object) -> str:
+    name = str(raw or "none").strip().lower()
+    return name if name in ("sub_boom", "braam", "paper_rustle") else "none"
 
 
 def _hook_number(raw: object, candidate: StoryCandidate) -> str:
@@ -349,6 +392,22 @@ def _template_script(candidate: StoryCandidate) -> Script:
     )
 
 
+# 생성 컷의 고정 스타일. LLM 이 프롬프트를 못 준 컷에도 이 톤은 유지된다.
+CINEMATIC_STYLE = (
+    "dark historical Joseon dynasty, chiaroscuro lighting, heavy volumetric fog, "
+    "eerie atmosphere, 35mm film grain, 8k"
+)
+FALLBACK_IMAGE_PROMPT = f"night sky over a Joseon village, {CINEMATIC_STYLE}"
+
+_HANJA = re.compile(r"[\u4e00-\u9fff]{2,}")
+
+
+def _first_hanja_phrase(text: str, max_chars: int = 10) -> str:
+    """국역 안에 괄호로 붙어 있는 한자 중 첫 구절. 사료 컷에 띄울 글자다."""
+    match = _HANJA.search(text or "")
+    return match.group(0)[:max_chars] if match else ""
+
+
 def _sillok_template_script(candidate: StoryCandidate) -> Script:
     """LLM 없이 실록 기사만으로 짜는 대본.
 
@@ -360,7 +419,13 @@ def _sillok_template_script(candidate: StoryCandidate) -> Script:
     when = candidate.headline_number or "조선"
     facts = [fact for fact in candidate.facts if fact]
 
-    def line(index: int, text: str, emphasis: list[str] | None = None) -> ScriptLine:
+    def line(
+        index: int,
+        text: str,
+        emphasis: list[str] | None = None,
+        scene_type: str = "AI_IMAGE",
+        sfx: str = "none",
+    ) -> ScriptLine:
         return ScriptLine(
             text=text,
             spoken_text=read_aloud(text),
@@ -368,16 +433,38 @@ def _sillok_template_script(candidate: StoryCandidate) -> Script:
             visual_query_en=queries_en[index % len(queries_en)],
             show_chart=False,
             emphasis=emphasis or [],
+            scene_type=scene_type,
+            # 폴백이라 프롬프트를 지어내지 않는다. 생성 컷은 고정 스타일만 준다.
+            prompt=FALLBACK_IMAGE_PROMPT if scene_type in ("VEO", "AI_IMAGE") else "",
+            doc_title=candidate.headline_number,
+            doc_highlight=_first_hanja_phrase(candidate.context),
+            sfx=sfx,
         )
 
-    part1_lines = [line(0, f"{when}, 실록에 이런 게 적혀 있어.", emphasis=[when])]
+    part1_lines = [line(0, f"{when}, 실록에 이런 게 적혀 있어.", emphasis=[when], scene_type="VEO")]
     part1_lines += [line(i, fact) for i, fact in enumerate(facts[:3], start=1)]
-    part1_lines.append(line(4, "지어낸 얘기가 아니야. 실록 원문에 있는 말이야.", emphasis=["실록 원문"]))
-    part1_lines.append(line(5, "그래서 이게 뭐였을까?", emphasis=["뭐였을까"]))
+    part1_lines.append(
+        line(
+            4,
+            "지어낸 얘기가 아니야. 실록 원문에 있는 말이야.",
+            emphasis=["실록 원문"],
+            scene_type="HISTORICAL_DOC",
+            sfx="paper_rustle",
+        )
+    )
+    part1_lines.append(line(5, "그래서 이게 뭐였을까?", emphasis=["뭐였을까"], sfx="braam"))
 
     part2_lines = [line(0, "1부에서 남긴 질문이었지.")]
     part2_lines += [line(i, fact) for i, fact in enumerate(facts[3:7], start=1)]
-    part2_lines.append(line(5, "실록은 여기까지만 적어놨어. 답은 안 남겼고.", emphasis=["여기까지만"]))
+    part2_lines.append(
+        line(
+            5,
+            "실록은 여기까지만 적어놨어. 답은 안 남겼고.",
+            emphasis=["여기까지만"],
+            scene_type="HISTORICAL_DOC",
+            sfx="sub_boom",
+        )
+    )
     part2_lines.append(line(6, "너는 이게 뭐였을 것 같아?"))
 
     return Script(
