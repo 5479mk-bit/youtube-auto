@@ -56,7 +56,7 @@ class PipelineResult:
     cost_note: str = ""
 
 
-def select_topic(settings: Settings) -> StoryCandidate | None:
+def select_topic(settings: Settings, ignore_history: bool = False) -> StoryCandidate | None:
     """이번 회차 주제 하나. 소스는 `topics.source` 로 고른다.
 
     문화재 경로는 지우지 않았다 — 궁궐·유물 화면이 필요할 때 그대로 다시 쓴다.
@@ -73,7 +73,9 @@ def select_topic(settings: Settings) -> StoryCandidate | None:
         )
         weights = settings.get("topics.weights", {})
 
-    return topic_scorer.pick(candidates, weights, history.used_topic_keys(STATE_DB))
+    # 같은 소재를 다시 렌더할 때(연출을 고치며 반복할 때)는 중복 방지를 건너뛴다.
+    used = set() if ignore_history else history.used_topic_keys(STATE_DB)
+    return topic_scorer.pick(candidates, weights, used)
 
 
 def write_script(settings: Settings, candidate: StoryCandidate) -> Script:
@@ -215,9 +217,12 @@ def build_ai_image_client(settings: Settings) -> AiImageClient:
 
 
 def run(
-    settings: Settings, render: bool = True, use_veo: bool = True
+    settings: Settings,
+    render: bool = True,
+    use_veo: bool = True,
+    reuse_topic: bool = False,
 ) -> PipelineResult | None:
-    candidate = select_topic(settings)
+    candidate = select_topic(settings, ignore_history=reuse_topic)
     if candidate is None:
         logger.error("선정할 주제 후보가 없습니다")
         return None

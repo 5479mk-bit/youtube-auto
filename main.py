@@ -40,6 +40,11 @@ def main() -> int:
         help="Veo 를 쓰지 않고 전부 무료 파랄랙스로 만든다 (과금 없음)",
     )
     run_parser.add_argument(
+        "--reuse-topic",
+        action="store_true",
+        help="이미 다룬 주제도 다시 고른다 (연출을 고치며 같은 소재를 재렌더할 때)",
+    )
+    run_parser.add_argument(
         "--review",
         action="store_true",
         help="렌더 후 텔레그램으로 검수 요청을 보내고 승인 시 업로드한다",
@@ -93,7 +98,10 @@ def main() -> int:
 
     try:
         result = pipeline.run(
-            settings, render=not args.dry_run, use_veo=not args.no_veo
+            settings,
+            render=not args.dry_run,
+            use_veo=not args.no_veo,
+            reuse_topic=args.reuse_topic,
         )
     except Exception as exc:
         # 작업 스케줄러로 무인 실행될 때는 아무도 콘솔을 안 본다. 조용히 죽으면 며칠 뒤에야

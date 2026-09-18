@@ -22,6 +22,7 @@ from __future__ import annotations
 import html as html_module
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import requests
 from loguru import logger
@@ -30,6 +31,8 @@ from ..models import StoryCandidate
 from . import event_keywords
 
 BASE_URL = "https://sillok.history.go.kr/id/"
+# 받아둔 기사 페이지를 남겨두는 곳. 실록 사이트로 나가는 길이 불안정하다.
+CACHE_DIR = Path(__file__).resolve().parent.parent.parent / ".cache" / "sillok"
 # 실록 사건에는 사진이 존재하지 않는다 — "하늘에 이상한 물체가 나타났다"를 찍은 사진은
 # 없다. 그래서 컷별 검색어가 빗나갔을 때 돌아갈 곳으로 조선을 대표하는 **실존 대상**을
 # 미리 정해둔다. 궁궐·회화·고지도는 위키미디어에 실제로 있는 것들이다.
@@ -78,9 +81,25 @@ class SillokArticle:
         return f"{BASE_URL}{self.article_id}"
 
 
-def fetch(article_id: str) -> SillokArticle:
-    """기사 ID 하나로 국역·원문·제목·날짜를 가져온다."""
-    return parse(article_id, _get(f"{BASE_URL}{article_id}"))
+def fetch(article_id: str, cache_dir: Path | None = None) -> SillokArticle:
+    """기사 ID 하나로 국역·원문·제목·날짜를 가져온다.
+
+    받은 페이지는 캐시에 남긴다. 실록 사이트로 나가는 길이 자주 끊겨(재시도 6번이 전부
+    실패한 적도 있다) 그때마다 회차 전체가 날아가는 건 과하다 — 한 번 받아둔 기사는
+    다음 실행에서 네트워크 없이 그대로 쓴다.
+    """
+    cache = (cache_dir or CACHE_DIR) / f"{article_id}.html"
+    if cache.exists() and cache.stat().st_size > 1000:
+        try:
+            return parse(article_id, cache.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning(f"[sillok] 캐시가 깨져 다시 받습니다: {exc}")
+
+    html = _get(f"{BASE_URL}{article_id}")
+    article = parse(article_id, html)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(html, encoding="utf-8")
+    return article
 
 
 def to_candidate(article: SillokArticle) -> StoryCandidate:
