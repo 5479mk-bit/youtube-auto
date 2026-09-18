@@ -16,6 +16,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src import pipeline
+from src.cloud.spend_guard import CreditsExhausted, SpendGuard
 from src.datasource.base import load_fixture as load_stats_fixture
 from src.heritage import khs_client
 from src.heritage.fixtures import load_fixture as load_heritage_fixture
@@ -748,3 +749,35 @@ class TestSillokArticle:
     def test_국역이_없으면_조용히_넘어가지_않는다(self):
         with pytest.raises(sillok_article.SillokError):
             sillok_article.parse("x", "<div class='detail-view'></div>")
+
+
+class TestSpendGuard:
+    """크레딧이 바닥나면 호출 전에 멈춰야 한다 — 바닥난 뒤의 호출은 카드로 나간다."""
+
+    def test_남은_금액_안에서는_통과한다(self, tmp_path):
+        guard = SpendGuard(tmp_path / "ledger.json", credit_krw=10_000, reserve_krw=1_000)
+        guard.ensure_can_spend(5_000)
+        guard.record(5_000, "veo", "테스트")
+        assert guard.spent_krw == 5_000
+        assert guard.remaining_krw == 4_000
+
+    def test_남은_금액을_넘으면_예외를_던진다(self, tmp_path):
+        guard = SpendGuard(tmp_path / "ledger.json", credit_krw=10_000, reserve_krw=1_000)
+        guard.record(8_000, "veo", "테스트")
+        with pytest.raises(CreditsExhausted):
+            guard.ensure_can_spend(2_000)
+
+    def test_예비금은_아예_쓰지_않는다(self, tmp_path):
+        guard = SpendGuard(tmp_path / "ledger.json", credit_krw=10_000, reserve_krw=3_000)
+        assert guard.usable_krw == 7_000
+        with pytest.raises(CreditsExhausted):
+            guard.ensure_can_spend(7_001)
+
+    def test_원장은_재실행해도_이어진다(self, tmp_path):
+        ledger = tmp_path / "ledger.json"
+        SpendGuard(ledger, credit_krw=10_000).record(1_500, "image", "1장")
+        assert SpendGuard(ledger, credit_krw=10_000).spent_krw == 1_500
+
+    def test_상한을_끄면_막지_않는다(self, tmp_path):
+        guard = SpendGuard(tmp_path / "ledger.json", credit_krw=0, enabled=False)
+        guard.ensure_can_spend(999_999)

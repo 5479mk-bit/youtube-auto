@@ -85,6 +85,21 @@ publish:
 # 사진을 실제로 움직이는 영상으로 만드는 유료 경로. 8초 단위로 과금된다.
 # 배치는 "사진 → 그 사진이 움직이는 Veo 컷 → 다음 사진" 교차식이라, 정지 사진만 훑는
 # 지루함은 피하면서 비용은 클립 수만큼만 든다.
+# 생성 과금 경로와 상한.
+cloud:
+  # vertex = GCP 크레딧(₩354,417)으로 결제. aistudio = AI Studio 선불 잔액.
+  # 선불 잔액이 0 이라 vertex 로 간다.
+  backend: vertex
+  project_id: ""        # 비우면 VERTEX_PROJECT_ID / GOOGLE_CLOUD_PROJECT 환경변수
+  location: us-central1
+  image_model: imagen-4.0-fast-generate-001
+  image_cost_krw: 30    # Imagen 4 fast 장당 약 0.02달러
+  # 크레딧을 다 쓰면 생성을 멈춘다. 여기 적힌 금액은 우리가 계산한 **추정치**이고,
+  # 실제 청구는 GCP 만 안다 — 그래서 예비금을 남겨두고 그만큼은 아예 안 쓴다.
+  credit_krw: 354417
+  reserve_krw: 20000
+  stop_when_exhausted: true
+
 veo:
   tier: lite            # lite | fast | standard — 단가가 8배까지 벌어진다
   resolution: 720p

@@ -27,6 +27,8 @@ from .render.thumbnail import build_thumbnail
 from .render.video_builder import build_part
 from .script import script_writer
 from .script.llm_client import build_provider
+from .cloud.spend_guard import SpendGuard
+from .cloud.vertex import VertexAuth, VertexConfig, project_from_env
 from .settings import CACHE_DIR, OUTPUT_DIR, STATE_DB, Settings
 from .subtitles import subtitle_builder
 from . import heritage, sillok
@@ -190,7 +192,41 @@ def build_tts_engines(settings: Settings) -> list:
     return [gemini, edge]
 
 
-def build_veo_client(settings: Settings) -> VeoClient:
+def build_spend_guard(settings: Settings) -> SpendGuard:
+    """크레딧 원장. 남은 금액이 모자라면 생성 호출 자체를 막는다."""
+    return SpendGuard(
+        ledger_path=CACHE_DIR / "spend_ledger.json",
+        credit_krw=settings.get("cloud.credit_krw", 0),
+        reserve_krw=settings.get("cloud.reserve_krw", 20000),
+        enabled=bool(settings.get("cloud.stop_when_exhausted", True)),
+    )
+
+
+def build_vertex(settings: Settings) -> tuple[VertexConfig | None, VertexAuth | None]:
+    """Vertex 설정과 인증. 프로젝트나 인증 정보가 없으면 (None, None)."""
+    if settings.get("cloud.backend", "aistudio") != "vertex":
+        return None, None
+
+    project_id = settings.get("cloud.project_id", "") or project_from_env()
+    if not project_id:
+        logger.warning(
+            "[cloud] Vertex 를 쓰려면 프로젝트 ID 가 필요합니다 "
+            "(config cloud.project_id 또는 VERTEX_PROJECT_ID)"
+        )
+        return None, None
+
+    auth = VertexAuth(settings.secrets.vertex_service_account_file)
+    if not auth.available:
+        logger.warning(
+            "[cloud] Vertex 인증 정보를 찾지 못했습니다 "
+            "(VERTEX_SERVICE_ACCOUNT_FILE 또는 gcloud ADC)"
+        )
+        return None, None
+
+    return VertexConfig(project_id=project_id, location=settings.get("cloud.location", "us-central1")), auth
+
+
+def build_veo_client(settings: Settings, spend_guard: SpendGuard | None = None) -> VeoClient:
     tier = settings.get("veo.tier", "lite")
     budget = VeoBudget(
         cache_dir=CACHE_DIR / "veo",
@@ -198,21 +234,40 @@ def build_veo_client(settings: Settings) -> VeoClient:
         max_clips_per_episode=settings.get("veo.max_clips_per_episode", 4),
         max_clips_per_day=settings.get("veo.max_clips_per_day", 12),
     )
+    vertex, auth = build_vertex(settings)
+    backend = "vertex" if vertex is not None else "aistudio"
     return VeoClient(
         api_key=settings.secrets.gemini_api_key,
         budget=budget,
         tier=tier,
         resolution=settings.get("veo.resolution", "720p"),
         duration_seconds=settings.get("veo.duration_seconds", 8),
+        backend=backend,
+        vertex=vertex,
+        auth=auth,
+        spend_guard=spend_guard or build_spend_guard(settings),
     )
 
 
-def build_ai_image_client(settings: Settings) -> AiImageClient:
-    """장면 생성용 이미지 클라이언트. 키가 없거나 할당량이 0 이면 알아서 비활성이 된다."""
+def build_ai_image_client(
+    settings: Settings, spend_guard: SpendGuard | None = None
+) -> AiImageClient:
+    """장면 생성용 이미지 클라이언트.
+
+    Vertex 가 준비돼 있으면 GCP 크레딧으로, 아니면 AI Studio 키로 간다. 둘 다 막히면
+    호출하지 않고 대체 화면으로 내려간다.
+    """
+    vertex, auth = build_vertex(settings)
     return AiImageClient(
         settings.secrets.gemini_api_keys,
         CACHE_DIR / "ai_images",
         settings.get("visuals.ai_image_model", ""),
+        backend="vertex" if vertex is not None else "aistudio",
+        vertex=vertex,
+        auth=auth,
+        spend_guard=spend_guard or build_spend_guard(settings),
+        vertex_model=settings.get("cloud.image_model", ""),
+        cost_krw=settings.get("cloud.image_cost_krw", 30),
     )
 
 
@@ -242,9 +297,11 @@ def run(
         return PipelineResult(task_id, candidate, script, [], work_dir, [])
 
     assets.warn_if_missing()
+    spend_guard = build_spend_guard(settings)
+    logger.info(f"[지출] {spend_guard.summary()}")
     collector = build_collector(settings, candidate)
-    veo_client = build_veo_client(settings) if use_veo else None
-    ai_client = build_ai_image_client(settings)
+    veo_client = build_veo_client(settings, spend_guard) if use_veo else None
+    ai_client = build_ai_image_client(settings, spend_guard)
     provider = build_provider(
         settings.get("script.llm.provider", "gemini"),
         settings.get("script.llm.model", ""),

@@ -29,6 +29,8 @@ class Secrets:
     telegram_chat_id: str
     youtube_client_secret_file: str
     youtube_token_file: str
+    # Vertex AI(구글 클라우드) 인증용 서비스 계정 키 파일. 없으면 ADC 를 찾는다.
+    vertex_service_account_file: str = ""
 
 
 class Settings:
@@ -85,5 +87,6 @@ def load_settings(config_path: Path | None = None) -> Settings:
         youtube_token_file=os.getenv(
             "YOUTUBE_TOKEN_FILE", "credentials/youtube_token.json"
         ),
+        vertex_service_account_file=os.getenv("VERTEX_SERVICE_ACCOUNT_FILE", ""),
     )
     return Settings(config, secrets)

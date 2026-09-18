@@ -18,13 +18,29 @@ from pathlib import Path
 import requests
 from loguru import logger
 
+from ..cloud.vertex import VertexAuth, VertexConfig
+
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 DEFAULT_MODEL = "gemini-2.5-flash-image"
+# Vertex 쪽 이미지 모델. Imagen 4 fast 는 장당 약 0.02달러다.
+VERTEX_MODEL = "imagen-4.0-fast-generate-001"
+IMAGE_COST_KRW = 30
 TIMEOUT = 180
 
 
 class AiImageClient:
-    def __init__(self, api_keys: list[str], cache_dir: Path, model: str = DEFAULT_MODEL):
+    def __init__(
+        self,
+        api_keys: list[str],
+        cache_dir: Path,
+        model: str = DEFAULT_MODEL,
+        backend: str = "aistudio",
+        vertex: VertexConfig | None = None,
+        auth: VertexAuth | None = None,
+        spend_guard=None,
+        vertex_model: str = VERTEX_MODEL,
+        cost_krw: int = IMAGE_COST_KRW,
+    ):
         self.api_keys = [key for key in api_keys if key]
         self.model = model or DEFAULT_MODEL
         self.cache_dir = cache_dir
@@ -32,9 +48,18 @@ class AiImageClient:
         # 403(프로젝트 접근 거부)·429(할당량 0)가 뜬 키는 이번 실행 동안 다시 쓰지 않는다.
         # 컷마다 죽은 키를 또 찔러보면 렌더가 몇 분씩 길어진다.
         self._dead: set[str] = set()
+        # 어느 지갑으로 결제할지. vertex = GCP 크레딧, aistudio = 선불 잔액.
+        self.backend = backend
+        self.vertex = vertex
+        self.auth = auth
+        self.spend_guard = spend_guard
+        self.vertex_model = vertex_model or VERTEX_MODEL
+        self.cost_krw = int(cost_krw)
 
     @property
     def enabled(self) -> bool:
+        if self.backend == "vertex":
+            return bool(self.vertex and self.vertex.project_id and self.auth and self.auth.available)
         return bool(self.api_keys)
 
     def generate(self, prompt: str, aspect_ratio: str = "9:16") -> Path | None:
@@ -47,6 +72,17 @@ class AiImageClient:
             return cached
         if not self.enabled:
             return None
+
+        # 크레딧이 남았는지 호출 전에 본다. 바닥나면 여기서 멈춘다(추가 과금 방지).
+        if self.spend_guard is not None:
+            try:
+                self.spend_guard.ensure_can_spend(self.cost_krw, "이미지 1장")
+            except Exception as exc:
+                logger.warning(f"[ai_image] {exc}")
+                return None
+
+        if self.backend == "vertex":
+            return self._generate_vertex(prompt, aspect_ratio, cached)
 
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
@@ -84,9 +120,51 @@ class AiImageClient:
 
             cached.write_bytes(data)
             logger.info(f"[ai_image] 생성: {cached.name}")
+            if self.spend_guard is not None:
+                self.spend_guard.record(self.cost_krw, "image", self.model)
             return cached
 
         logger.warning("[ai_image] 쓸 수 있는 키가 없습니다 (무료 티어는 이미지 할당량이 0)")
+        return None
+
+    def _generate_vertex(self, prompt: str, aspect_ratio: str, dest: Path) -> Path | None:
+        """Vertex Imagen 경로. GCP 크레딧으로 결제된다."""
+        payload = {
+            "instances": [{"prompt": prompt}],
+            "parameters": {
+                "sampleCount": 1,
+                "aspectRatio": aspect_ratio,
+                # 조선 사건 장면은 사람이 나와도 얼굴을 크게 잡지 않는다. 그래도 인물
+                # 필터에 걸려 빈 응답이 오는 일이 있어 허용 범위를 명시한다.
+                "personGeneration": "allow_adult",
+            },
+        }
+        try:
+            response = requests.post(
+                self.vertex.model_url(self.vertex_model, "predict"),
+                headers=self.auth.headers(),
+                json=payload,
+                timeout=TIMEOUT,
+            )
+        except Exception as exc:
+            logger.warning(f"[ai_image] Vertex 호출 실패: {exc}")
+            return None
+
+        if response.status_code != 200:
+            logger.warning(f"[ai_image] Vertex {response.status_code}: {response.text[:200]}")
+            return None
+
+        predictions = response.json().get("predictions", [])
+        for prediction in predictions:
+            encoded = prediction.get("bytesBase64Encoded")
+            if encoded:
+                dest.write_bytes(base64.b64decode(encoded))
+                logger.info(f"[ai_image] 생성(vertex): {dest.name}")
+                if self.spend_guard is not None:
+                    self.spend_guard.record(self.cost_krw, "image", self.vertex_model)
+                return dest
+
+        logger.warning(f"[ai_image] Vertex 응답에 이미지가 없습니다: {str(response.text)[:200]}")
         return None
 
     def _cache_path(self, prompt: str, aspect_ratio: str) -> Path:

@@ -55,6 +55,10 @@ def main() -> int:
 
     subparsers.add_parser("topics", help="주제 후보 순위만 확인한다")
 
+    subparsers.add_parser(
+        "credits", help="생성에 쓴 추정 금액과 남은 크레딧을 본다 (호출 없음)"
+    )
+
     review_pending_parser = subparsers.add_parser(
         "review-pending",
         help="PC가 꺼지는 등으로 끊긴 검수 대기를 다시 확인하고, 승인됐으면 업로드한다",
@@ -87,6 +91,8 @@ def main() -> int:
 
     if args.command == "topics":
         return _topics(settings)
+    if args.command == "credits":
+        return _credits(settings)
     if args.command == "photos":
         return _photos(settings, args.query, args.en)
     if args.command == "voice-test":
@@ -123,6 +129,26 @@ def main() -> int:
     if args.review and result.parts:
         pipeline.review_and_publish(settings, result, args.wait)
 
+    return 0
+
+
+def _credits(settings) -> int:
+    """지금까지 쓴 추정 금액과 남은 크레딧. 실제 청구액은 GCP 콘솔이 정답이다."""
+    guard = pipeline.build_spend_guard(settings)
+    logger.info(guard.summary())
+
+    vertex, auth = pipeline.build_vertex(settings)
+    if vertex is None:
+        logger.warning(
+            "Vertex 가 준비되지 않아 지금은 생성이 막힙니다 "
+            "(cloud.project_id / VERTEX_SERVICE_ACCOUNT_FILE 확인)"
+        )
+    else:
+        logger.info(f"Vertex: {vertex.project_id} / {vertex.location}")
+
+    ledger = guard.ledger_path
+    if ledger.exists():
+        logger.info(f"원장: {ledger}")
     return 0
 
 
