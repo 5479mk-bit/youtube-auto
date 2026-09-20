@@ -65,34 +65,60 @@ jobs:
       - name: 에셋 준비
         run: ./download_assets.sh
 
-      # 시크릿이 비어 있으면 인증 액션은 "둘 중 하나를 지정하라"는 알쏭달쏭한 메시지만
-      # 남기고 죽는다. 어느 값이 비었는지 여기서 이름으로 짚어준다(값은 찍지 않는다).
+      # "Secrets and variables" 페이지에는 탭이 둘이다 — Secrets 와 Variables.
+      # Variables 탭에 넣은 값은 secrets.* 로는 안 잡히고 vars.* 로만 잡히는데, 화면이
+      # 거의 같아서 헷갈리기 쉽다. 어느 쪽에 들어갔는지 여기서 짚어준다(값은 안 찍는다).
       - name: 시크릿 점검
         env:
-          WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          SA: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          PROJECT: ${{ secrets.VERTEX_PROJECT_ID }}
-          GEMINI: ${{ secrets.GEMINI_API_KEY }}
-          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          S_WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          V_WIF: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          S_SA: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          V_SA: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          S_PROJECT: ${{ secrets.VERTEX_PROJECT_ID }}
+          V_PROJECT: ${{ vars.VERTEX_PROJECT_ID }}
+          S_GEMINI: ${{ secrets.GEMINI_API_KEY }}
+          V_GEMINI: ${{ vars.GEMINI_API_KEY }}
+          S_TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          S_TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           missing=""
+          in_vars=""
           for name in WIF SA PROJECT GEMINI; do
-            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+            secret="S_$name"; variable="V_$name"
+            if [ -n "${!secret}" ]; then
+              echo "  $name: Secrets 탭에서 찾음"
+            elif [ -n "${!variable}" ]; then
+              echo "  $name: ⚠ Variables 탭에 있음"
+              in_vars="$in_vars $name"
+            else
+              missing="$missing $name"
+            fi
           done
+
+          if [ -n "$in_vars" ]; then
+            echo "::warning::Variables 탭에 들어간 값:$in_vars"
+            echo "  → GCP 식별자 3개(WIF/SA/PROJECT)는 비밀이 아니라 Variables 여도 동작한다."
+            echo "  → 다만 GEMINI_API_KEY 는 반드시 Secrets 여야 한다. Variables 는 로그와"
+            echo "    화면에 그대로 보이기 때문이다. 거기 있다면 지우고 Secrets 에 다시 넣으세요."
+          fi
+
           if [ -n "$missing" ]; then
-            echo "::error::비어 있는 시크릿:$missing"
+            echo "::error::어느 탭에도 없는 값:$missing"
             echo "  WIF     = GCP_WORKLOAD_IDENTITY_PROVIDER (Cloud Shell 출력 첫 줄)"
             echo "  SA      = GCP_SERVICE_ACCOUNT            (Cloud Shell 출력 둘째 줄)"
             echo "  PROJECT = VERTEX_PROJECT_ID              (vid115)"
             echo "  GEMINI  = GEMINI_API_KEY                 (대본·TTS 용)"
-            echo "저장소 Settings > Secrets and variables > Actions 에서 채우세요."
+            echo ""
+            echo "저장소 Settings > Secrets and variables > Actions 에서,"
+            echo "**Repository secrets** 의 [New repository secret] 으로 넣으세요."
+            echo "(같은 페이지의 Variables 탭이 아니라 Secrets 탭입니다)"
             exit 1
           fi
-          if [ -z "$TG_TOKEN" ] || [ -z "$TG_CHAT" ]; then
+
+          if [ -z "$S_TG_TOKEN" ] || [ -z "$S_TG_CHAT" ]; then
             echo "::warning::텔레그램 시크릿이 비어 있어 검수 전송은 건너뜁니다"
           fi
-          echo "필요한 시크릿이 모두 있습니다."
+          echo "필요한 값이 모두 있습니다."
 
       # 키 파일 없이 GCP 에 로그인한다. GitHub 이 OIDC 토큰으로 신원을 증명하고,
       # GCP 가 그 신원에 서비스 계정 권한을 빌려준다 — 저장되는 키가 없다.
@@ -100,12 +126,12 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT }}
 
       - name: Vertex 점검 (과금 없음)
         env:
-          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
+          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID || vars.VERTEX_PROJECT_ID }}
         run: python main.py cloud-check
 
       - name: 한 회차 생성
@@ -115,7 +141,7 @@ jobs:
           DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID }}
+          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID || vars.VERTEX_PROJECT_ID }}
         run: |
           ARGS=""
           if [ "${{ inputs.no_veo }}" = "true" ]; then ARGS="$ARGS --no-veo"; fi
