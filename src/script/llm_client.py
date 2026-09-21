@@ -18,6 +18,8 @@ TIMEOUT = 60
 # 키를 한 바퀴 도는 것을 몇 번 반복할지, 그 사이에 얼마나 쉴지.
 ROTATION_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = 4
+# 설정한 모델이 Vertex 에 없을 때 내려갈 자리. 오래 있던 모델이라 어느 프로젝트에나 있다.
+VERTEX_FALLBACK_MODEL = "gemini-2.5-flash"
 
 
 def _safe(error: Exception) -> str:
@@ -86,6 +88,70 @@ class GeminiProvider:
         return None
 
 
+class VertexGeminiProvider:
+    """같은 Gemini 모델을 Vertex 로 부른다.
+
+    AI Studio 키는 **선불 잔액**에서 빠지고 그게 0 이면 402 가 온다(실제로 그렇게 됐다).
+    GCP 크레딧을 쓰려면 주소와 인증을 바꿔야 한다 — 페이로드는 한 글자도 다르지 않다.
+
+    키를 여러 개 돌릴 일이 없다. 자격증명이 하나뿐이라 순환할 대상이 없다.
+    """
+
+    def __init__(self, vertex, auth, model: str):
+        self.vertex = vertex
+        self.auth = auth
+        self.model = model or VERTEX_FALLBACK_MODEL
+
+    def complete_json(self, prompt: str, temperature: float) -> dict | None:
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": temperature,
+                "responseMimeType": "application/json",
+            },
+        }
+
+        # 설정한 모델 이름이 Vertex 에 없을 수 있다(AI Studio 에만 있는 이름이거나,
+        # 프로젝트에 아직 안 열린 모델이거나). 그때 한 번만 무난한 모델로 내려간다.
+        for model in _model_candidates(self.model):
+            for attempt in range(ROTATION_ATTEMPTS):
+                if attempt:
+                    time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+                try:
+                    response = requests.post(
+                        self.vertex.model_url(model, "generateContent"),
+                        headers=self.auth.headers(),
+                        json=payload,
+                        timeout=TIMEOUT,
+                    )
+                except Exception as exc:
+                    logger.warning(f"Vertex 대본 호출 실패 ({model}): {_safe(exc)}")
+                    continue
+
+                if response.status_code == 404:
+                    logger.warning(f"Vertex 에 {model} 모델이 없습니다 — 다음 후보로 넘어갑니다")
+                    break
+                if not response.ok:
+                    logger.warning(
+                        f"Vertex 대본 {response.status_code} ({model}): {response.text[:200]}"
+                    )
+                    continue
+
+                try:
+                    text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    return json.loads(text)
+                except (KeyError, IndexError, ValueError) as exc:
+                    logger.warning(f"Vertex 대본 응답을 읽지 못했습니다: {_safe(exc)}")
+
+        return None
+
+
+def _model_candidates(model: str) -> list[str]:
+    if model and model != VERTEX_FALLBACK_MODEL:
+        return [model, VERTEX_FALLBACK_MODEL]
+    return [VERTEX_FALLBACK_MODEL]
+
+
 class OpenAICompatibleProvider:
     def __init__(self, api_key: str, model: str, base_url: str = ""):
         self.api_key = api_key
@@ -113,8 +179,16 @@ class OpenAICompatibleProvider:
             return None
 
 
-def build_provider(provider_name: str, model: str, secrets) -> LLMProvider | None:
-    if provider_name == "gemini" and secrets.gemini_api_keys:
+def build_provider(
+    provider_name: str, model: str, secrets, vertex=None, auth=None
+) -> LLMProvider | None:
+    # Vertex 가 준비돼 있으면 같은 모델을 그쪽으로 부른다. AI Studio 선불 잔액이 아니라
+    # GCP 크레딧에서 빠진다.
+    if provider_name in {"gemini", "vertex_gemini"} and vertex is not None and auth is not None:
+        return VertexGeminiProvider(vertex, auth, model)
+    if provider_name == "vertex_gemini":
+        logger.warning("Vertex 준비가 안 돼 AI Studio 키로 대본을 씁니다")
+    if provider_name in {"gemini", "vertex_gemini"} and secrets.gemini_api_keys:
         return GeminiProvider(secrets.gemini_api_keys, model)
     if provider_name in {"openai", "openai_compatible"} and secrets.openai_api_key:
         return OpenAICompatibleProvider(secrets.openai_api_key, model, secrets.openai_base_url)

@@ -139,7 +139,12 @@ def main() -> int:
         logger.info(result.cost_note)
 
     if args.review and result.parts:
-        pipeline.review_and_publish(settings, result, args.wait)
+        # 영상은 다 나왔는데 텔레그램 전송 하나로 회차 전체를 실패로 만들 이유가 없다.
+        # 실패 사유는 telegram_bot 이 응답의 description 으로 이미 찍는다.
+        try:
+            pipeline.review_and_publish(settings, result, args.wait)
+        except Exception as exc:
+            logger.warning(f"검수 전송에 실패했습니다 (영상은 정상 생성됨): {exc}")
 
     return 0
 
@@ -204,25 +209,40 @@ def _cloud_check(settings, generate: bool) -> int:
         )
         return 0
 
+    # 대본이 먼저다. 이게 막히면 22분짜리 렌더가 템플릿 대본으로 나간다 — 지난 회차가
+    # 정확히 그렇게 됐다. 토큰 몇 개짜리 호출이라 비용은 사실상 없다.
+    logger.info("4) 대본 모델을 한 번 찔러봅니다…")
+    provider = pipeline.build_llm_provider(settings)
+    if provider is None:
+        logger.error("4) 대본 공급자를 못 만들었습니다 → config script.llm.provider 를 보세요")
+        return 1
+    probe = provider.complete_json(
+        '{"ok": true} 라는 JSON 만 그대로 돌려줘.', 0.0
+    )
+    if probe is None:
+        logger.error("4) 대본 모델 호출 실패 → 위 경고의 상태 코드를 보세요")
+        return 1
+    logger.info(f"4) 대본 모델 응답: {probe}")
+
     client = pipeline.build_ai_image_client(settings, guard)
     if client.backend != "vertex":
-        logger.error("4) Vertex 경로가 아닙니다 → config cloud.backend 를 vertex 로 두세요")
+        logger.error("5) Vertex 경로가 아닙니다 → config cloud.backend 를 vertex 로 두세요")
         return 1
 
-    logger.info("4) 이미지 1장을 실제로 만들어 봅니다…")
+    logger.info("5) 이미지 1장을 실제로 만들어 봅니다…")
     path = client.generate(
         "dark historical Joseon dynasty night sky over a mountain village, "
         "chiaroscuro lighting, heavy volumetric fog, eerie atmosphere, 35mm film grain, 8k"
     )
     if path is None:
         logger.error(
-            "4) 생성 실패 → 위 경고를 보세요. 403 이면 서비스 계정에 "
+            "5) 생성 실패 → 위 경고를 보세요. 403 이면 서비스 계정에 "
             "roles/aiplatform.user 가 없고, 404 면 프로젝트에 Vertex AI API 가 꺼져 있습니다"
         )
         return 1
 
-    logger.info(f"4) 성공: {path}")
-    logger.info(f"5) {guard.summary()}")
+    logger.info(f"5) 성공: {path}")
+    logger.info(f"6) {guard.summary()}")
     return 0
 
 

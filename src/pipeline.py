@@ -80,12 +80,20 @@ def select_topic(settings: Settings, ignore_history: bool = False) -> StoryCandi
     return topic_scorer.pick(candidates, weights, used)
 
 
-def write_script(settings: Settings, candidate: StoryCandidate) -> Script:
-    provider = build_provider(
+def build_llm_provider(settings: Settings):
+    """대본 생성기. Vertex 가 준비돼 있으면 GCP 크레딧 쪽으로 간다."""
+    vertex, auth = build_vertex(settings)
+    return build_provider(
         settings.get("script.llm.provider", "gemini"),
         settings.get("script.llm.model", ""),
         settings.secrets,
+        vertex=vertex,
+        auth=auth,
     )
+
+
+def write_script(settings: Settings, candidate: StoryCandidate) -> Script:
+    provider = build_llm_provider(settings)
     return script_writer.generate(
         candidate,
         provider,
@@ -179,11 +187,17 @@ def fetch_official_video(
 
 def build_tts_engines(settings: Settings) -> list:
     """설정한 엔진을 앞에 두고, 실패했을 때 내려갈 자리를 뒤에 붙인다."""
+    vertex, auth = build_vertex(settings)
     gemini = GeminiTTS(
         api_keys=settings.secrets.gemini_api_keys,
         voice=settings.get("audio.gemini_voice", "Fenrir"),
         model=settings.get("audio.gemini_model", ""),
         style_prompt=settings.get("audio.gemini_style_prompt", ""),
+        backend="vertex" if vertex is not None else "aistudio",
+        vertex=vertex,
+        auth=auth,
+        spend_guard=build_spend_guard(settings),
+        cost_krw=settings.get("cloud.tts_cost_krw", 50),
     )
     edge = EdgeTTS(settings.get("audio.edge_voice", "hyunsu"))
 
@@ -302,11 +316,7 @@ def run(
     collector = build_collector(settings, candidate)
     veo_client = build_veo_client(settings, spend_guard) if use_veo else None
     ai_client = build_ai_image_client(settings, spend_guard)
-    provider = build_provider(
-        settings.get("script.llm.provider", "gemini"),
-        settings.get("script.llm.model", ""),
-        settings.secrets,
-    )
+    provider = build_llm_provider(settings)
     official_video = fetch_official_video(settings, candidate, work_dir)
     if official_video:
         logger.info(f"공식 동영상을 도입부에 씁니다 ({official_video[1]:.1f}초) — Veo 생략")

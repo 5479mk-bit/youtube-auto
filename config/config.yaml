@@ -2,6 +2,9 @@ video:
   width: 1080
   height: 1920
   fps: 30
+  # ffmpeg 인코딩 속도. 러너가 2코어라 medium 은 한 편에 10분이 넘는다.
+  preset: veryfast
+  threads: 0            # 0 이면 코어 수만큼
   # 유튜브 쇼츠 UI 가 덮는 영역. 핵심 정보는 이 사이(safe band)에만 배치한다.
   safe_top: 0.25
   safe_bottom: 0.25
@@ -37,7 +40,8 @@ audio:
 
 script:
   llm:
-    provider: gemini
+    # vertex_gemini = 같은 모델을 GCP 크레딧으로. AI Studio 선불 잔액은 0 이다(402).
+    provider: vertex_gemini
     model: gemini-3.6-flash
     temperature: 0.9
   # 부별 목표 글자 수. 한국어 내레이션 기준 대략 1초당 5~6자.
@@ -94,6 +98,7 @@ cloud:
   location: us-central1
   image_model: imagen-4.0-fast-generate-001
   image_cost_krw: 30    # Imagen 4 fast 장당 약 0.02달러
+  tts_cost_krw: 50      # 내레이션 한 부(40~50초) 추정
   # 크레딧을 다 쓰면 생성을 멈춘다. 여기 적힌 금액은 우리가 계산한 **추정치**이고,
   # 실제 청구는 GCP 만 안다 — 그래서 예비금을 남겨두고 그만큼은 아예 안 쓴다.
   credit_krw: 354417

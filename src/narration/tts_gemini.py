@@ -29,6 +29,8 @@ CHANNELS = 1
 # 문장을 자를 무음 기준. 문장 끝의 자연스러운 쉼을 잡되 말 중간의 숨은 넘긴다.
 SPLIT_SILENCE_DB = "-38dB"
 SPLIT_MIN_SILENCE = 0.14
+# 부 하나(40~50초)를 읽히는 데 드는 추정 비용. 실제 청구액은 GCP 청구서가 정답이다.
+TTS_COST_KRW = 50
 
 
 class GeminiTTS:
@@ -40,6 +42,11 @@ class GeminiTTS:
         voice: str = "Fenrir",
         model: str = DEFAULT_MODEL,
         style_prompt: str = "",
+        backend: str = "aistudio",
+        vertex=None,
+        auth=None,
+        spend_guard=None,
+        cost_krw: int = TTS_COST_KRW,
     ):
         self.api_keys = [key for key in api_keys if key]
         self.voice = voice
@@ -48,9 +55,17 @@ class GeminiTTS:
         self.session = requests.Session()
         # 한도에 걸린 키는 이 실행 동안 건너뛴다. 어차피 내일까지 안 풀린다.
         self._exhausted: set[str] = set()
+        # 어느 지갑으로 결제할지. vertex = GCP 크레딧, aistudio = 선불 잔액.
+        self.backend = backend
+        self.vertex = vertex
+        self.auth = auth
+        self.spend_guard = spend_guard
+        self.cost_krw = int(cost_krw)
 
     @property
     def enabled(self) -> bool:
+        if self.backend == "vertex":
+            return bool(self.vertex and self.auth)
         return bool(self.api_keys)
 
     @property
@@ -93,6 +108,8 @@ class GeminiTTS:
         )
 
     def _request(self, prompt: str) -> bytes | None:
+        if self.backend == "vertex":
+            return self._request_vertex(prompt)
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
@@ -137,6 +154,51 @@ class GeminiTTS:
 
         logger.warning("쓸 수 있는 Gemini 키가 없습니다")
         return None
+
+    def _request_vertex(self, prompt: str) -> bytes | None:
+        """같은 모델을 GCP 크레딧으로 부른다. 페이로드는 AI Studio 쪽과 같다."""
+        if self.spend_guard is not None:
+            try:
+                self.spend_guard.ensure_can_spend(self.cost_krw, "내레이션 1부")
+            except Exception as exc:
+                logger.warning(f"[tts] {exc}")
+                return None
+
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": self.voice}}
+                },
+            },
+        }
+        try:
+            response = self.session.post(
+                self.vertex.model_url(self.model, "generateContent"),
+                headers=self.auth.headers(),
+                json=payload,
+                timeout=180,
+            )
+        except Exception as exc:
+            logger.warning(f"Vertex TTS 호출 실패: {exc}")
+            return None
+
+        if not response.ok:
+            # 404 면 이 프로젝트에 TTS 모델이 안 열린 것이다. edge-tts 로 내려간다.
+            logger.warning(f"Vertex TTS 오류 {response.status_code}: {response.text[:200]}")
+            return None
+
+        try:
+            part = response.json()["candidates"][0]["content"]["parts"][0]
+            data = part.get("inlineData") or part["inline_data"]
+        except (KeyError, IndexError, ValueError) as exc:
+            logger.warning(f"Vertex TTS 응답을 읽지 못했습니다: {exc}")
+            return None
+
+        if self.spend_guard is not None:
+            self.spend_guard.record(self.cost_krw, "tts", self.model)
+        return base64.b64decode(data["data"])
 
 
 def _split_into_sentences(

@@ -174,11 +174,13 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || vars.GCP_WORKLOAD_IDENTITY_PROVIDER || env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT || env.GCP_SERVICE_ACCOUNT }}
 
-      - name: Vertex 점검 (과금 없음)
+      # 여기서 대본 모델과 이미지 모델을 실제로 한 번씩 부른다(약 30원). 지난 회차는
+      # 이 확인이 없어서 22분을 렌더한 뒤에야 "대본도 그림도 전부 폴백이었다"를 알았다.
+      - name: Vertex 점검 (실제 생성, 약 30원)
         if: steps.preflight.outputs.has_gcp == 'true'
         env:
           VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID || vars.VERTEX_PROJECT_ID || env.VERTEX_PROJECT_ID }}
-        run: python main.py cloud-check
+        run: python main.py cloud-check --generate
 
       - name: 한 회차 생성
         env:

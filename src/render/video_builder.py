@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import os
+
 import random
 from pathlib import Path
 
@@ -86,7 +88,10 @@ def build_part(
         fps=fps,
         codec="libx264",
         audio_codec="aac",
-        preset="medium",
+        # 러너는 2코어라 medium 으로는 한 편에 10분이 넘게 걸린다. 쇼츠 해상도에서
+        # veryfast 와 medium 의 화질 차이는 눈에 띄지 않는다.
+        preset=settings.get("video.preset", "veryfast"),
+        threads=settings.get("video.threads", 0) or os.cpu_count() or 2,
         # 지정하지 않으면 moviepy 가 임시 오디오를 현재 디렉터리에 떨군다.
         temp_audiofile=str(work_dir / f"temp_audio_part{part.part}.m4a"),
         logger=None,
