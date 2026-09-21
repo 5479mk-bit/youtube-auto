@@ -72,10 +72,15 @@ jobs:
       # 주의: GitHub 은 시크릿 "통째"만 로그에서 가려준다. 줄 단위로 쪼갠 값은 안 가려주니
       # 여기서 직접 마스킹을 걸어준다.
       - name: DOTENV 시크릿 풀기
-        if: ${{ secrets.DOTENV != '' }}
         env:
           DOTENV: ${{ secrets.DOTENV }}
         run: |
+          # step 의 `if:` 에서는 secrets 를 못 읽는다(표현식 오류로 워크플로 전체가
+          # 파싱조차 안 된다). 비었는지는 여기서 본다.
+          if [ -z "$DOTENV" ]; then
+            echo "DOTENV 시크릿이 없습니다 — 개별 시크릿을 씁니다"
+            exit 0
+          fi
           printf '%s\n' "$DOTENV" > .env
           while IFS= read -r line; do
             case "$line" in ''|'#'*) continue ;; esac
@@ -91,6 +96,7 @@ jobs:
       # Variables 탭에 넣은 값은 secrets.* 로는 안 잡히고 vars.* 로만 잡히는데, 화면이
       # 거의 같아서 헷갈리기 쉽다. 어느 쪽에 들어갔는지 여기서 짚어준다(값은 안 찍는다).
       - name: 시크릿 점검
+        id: preflight
         env:
           S_WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           V_WIF: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -124,12 +130,22 @@ jobs:
             echo "    화면에 그대로 보이기 때문이다. 거기 있다면 지우고 Secrets 에 다시 넣으세요."
           fi
 
-          if [ -n "$missing" ]; then
-            echo "::error::어느 탭에도 없는 값:$missing"
-            echo "  WIF     = GCP_WORKLOAD_IDENTITY_PROVIDER (Cloud Shell 출력 첫 줄)"
-            echo "  SA      = GCP_SERVICE_ACCOUNT            (Cloud Shell 출력 둘째 줄)"
-            echo "  PROJECT = VERTEX_PROJECT_ID              (vid115)"
-            echo "  GEMINI  = GEMINI_API_KEY                 (대본·TTS 용)"
+          # GCP 값이 없어도 회차는 만들 수 있다 — 생성 컷만 대체 화면으로 내려갈 뿐이다.
+          # 그래서 여기서 멈추는 건 대본을 못 쓰는 경우(GEMINI)뿐이다.
+          case " $missing " in
+            *" WIF "*|*" SA "*|*" PROJECT "*)
+              echo "::warning::GCP 설정이 없어 이번 회차는 AI 생성 컷을 대체 화면으로 만듭니다"
+              echo "  (Cloud Shell 로 WIF 를 만든 뒤 DOTENV 에 두 줄 추가하면 켜집니다)"
+              ;;
+          esac
+          if [ -n "$S_WIF" ] && [ -n "$S_SA" ]; then
+            echo "has_gcp=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_gcp=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          case " $missing " in *" GEMINI "*)
+            echo "::error::대본을 쓸 수 없습니다 — GEMINI_API_KEY 가 없습니다"
             echo ""
             echo "넣는 방법은 둘 중 하나입니다."
             echo " (가) 한 번에: 이름이 DOTENV 인 시크릿 하나를 만들고 값에 아래처럼 줄줄이"
@@ -140,7 +156,8 @@ jobs:
             echo " (나) 하나씩: 위 이름 그대로 시크릿을 하나씩 추가"
             echo "저장소 Settings > Secrets and variables > Actions > Repository secrets"
             exit 1
-          fi
+            ;;
+          esac
 
           if [ -z "$S_TG_TOKEN" ] || [ -z "$S_TG_CHAT" ]; then
             echo "::warning::텔레그램 시크릿이 비어 있어 검수 전송은 건너뜁니다"
@@ -151,12 +168,14 @@ jobs:
       # GCP 가 그 신원에 서비스 계정 권한을 빌려준다 — 저장되는 키가 없다.
       - name: GCP 인증 (Workload Identity)
         id: auth
+        if: steps.preflight.outputs.has_gcp == 'true'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || vars.GCP_WORKLOAD_IDENTITY_PROVIDER || env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT || env.GCP_SERVICE_ACCOUNT }}
 
       - name: Vertex 점검 (과금 없음)
+        if: steps.preflight.outputs.has_gcp == 'true'
         env:
           VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID || vars.VERTEX_PROJECT_ID || env.VERTEX_PROJECT_ID }}
         run: python main.py cloud-check
