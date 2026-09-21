@@ -371,7 +371,25 @@ echo "GCP_SERVICE_ACCOUNT=shorts-runner@$PROJECT_ID.iam.gserviceaccount.com"
 
 ### 2. GitHub: 시크릿 넣기
 
-저장소 `Settings → Secrets and variables → Actions → New repository secret`.
+저장소 `Settings → Secrets and variables → Actions → Repository secrets`.
+
+**한 번에 넣는 방법(권장).** `DOTENV` 라는 이름으로 시크릿 **하나**를 만들고, 값 칸에
+아래처럼 `이름=값` 을 줄줄이 넣는다. 워크플로가 이걸 `.env` 로 풀어 쓴다.
+
+```
+GEMINI_API_KEY=여기에_키
+TELEGRAM_BOT_TOKEN=여기에_토큰
+TELEGRAM_CHAT_ID=여기에_챗ID
+VERTEX_PROJECT_ID=vid115
+GCP_WORKLOAD_IDENTITY_PROVIDER=projects/…/providers/github-provider
+GCP_SERVICE_ACCOUNT=shorts-runner@vid115.iam.gserviceaccount.com
+```
+
+줄에서 풀린 값은 로그에서 가려지도록 따로 마스킹한다(GitHub 은 시크릿 "통째"만
+가려주기 때문이다).
+
+**하나씩 넣는 방법.** 아래 이름으로 시크릿을 하나씩 추가해도 된다. 둘을 섞어 써도 되고,
+같은 이름이 양쪽에 있으면 개별 시크릿이 이긴다.
 
 | 이름 | 값 |
 |---|---|

@@ -65,21 +65,43 @@ jobs:
       - name: 에셋 준비
         run: ./download_assets.sh
 
+      # 시크릿을 이름마다 하나씩 넣는 건 손이 많이 간다. DOTENV 시크릿 하나에
+      # `이름=값` 을 줄줄이 넣어두면 여기서 .env 로 풀어 쓴다 — 파이프라인이 이미
+      # python-dotenv 로 .env 를 읽으므로 그다음은 평소와 같다.
+      #
+      # 주의: GitHub 은 시크릿 "통째"만 로그에서 가려준다. 줄 단위로 쪼갠 값은 안 가려주니
+      # 여기서 직접 마스킹을 걸어준다.
+      - name: DOTENV 시크릿 풀기
+        if: ${{ secrets.DOTENV != '' }}
+        env:
+          DOTENV: ${{ secrets.DOTENV }}
+        run: |
+          printf '%s\n' "$DOTENV" > .env
+          while IFS= read -r line; do
+            case "$line" in ''|'#'*) continue ;; esac
+            name="${line%%=*}"
+            value="${line#*=}"
+            [ -z "$value" ] && continue
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          done < .env
+          echo "DOTENV 에서 $(grep -c '=' .env) 개의 값을 읽었습니다."
+
       # "Secrets and variables" 페이지에는 탭이 둘이다 — Secrets 와 Variables.
       # Variables 탭에 넣은 값은 secrets.* 로는 안 잡히고 vars.* 로만 잡히는데, 화면이
       # 거의 같아서 헷갈리기 쉽다. 어느 쪽에 들어갔는지 여기서 짚어준다(값은 안 찍는다).
       - name: 시크릿 점검
         env:
-          S_WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          S_WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           V_WIF: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          S_SA: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          S_SA: ${{ secrets.GCP_SERVICE_ACCOUNT || env.GCP_SERVICE_ACCOUNT }}
           V_SA: ${{ vars.GCP_SERVICE_ACCOUNT }}
-          S_PROJECT: ${{ secrets.VERTEX_PROJECT_ID }}
+          S_PROJECT: ${{ secrets.VERTEX_PROJECT_ID || env.VERTEX_PROJECT_ID }}
           V_PROJECT: ${{ vars.VERTEX_PROJECT_ID }}
-          S_GEMINI: ${{ secrets.GEMINI_API_KEY }}
+          S_GEMINI: ${{ secrets.GEMINI_API_KEY || env.GEMINI_API_KEY }}
           V_GEMINI: ${{ vars.GEMINI_API_KEY }}
-          S_TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          S_TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          S_TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN }}
+          S_TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID || env.TELEGRAM_CHAT_ID }}
         run: |
           missing=""
           in_vars=""
@@ -109,9 +131,14 @@ jobs:
             echo "  PROJECT = VERTEX_PROJECT_ID              (vid115)"
             echo "  GEMINI  = GEMINI_API_KEY                 (대본·TTS 용)"
             echo ""
-            echo "저장소 Settings > Secrets and variables > Actions 에서,"
-            echo "**Repository secrets** 의 [New repository secret] 으로 넣으세요."
-            echo "(같은 페이지의 Variables 탭이 아니라 Secrets 탭입니다)"
+            echo "넣는 방법은 둘 중 하나입니다."
+            echo " (가) 한 번에: 이름이 DOTENV 인 시크릿 하나를 만들고 값에 아래처럼 줄줄이"
+            echo "     GEMINI_API_KEY=..."
+            echo "     TELEGRAM_BOT_TOKEN=..."
+            echo "     TELEGRAM_CHAT_ID=..."
+            echo "     VERTEX_PROJECT_ID=vid115"
+            echo " (나) 하나씩: 위 이름 그대로 시크릿을 하나씩 추가"
+            echo "저장소 Settings > Secrets and variables > Actions > Repository secrets"
             exit 1
           fi
 
@@ -126,22 +153,23 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || vars.GCP_WORKLOAD_IDENTITY_PROVIDER || env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT || env.GCP_SERVICE_ACCOUNT }}
 
       - name: Vertex 점검 (과금 없음)
         env:
-          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID || vars.VERTEX_PROJECT_ID }}
+          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID || vars.VERTEX_PROJECT_ID || env.VERTEX_PROJECT_ID }}
         run: python main.py cloud-check
 
       - name: 한 회차 생성
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_BACKUP: ${{ secrets.GEMINI_API_KEY_BACKUP }}
-          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID || vars.VERTEX_PROJECT_ID }}
+          # 개별 시크릿이 있으면 그걸 쓰고, 없으면 DOTENV 에서 풀린 값이 그대로 남는다.
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || env.GEMINI_API_KEY }}
+          GEMINI_API_KEY_BACKUP: ${{ secrets.GEMINI_API_KEY_BACKUP || env.GEMINI_API_KEY_BACKUP }}
+          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY || env.DATA_GO_KR_SERVICE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || env.TELEGRAM_CHAT_ID }}
+          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID || vars.VERTEX_PROJECT_ID || env.VERTEX_PROJECT_ID }}
         run: |
           ARGS=""
           if [ "${{ inputs.no_veo }}" = "true" ]; then ARGS="$ARGS --no-veo"; fi
