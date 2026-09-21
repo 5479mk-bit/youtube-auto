@@ -31,8 +31,13 @@ from ..models import StoryCandidate
 from . import event_keywords
 
 BASE_URL = "https://sillok.history.go.kr/id/"
-# 받아둔 기사 페이지를 남겨두는 곳. 실록 사이트로 나가는 길이 불안정하다.
-CACHE_DIR = Path(__file__).resolve().parent.parent.parent / ".cache" / "sillok"
+_ROOT = Path(__file__).resolve().parent.parent.parent
+# 저장소에 함께 넣어둔 기사. 실록 사이트는 해외 IP 를 막는 것으로 보여 GitHub 러너에서는
+# 연결 자체가 안 된다(연결 타임아웃 6회). 쓸 기사를 미리 받아 커밋해두면 러너는 네트워크를
+# 아예 안 탄다. 새 기사를 추가할 때만 국내에서 받아 여기 넣으면 된다.
+BUNDLED_DIR = _ROOT / "data" / "sillok" / "articles"
+# 실행 중에 받아둔 것을 남겨두는 곳.
+CACHE_DIR = _ROOT / ".cache" / "sillok"
 # 실록 사건에는 사진이 존재하지 않는다 — "하늘에 이상한 물체가 나타났다"를 찍은 사진은
 # 없다. 그래서 컷별 검색어가 빗나갔을 때 돌아갈 곳으로 조선을 대표하는 **실존 대상**을
 # 미리 정해둔다. 궁궐·회화·고지도는 위키미디어에 실제로 있는 것들이다.
@@ -49,8 +54,12 @@ DEFAULT_IMAGE_QUERIES_EN = (
 )
 # 국역은 한국고전번역원 번역을 국사편찬위원회가 서비스하는 것이다. 둘 다 밝힌다.
 SOURCE_NAME = "조선왕조실록 (국사편찬위원회·한국고전번역원 국역)"
-TIMEOUT = 40
+# (연결, 읽기) 타임아웃. 연결이 안 되는 상황은 오래 기다려도 결과가 같아서 짧게 끊는다.
+TIMEOUT = (10, 40)
 MAX_ATTEMPTS = 6
+# 붙었다 끊기는 건 재시도가 먹히지만, 연결 자체가 안 되면 몇 번을 해도 같다. 해외에서
+# 막힌 경우가 그렇다 — 세 번 연속 연결 실패면 더 두드리지 않는다.
+MAX_CONNECT_FAILURES = 3
 # 기본 requests UA 는 400 으로 막힌다. 브라우저 UA 를 써야 본문이 온다.
 HEADERS = {
     "User-Agent": (
@@ -89,11 +98,12 @@ def fetch(article_id: str, cache_dir: Path | None = None) -> SillokArticle:
     다음 실행에서 네트워크 없이 그대로 쓴다.
     """
     cache = (cache_dir or CACHE_DIR) / f"{article_id}.html"
-    if cache.exists() and cache.stat().st_size > 1000:
-        try:
-            return parse(article_id, cache.read_text(encoding="utf-8"))
-        except Exception as exc:
-            logger.warning(f"[sillok] 캐시가 깨져 다시 받습니다: {exc}")
+    for source in (BUNDLED_DIR / f"{article_id}.html", cache):
+        if source.exists() and source.stat().st_size > 1000:
+            try:
+                return parse(article_id, source.read_text(encoding="utf-8"))
+            except Exception as exc:
+                logger.warning(f"[sillok] 저장본이 깨져 건너뜁니다({source.name}): {exc}")
 
     html = _get(f"{BASE_URL}{article_id}")
     article = parse(article_id, html)
@@ -170,12 +180,23 @@ def parse(article_id: str, html: str) -> SillokArticle:
 
 def _get(url: str) -> str:
     last_error: Exception | None = None
+    connect_failures = 0
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
             response.raise_for_status()
             response.encoding = response.encoding or "utf-8"
             return response.text
+        except requests.exceptions.ConnectTimeout as exc:
+            last_error = exc
+            connect_failures += 1
+            if connect_failures >= MAX_CONNECT_FAILURES:
+                raise SillokError(
+                    f"{url} 에 연결되지 않습니다(연결 시도 {connect_failures}회 실패). "
+                    "해외 IP 에서 막히는 것으로 보입니다 — 기사를 "
+                    "data/sillok/articles/ 에 미리 받아 두세요."
+                ) from exc
+            logger.warning(f"[sillok] 연결 실패 {connect_failures}/{MAX_CONNECT_FAILURES}: {exc}")
         except Exception as exc:
             last_error = exc
             if attempt < MAX_ATTEMPTS:

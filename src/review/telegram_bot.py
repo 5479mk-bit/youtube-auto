@@ -127,14 +127,32 @@ class TelegramReviewer:
                 timeout=300,
             )
         if not response.ok:
-            logger.warning(f"영상 전송 실패({path.name}): {response.text[:200]}")
+            logger.warning(
+                f"영상 전송 실패({path.name}) {response.status_code}: {_describe(response)}"
+            )
 
     def _call(self, method: str, payload: dict, timeout: int = 30) -> dict:
         response = self.session.post(
             f"{API_BASE}{self.bot_token}/{method}", json=payload, timeout=timeout
         )
+        if not response.ok:
+            # 상태 코드만으로는 원인을 알 수 없다. 400 하나에 "chat not found"(챗ID가
+            # 틀림)와 "Unauthorized"(토큰이 틀림)가 다 섞여 있는데, 어느 쪽인지는
+            # 응답 본문의 description 에만 적혀 있다. 토큰·챗ID 값은 찍지 않는다.
+            logger.warning(
+                f"텔레그램 {method} 실패 {response.status_code}: {_describe(response)}"
+            )
         response.raise_for_status()
         return response.json()
+
+
+def _describe(response) -> str:
+    """텔레그램이 알려준 실패 사유. 본문이 JSON 이 아니면 앞부분만 그대로 돌려준다."""
+    try:
+        body = response.json()
+    except ValueError:
+        return response.text[:200]
+    return str(body.get("description") or body)[:200]
 
 
 def build_summary(
