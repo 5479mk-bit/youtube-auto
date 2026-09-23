@@ -179,9 +179,13 @@ class AiImageClient:
         return None
 
     def _generate_vertex_gemini(self, prompt: str, aspect_ratio: str, dest: Path) -> Path | None:
-        """AI Studio 분기와 같은 generateContent 형식. 주소·인증만 Vertex 것을 쓴다."""
+        """AI Studio 분기와 같은 generateContent 형식. 주소·인증만 Vertex 것을 쓴다.
+
+        AI Studio 쪽은 role 없이도 받아주지만, Vertex 는 "Please use a valid role:
+        user, model." 로 400 을 낸다 — 명시해야 한다.
+        """
         payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {
                 "responseModalities": ["IMAGE"],
                 "imageConfig": {"aspectRatio": aspect_ratio},
