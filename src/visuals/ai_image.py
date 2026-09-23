@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import time
 from pathlib import Path
 
 import requests
@@ -28,6 +29,9 @@ DEFAULT_MODEL = "gemini-2.5-flash-image"
 VERTEX_MODEL = "gemini-3.1-flash-image"
 IMAGE_COST_KRW = 30
 TIMEOUT = 180
+# 신규 모델이라 프로젝트별 분당 한도가 낮다. 한 번만 짧게 쉬었다 재시도한다.
+VERTEX_IMAGE_RETRIES = 2
+VERTEX_IMAGE_RETRY_SECONDS = 8
 
 
 class AiImageClient:
@@ -191,18 +195,29 @@ class AiImageClient:
                 "imageConfig": {"aspectRatio": aspect_ratio},
             },
         }
-        try:
-            response = requests.post(
-                # Gemini 이미지 생성은 리전 엔드포인트(us-central1 등)에는 없고
-                # global 에만 있다 — 콘솔 코드 샘플로 확인됐다.
-                self.vertex.model_url(self.vertex_model, "generateContent", location="global"),
-                headers=self.auth.headers(),
-                json=payload,
-                timeout=TIMEOUT,
-            )
-        except Exception as exc:
-            logger.warning(f"[ai_image] Vertex 호출 실패: {exc}")
-            return None
+        url = self.vertex.model_url(self.vertex_model, "generateContent", location="global")
+
+        # 새 모델이라 프로젝트별 분당 요청 한도가 낮다 — 컷을 몰아서 만들면 429 가
+        # 섞여 나온다. 한 번만 짧게 쉬었다 다시 부른다(계속 실패하면 대체 화면으로).
+        response = None
+        for attempt in range(VERTEX_IMAGE_RETRIES):
+            if attempt:
+                time.sleep(VERTEX_IMAGE_RETRY_SECONDS)
+            try:
+                response = requests.post(
+                    # Gemini 이미지 생성은 리전 엔드포인트(us-central1 등)에는 없고
+                    # global 에만 있다 — 콘솔 코드 샘플로 확인됐다.
+                    url,
+                    headers=self.auth.headers(),
+                    json=payload,
+                    timeout=TIMEOUT,
+                )
+            except Exception as exc:
+                logger.warning(f"[ai_image] Vertex 호출 실패: {exc}")
+                return None
+            if response.status_code != 429:
+                break
+            logger.info(f"[ai_image] Vertex 429(할당량) — {VERTEX_IMAGE_RETRY_SECONDS}초 뒤 재시도")
 
         if response.status_code != 200:
             logger.warning(f"[ai_image] Vertex {response.status_code}: {response.text[:200]}")

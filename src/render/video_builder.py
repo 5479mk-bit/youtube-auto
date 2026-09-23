@@ -1,13 +1,13 @@
-"""컷·차트·자막·음성을 하나의 세로 쇼츠로 합친다.
+"""컷·차트·자막·음성을 하나의 "포스터형" 세로 쇼츠로 합친다.
 
-레이어 순서는 배경(Ken-Burns) → 어둡게 깔기 → 차트 → 훅 숫자 → 자막 → 배지다.
-사진 위에 흰 글씨를 얹어야 하므로 배경을 한 겹 눌러 대비를 확보한다.
+풀스크린 영상 위에 글자를 얹던 예전 방식과 달리, 어두운 캔버스 위에 액자 박스로 영상을
+앉히고 위에는 후킹 타이틀이 내내 떠 있고 박스 아래에 자막이 붙는다. 레이어 순서는
+캔버스 → 액자 영상 → 테두리 → 차트 → 타이틀 → 자막 → 배지다.
 """
 
 from __future__ import annotations
 
 import os
-
 import random
 from pathlib import Path
 
@@ -32,8 +32,6 @@ from . import overlays
 from .film_look import apply_film_look
 from .motion_sources import build_scene_clip
 
-# 사진 위에 흰 자막을 얹으려면 배경을 꽤 눌러야 한다. 다큐 톤과도 맞는다.
-BACKGROUND_DIM = 0.42
 
 
 def build_part(
@@ -64,12 +62,20 @@ def build_part(
         vignette=settings.get("film_look.vignette", 0.30),
         exposure_breathing=settings.get("film_look.exposure_breathing", 0.02),
     )
-    layers = [background, _dim_layer(size, background.duration)]
+
+    # 포스터형 레이아웃: 풀스크린 영상이 아니라 어두운 캔버스 위에 액자 박스로 영상을
+    # 앉힌다. 위에는 후킹 타이틀이 내내 떠 있고, 박스 아래에 자막이 붙는다.
+    box = _frame_box(size, settings)
+    layers = [
+        _canvas_layer(size, background.duration, settings),
+        _boxed_clip(background, box),
+        _frame_border_layer(size, box, background.duration, work_dir, part.part, settings),
+    ]
 
     chart_frames = _chart_frames(candidate, part, work_dir, size)
     layers.extend(_chart_layers(scenes, chart_frames, size))
-    layers.extend(_hook_layers(part, scenes, work_dir, size, settings))
-    layers.extend(_subtitle_layers(cues, work_dir, part.part, size, settings))
+    layers.extend(_title_layers(part, work_dir, size, settings, background.duration))
+    layers.extend(_subtitle_layers(cues, work_dir, part.part, size, settings, box=box))
     layers.extend(
         _badge_layers(script, part, work_dir, size, background.duration, credits)
     )
@@ -124,12 +130,65 @@ def _build_background(
     return concatenate_videoclips(clips), credits
 
 
-def _dim_layer(size: tuple[int, int], duration: float):
-    return (
-        ColorClip(size=size, color=(0, 0, 0))
-        .with_opacity(BACKGROUND_DIM)
-        .with_duration(duration)
+def _hex_to_rgb(value: str) -> tuple[int, int, int]:
+    value = value.lstrip("#")
+    return tuple(int(value[i : i + 2], 16) for i in (0, 2, 4))
+
+
+def _frame_box(size: tuple[int, int], settings) -> tuple[int, int, int, int]:
+    """액자 박스의 절대 좌표(x1, y1, x2, y2). 위는 후킹 타이틀, 아래는 자막 자리로
+    비워두고 그 사이에 영상을 앉힌다."""
+    width, height = size
+    top = settings.get("video.frame_top", 0.22)
+    bottom = settings.get("video.frame_bottom", 0.78)
+    margin_x = settings.get("video.frame_margin_x", 0.06)
+    x1 = int(width * margin_x)
+    x2 = int(width * (1 - margin_x))
+    y1 = int(height * top)
+    y2 = int(height * bottom)
+    return x1, y1, x2, y2
+
+
+def _canvas_layer(size: tuple[int, int], duration: float, settings):
+    color = _hex_to_rgb(settings.get("video.frame_bg_color", "#0B0B10"))
+    return ColorClip(size=size, color=color).with_duration(duration)
+
+
+def _boxed_clip(clip, box: tuple[int, int, int, int]):
+    """영상을 액자 박스 크기로 cover-fit 크롭·리사이즈해 그 자리에 앉힌다.
+
+    `motion_sources._official_video_clip` 의 16:9→9:16 크롭과 같은 방식이다 — 너비를
+    박스에 맞춰 줄인 뒤 세로 중앙을 박스 높이만큼 잘라낸다.
+    """
+    x1, y1, x2, y2 = box
+    box_w, box_h = x2 - x1, y2 - y1
+    width, height = clip.size
+    scale = box_w / width
+    new_width, new_height = box_w, int(height * scale)
+    resized = clip.resized((new_width, new_height))
+    if new_height > box_h:
+        top = (new_height - box_h) // 2
+        resized = resized.cropped(y1=top, height=box_h)
+    return resized.with_position((x1, y1))
+
+
+def _frame_border_layer(
+    size: tuple[int, int],
+    box: tuple[int, int, int, int],
+    duration: float,
+    work_dir: Path,
+    part_number: int,
+    settings,
+):
+    path = overlays.render_frame_border(
+        work_dir / f"frame_border_part{part_number}.png",
+        size,
+        box,
+        color=settings.get("video.frame_border_color", "#E8C97A"),
+        width_px=settings.get("video.frame_border_width", 4),
+        radius=settings.get("video.frame_border_radius", 18),
     )
+    return ImageClip(str(path)).with_duration(duration)
 
 
 def _chart_frames(
@@ -169,27 +228,41 @@ def _chart_layers(scenes: list[Scene], chart_frames: list[Path], size: tuple[int
     return layers
 
 
-def _hook_layers(
-    part: ScriptPart, scenes: list[Scene], work_dir: Path, size: tuple[int, int], settings
+def _title_layers(
+    part: ScriptPart, work_dir: Path, size: tuple[int, int], settings, duration: float
 ):
-    if not scenes or not part.hook_number:
+    """포스터형 상단 타이틀. render_hook_number 와 달리 반짝 나왔다 사라지지 않고
+    파트 내내 떠 있다 — 참고 이미지의 헤더 문구 자리다."""
+    if not part.hook_number:
         return []
 
-    hook_duration = min(settings.get("video.hook_duration"), scenes[0].duration)
-    path = overlays.render_hook_number(
+    path = overlays.render_title_banner(
         part.hook_number,
-        work_dir / f"hook_part{part.part}.png",
+        work_dir / f"title_part{part.part}.png",
         size,
-        color=settings.get("subtitle.emphasis_color"),
+        color=settings.get("video.frame_title_color", "#FFFFFF"),
+        accent_color=settings.get("subtitle.emphasis_color"),
     )
-    return [ImageClip(str(path)).with_start(0).with_duration(hook_duration)]
+    return [ImageClip(str(path)).with_start(0).with_duration(duration)]
 
 
 def _subtitle_layers(
-    cues: list[SubtitleCue], work_dir: Path, part_number: int, size: tuple[int, int], settings
+    cues: list[SubtitleCue],
+    work_dir: Path,
+    part_number: int,
+    size: tuple[int, int],
+    settings,
+    box: tuple[int, int, int, int] | None = None,
 ):
     style = settings["subtitle"]
-    safe_bottom = settings.get("video.safe_bottom")
+    # 자막은 이제 풀스크린 영상 위가 아니라 액자 박스 바로 아래, 캔버스 위에 앉는다.
+    # bottom_ratio 는 "화면 하단에서부터"의 비율이라 박스 아래끝을 그 기준으로 환산한다.
+    if box is not None:
+        _, _, _, box_bottom_px = box
+        gap = size[1] * 0.03
+        safe_bottom = 1 - (box_bottom_px + gap) / size[1]
+    else:
+        safe_bottom = settings.get("video.safe_bottom")
 
     layers = []
     for index, cue in enumerate(cues):

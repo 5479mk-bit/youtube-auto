@@ -14,6 +14,16 @@ video:
   cut_duration_max: 3.0
   hook_duration: 3.0
   zoom_amount: 0.08
+  # 포스터형 레이아웃: 풀스크린 영상이 아니라 어두운 캔버스 위 액자 박스에 영상을 앉힌다.
+  # top/bottom 은 화면 세로 비율(0~1), margin_x 는 좌우 여백 비율이다.
+  frame_top: 0.22
+  frame_bottom: 0.78
+  frame_margin_x: 0.06
+  frame_bg_color: "#0B0B10"
+  frame_border_color: "#E8C97A"
+  frame_border_width: 4
+  frame_border_radius: 18
+  frame_title_color: "#FFFFFF"
 
 subtitle:
   # 외곽선을 버리고 드롭 섀도우로 바꿨다. 글자가 얇아진 만큼 크기도 줄인다.

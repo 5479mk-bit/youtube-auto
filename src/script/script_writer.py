@@ -154,8 +154,17 @@ SILLOK_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 �
 끝에 그대로 붙인다:
   "dark historical Joseon dynasty, chiaroscuro lighting, heavy volumetric fog,
    eerie atmosphere, 35mm film grain, 8k"
-사람 얼굴을 클로즈업하지 않는다(생성물이 어색해진다). 하늘·산·기와지붕·횃불·안개처럼
-형체가 단순한 것을 시킨다.
+**식별 가능한 얼굴 클로즈업은 여전히 피한다**(안전 필터에 걸리거나 생성물이 어색해진다).
+그 밖은 과감하게 간다 — 인물을 실루엣·후면·역광·갑옷과 무기의 클로즈업(얼굴 없이)으로
+담아 긴장감을 준다. 하늘·산·기와지붕·횃불·안개만 반복해서 쓰지 말고, 컷마다 카메라
+앵글과 조명을 다르게 지시한다(로우앵글, 버즈아이, 오브젝트 클로즈업, 역광 실루엣을
+번갈아 쓴다) — 같은 구도가 반복되면 화면이 단조로워진다. 스타일 문구 앞에 그 컷에 맞는
+동세·구도 수식어를 한두 개 덧붙인다(예: "dramatic low-angle composition", "dynamic
+motion, dust and embers flying", "intense dramatic side lighting"). VEO 로 가는 문장
+(1부 첫 문장, 가장 센 장면)은 카메라 무브먼트 지시를 반드시 포함한다(예: "slow dramatic
+push-in", "camera pans up to reveal"). **사실 기반 원칙은 그대로다** — 바뀌는 건
+"어떻게 찍을까"(카메라·조명·구도)이지 "무슨 일이 있었나"가 아니다. 실록에 없는 장면을
+지어내 그리지 않는다.
 
 `sfx` 는 그 문장이 시작될 때 때릴 소리다. 부마다 **한두 문장에만** 준다 — 매 문장에 넣으면
 아무 문장도 안 센 게 된다.

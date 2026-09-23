@@ -151,6 +151,89 @@ def render_hook_number(
     return out_path
 
 
+def _wrap_lines(draw: ImageDraw.ImageDraw, text: str, font, max_width: float) -> list[str]:
+    """단어 단위로 최대 두 줄까지 접는다. 한국어는 공백이 성기니 어절 단위로 접어도
+    자연스럽다."""
+    words = text.split()
+    if not words:
+        return [text]
+    lines: list[str] = []
+    current = words[0]
+    for word in words[1:]:
+        candidate = f"{current} {word}"
+        if draw.textlength(candidate, font=font) <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+    return lines[:2]
+
+
+def render_title_banner(
+    text: str,
+    out_path: Path,
+    size: tuple[int, int],
+    color: str = "#FFFFFF",
+    accent_color: str = "#FFD84D",
+) -> Path:
+    """포스터형 레이아웃의 상단 후킹 문구. 참고 이미지처럼 화면 내내 떠 있는 굵은
+    두 줄짜리 타이틀이다 — 첫 2~3초만 반짝이고 사라지는 render_hook_number 와 달리
+    영상 전체를 붙잡아야 하는 자리라 따로 만든다.
+    """
+    width, height = size
+    image = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    bold = assets.FONT_SANS if assets.FONT_SANS.exists() else None
+    font_size = int(width * 0.088)
+    font = ImageFont.truetype(str(bold), font_size) if bold else _font(font_size)
+    max_width = width * 0.88
+
+    lines = _wrap_lines(draw, text, font, max_width)
+    while len(lines) > 2 and font_size > 36:
+        font_size = int(font_size * 0.92)
+        font = ImageFont.truetype(str(bold), font_size) if bold else _font(font_size)
+        lines = _wrap_lines(draw, text, font, max_width)
+
+    line_height = int(font_size * 1.28)
+    total_height = line_height * len(lines)
+    top = height * 0.07
+
+    for index, line in enumerate(lines):
+        # 두 번째 줄이 있으면(핵심 워딩) 강조색을 쓴다 — 참고 이미지의 "최강 피지컬
+        # 사나이"처럼 두 번째 줄이 임팩트를 담는 경우가 많다.
+        line_color = accent_color if (index == 1 and len(lines) > 1) else color
+        line_width = draw.textlength(line, font=font)
+        x = (width - line_width) / 2
+        y = top + index * line_height
+        _draw_text_with_shadow(draw, (x, y), line, font, line_color, shadow_blur=8, shadow_alpha=200)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(out_path)
+    return out_path
+
+
+def render_frame_border(
+    out_path: Path,
+    size: tuple[int, int],
+    box: tuple[int, int, int, int],
+    color: str = "#E8C97A",
+    width_px: int = 4,
+    radius: int = 18,
+) -> Path:
+    """액자 박스 테두리 한 장. 프레임마다 다시 그리지 않고 전체 구간에 얹는다."""
+    image = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    x1, y1, x2, y2 = box
+    draw.rounded_rectangle(
+        (x1, y1, x2, y2), radius=radius, outline=color, width=width_px
+    )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(out_path)
+    return out_path
+
+
 def render_banner(
     text: str,
     out_path: Path,
