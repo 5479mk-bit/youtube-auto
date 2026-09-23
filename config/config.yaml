@@ -96,9 +96,10 @@ cloud:
   backend: vertex
   project_id: "vid115"  # 비우면 VERTEX_PROJECT_ID / GOOGLE_CLOUD_PROJECT 환경변수
   location: us-central1
-  # imagen-4.0-fast 는 이 프로젝트에서 404 였다(Model Garden 동의가 별도로 필요한
-  # 것으로 보인다). 3.0 계열은 더 오래돼 승인 없이 열려 있는 경우가 많아 우선 이걸로 간다.
-  image_model: imagen-3.0-fast-generate-001
+  # Imagen 계열이 이 프로젝트의 Model Garden 카탈로그에 아예 없다(검색해도 안 뜬다).
+  # Gemini 이미지 모델을 그대로 Vertex 로 부른다 — AI Studio 분기와 같은 generateContent
+  # 형식이라 ai_image.py 가 모델 이름으로 자동으로 이 경로를 탄다.
+  image_model: gemini-3.1-flash-image
   image_cost_krw: 30    # Imagen 4 fast 장당 약 0.02달러
   tts_cost_krw: 50      # 내레이션 한 부(40~50초) 추정
   # 크레딧을 다 쓰면 생성을 멈춘다. 여기 적힌 금액은 우리가 계산한 **추정치**이고,

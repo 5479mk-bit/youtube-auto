@@ -22,8 +22,10 @@ from ..cloud.vertex import VertexAuth, VertexConfig
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 DEFAULT_MODEL = "gemini-2.5-flash-image"
-# Vertex 쪽 이미지 모델. Imagen 4 fast 는 장당 약 0.02달러다.
-VERTEX_MODEL = "imagen-4.0-fast-generate-001"
+# Vertex 쪽 이미지 모델. 이 프로젝트의 Model Garden 카탈로그에 Imagen 계열이 아예
+# 없어서(검색해도 안 뜬다) Gemini 이미지 모델을 그대로 Vertex 로 부른다 — AI Studio
+# 분기와 같은 generateContent 형식이라 페이로드를 그대로 재사용한다.
+VERTEX_MODEL = "gemini-3.1-flash-image"
 IMAGE_COST_KRW = 30
 TIMEOUT = 180
 
@@ -128,7 +130,16 @@ class AiImageClient:
         return None
 
     def _generate_vertex(self, prompt: str, aspect_ratio: str, dest: Path) -> Path | None:
-        """Vertex Imagen 경로. GCP 크레딧으로 결제된다."""
+        """Vertex 이미지 경로. GCP 크레딧으로 결제된다.
+
+        모델 이름에 imagen 이 들어 있으면 Imagen 전용 predict 형식을, 그 외(Gemini
+        이미지 계열)면 AI Studio 분기와 같은 generateContent 형식을 쓴다.
+        """
+        if "imagen" in self.vertex_model.lower():
+            return self._generate_vertex_imagen(prompt, aspect_ratio, dest)
+        return self._generate_vertex_gemini(prompt, aspect_ratio, dest)
+
+    def _generate_vertex_imagen(self, prompt: str, aspect_ratio: str, dest: Path) -> Path | None:
         payload = {
             "instances": [{"prompt": prompt}],
             "parameters": {
@@ -166,6 +177,41 @@ class AiImageClient:
 
         logger.warning(f"[ai_image] Vertex 응답에 이미지가 없습니다: {str(response.text)[:200]}")
         return None
+
+    def _generate_vertex_gemini(self, prompt: str, aspect_ratio: str, dest: Path) -> Path | None:
+        """AI Studio 분기와 같은 generateContent 형식. 주소·인증만 Vertex 것을 쓴다."""
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseModalities": ["IMAGE"],
+                "imageConfig": {"aspectRatio": aspect_ratio},
+            },
+        }
+        try:
+            response = requests.post(
+                self.vertex.model_url(self.vertex_model, "generateContent"),
+                headers=self.auth.headers(),
+                json=payload,
+                timeout=TIMEOUT,
+            )
+        except Exception as exc:
+            logger.warning(f"[ai_image] Vertex 호출 실패: {exc}")
+            return None
+
+        if response.status_code != 200:
+            logger.warning(f"[ai_image] Vertex {response.status_code}: {response.text[:200]}")
+            return None
+
+        data = _first_image_bytes(response.json())
+        if data is None:
+            logger.warning(f"[ai_image] Vertex 응답에 이미지가 없습니다: {str(response.text)[:200]}")
+            return None
+
+        dest.write_bytes(data)
+        logger.info(f"[ai_image] 생성(vertex): {dest.name}")
+        if self.spend_guard is not None:
+            self.spend_guard.record(self.cost_krw, "image", self.vertex_model)
+        return dest
 
     def _cache_path(self, prompt: str, aspect_ratio: str) -> Path:
         key = hashlib.sha1(f"{self.model}|{aspect_ratio}|{prompt}".encode()).hexdigest()[:16]
