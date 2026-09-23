@@ -100,11 +100,14 @@ class GeminiTTS:
     def _build_prompt(self, texts: list[str]) -> str:
         if len(texts) == 1:
             return f"{self.style_prompt} 읽어줘:\n{texts[0]}"
-        # 줄 사이를 쉬어 달라고 해야 나중에 문장 경계를 찾을 수 있다.
+        # 줄 사이를 쉬어 달라고 해야 나중에 문장 경계를 찾을 수 있다. "반 박자"는 문장이
+        # 짧고 많을 때(한 편에 10문장 넘게) 뭉개지기 쉬워 무음 감지가 실패하고 자막이
+        # 밀린다 — 쉼을 분명하게 요구한다.
         body = "\n".join(texts)
         return (
-            f"{self.style_prompt} 읽어줘. 각 줄은 한 문장이고, 줄과 줄 사이에는 "
-            f"반 박자 쉬어줘. 줄 번호나 기호는 읽지 마:\n{body}"
+            f"{self.style_prompt} 읽어줘. 각 줄은 한 문장이다. **줄과 줄 사이에는 숨을 "
+            f"한 번 고를 만큼 확실하게 쉬어줘** — 문장이 짧다고 이어 붙이지 마라. "
+            f"줄 번호나 기호는 읽지 마:\n{body}"
         )
 
     def _request(self, prompt: str) -> bytes | None:

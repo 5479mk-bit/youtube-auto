@@ -29,9 +29,13 @@ DEFAULT_MODEL = "gemini-2.5-flash-image"
 VERTEX_MODEL = "gemini-3.1-flash-image"
 IMAGE_COST_KRW = 30
 TIMEOUT = 180
-# 신규 모델이라 프로젝트별 분당 한도가 낮다. 한 번만 짧게 쉬었다 재시도한다.
-VERTEX_IMAGE_RETRIES = 2
-VERTEX_IMAGE_RETRY_SECONDS = 8
+# 신규 모델이라 프로젝트별 분당 한도가 낮다. 컷이 10개가 넘는 편(문장을 잘게 쪼갠 뒤로는
+# 흔하다)에서 짧게 한두 번 쉬는 걸로는 할당량이 안 풀려 429 가 몇 분씩 이어지고, 그동안
+# 실패한 컷은 죄다 먹빛 대체 화면으로 떨어져 화면이 뭉텅이로 멈춰 보였다. 재시도를 더
+# 길게(지수 백오프) 주고, 애초에 연속으로 몰아치지 않게 호출 사이 최소 간격을 둔다.
+VERTEX_IMAGE_RETRIES = 5
+VERTEX_IMAGE_RETRY_SECONDS = 10  # 첫 재시도 대기. 이후 시도마다 두 배로 늘어난다.
+VERTEX_IMAGE_MIN_INTERVAL_SECONDS = 5.0  # 호출 사이 최소 간격 — 애초에 429 를 덜 만든다.
 
 
 class AiImageClient:
@@ -61,6 +65,8 @@ class AiImageClient:
         self.spend_guard = spend_guard
         self.vertex_model = vertex_model or VERTEX_MODEL
         self.cost_krw = int(cost_krw)
+        # 컷을 몰아서 부르면 할당량을 바로 넘긴다. 마지막 호출 시각을 기억해 최소 간격을 둔다.
+        self._last_call_at: float = 0.0
 
     @property
     def enabled(self) -> bool:
@@ -197,12 +203,19 @@ class AiImageClient:
         }
         url = self.vertex.model_url(self.vertex_model, "generateContent", location="global")
 
-        # 새 모델이라 프로젝트별 분당 요청 한도가 낮다 — 컷을 몰아서 만들면 429 가
-        # 섞여 나온다. 한 번만 짧게 쉬었다 다시 부른다(계속 실패하면 대체 화면으로).
+        # 새 모델이라 프로젝트별 분당 요청 한도가 낮다. 애초에 몰아치지 않도록 이전 호출과
+        # 최소 간격을 둔다 — 한 편에 컷이 10개가 넘어가면서 이게 없으면 금방 429 가 난다.
+        elapsed = time.monotonic() - self._last_call_at
+        if elapsed < VERTEX_IMAGE_MIN_INTERVAL_SECONDS:
+            time.sleep(VERTEX_IMAGE_MIN_INTERVAL_SECONDS - elapsed)
+
+        # 429 는 지수 백오프로 더 오래 기다린다 — 짧게 한두 번 쉬는 걸로는 할당량이 안
+        # 풀려 실패한 컷이 죄다 대체 화면(먹빛 플레이트)으로 떨어지고, 그게 여러 컷 몰려
+        # 있으면 화면이 한동안 멈춘 것처럼 보인다.
         response = None
         for attempt in range(VERTEX_IMAGE_RETRIES):
             if attempt:
-                time.sleep(VERTEX_IMAGE_RETRY_SECONDS)
+                time.sleep(VERTEX_IMAGE_RETRY_SECONDS * (2**(attempt - 1)))
             try:
                 response = requests.post(
                     # Gemini 이미지 생성은 리전 엔드포인트(us-central1 등)에는 없고
@@ -215,9 +228,12 @@ class AiImageClient:
             except Exception as exc:
                 logger.warning(f"[ai_image] Vertex 호출 실패: {exc}")
                 return None
+            finally:
+                self._last_call_at = time.monotonic()
             if response.status_code != 429:
                 break
-            logger.info(f"[ai_image] Vertex 429(할당량) — {VERTEX_IMAGE_RETRY_SECONDS}초 뒤 재시도")
+            wait = VERTEX_IMAGE_RETRY_SECONDS * (2**attempt)
+            logger.info(f"[ai_image] Vertex 429(할당량) — {wait}초 뒤 재시도")
 
         if response.status_code != 200:
             logger.warning(f"[ai_image] Vertex {response.status_code}: {response.text[:200]}")

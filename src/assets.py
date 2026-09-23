@@ -24,6 +24,8 @@ MAP_DAEDONG = ASSETS_DIR / "maps" / "daedong_map.png"
 OVERLAY_FOG = ASSETS_DIR / "overlays" / "fog.mp4"
 AUDIO_DRONE = ASSETS_DIR / "audio" / "dark_ambient_drone.mp3"
 AUDIO_SUB_BOOM = ASSETS_DIR / "audio" / "sub_boom.wav"
+AUDIO_PAPER_RUSTLE = ASSETS_DIR / "audio" / "paper_rustle.wav"
+AUDIO_BRAAM = ASSETS_DIR / "audio" / "braam.wav"
 
 _REQUIRED = (FONT_MYEONGJO, FONT_SERIF_HANJA, FONT_SANS, TEXTURE_HANJI, MAP_DAEDONG, OVERLAY_FOG, AUDIO_DRONE)
 

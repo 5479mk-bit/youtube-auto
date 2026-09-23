@@ -356,29 +356,35 @@ def _build_audio(part: ScriptPart, settings, duration: float, scenes: list[Scene
     return CompositeAudioClip(layers).with_duration(total)
 
 
+_SFX_FILES = {
+    "sub_boom": assets.AUDIO_SUB_BOOM,
+    "paper_rustle": assets.AUDIO_PAPER_RUSTLE,
+    "braam": assets.AUDIO_BRAAM,
+}
+
+
 def _sfx_layers(scenes: list[Scene], settings, total: float):
-    """`sfx` 태그가 붙은 컷이 시작될 때 타격음을 얹는다.
+    """`sfx` 태그가 붙은 컷이 시작될 때 그 태그에 맞는 소리를 얹는다.
 
-    타격음은 초저역(80Hz)이라 내레이션과 주파수가 겹치지 않는다 — 그래서 말이 묻히지 않고,
-    대신 배경 드론을 그 구간만 눌러(더킹) 자리를 비워준다.
+    세 가지가 서로 다른 소리다 — sub_boom(초저역 타격), paper_rustle(사료 컷의 종이
+    넘기는 소리), braam(1부 클리프행어의 길게 끄는 저음). 예전엔 셋 다 sub_boom 을
+    길이만 다르게 재활용해서 사료 컷에도 타격음이 울렸다. 타격음은 초저역이라
+    내레이션과 주파수가 겹치지 않는다.
     """
-    if not assets.AUDIO_SUB_BOOM.exists():
-        return []
-
     gain = _db_to_gain(settings.get("audio.sfx_volume_db", -6))
     layers = []
     for scene in scenes:
-        if scene.sfx in ("none", "") or scene.start >= total:
+        path = _SFX_FILES.get(scene.sfx)
+        if path is None or scene.start >= total or not path.exists():
             continue
         try:
-            hit = AudioFileClip(str(assets.AUDIO_SUB_BOOM))
+            hit = AudioFileClip(str(path))
         except Exception as exc:
             logger.warning(f"효과음을 쓰지 못했습니다: {exc}")
-            return layers
+            continue
 
         room = max(total - scene.start, 0.05)
-        # braam 은 여운을 길게, sub_boom·paper_rustle 은 짧게 때린다.
-        length = min(hit.duration if scene.sfx == "braam" else hit.duration * 0.7, room)
+        length = min(hit.duration, room)
         layers.append(
             hit.subclipped(0, length).with_start(scene.start).with_volume_scaled(gain)
         )

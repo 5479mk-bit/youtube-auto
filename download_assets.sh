@@ -73,6 +73,25 @@ else
     assets/audio/sub_boom.wav -loglevel error
   echo "    만듦: assets/audio/sub_boom.wav"
 fi
+if have assets/audio/paper_rustle.wav; then
+  echo "    건너뜀 (이미 있음): assets/audio/paper_rustle.wav"
+else
+  # 사료(HISTORICAL_DOC) 컷 전용 — 종이 넘기는 소리. sub_boom 을 재활용하던 걸
+  # 분리했다. 화이트노이즈를 고역대만 남기고 짧게 감쌌다.
+  "$FFMPEG" -y -f lavfi -i "anoisesrc=d=0.6:c=white:a=0.6" \
+    -af "highpass=f=1200,lowpass=f=6000,afade=t=in:st=0:d=0.05,afade=t=out:st=0.35:d=0.25,volume=0.8" \
+    assets/audio/paper_rustle.wav -loglevel error
+  echo "    만듦: assets/audio/paper_rustle.wav"
+fi
+if have assets/audio/braam.wav; then
+  echo "    건너뜀 (이미 있음): assets/audio/braam.wav"
+else
+  # 1부 마지막 클리프행어 전용 — sub_boom 보다 낮고 길게, 여운(에코)을 크게 준다.
+  "$FFMPEG" -y -f lavfi -i "sine=frequency=42:duration=2.6" \
+    -af "afade=t=out:st=0.2:d=2.4,lowpass=f=95,aecho=0.8:0.9:600:0.5,volume=1.6" \
+    assets/audio/braam.wav -loglevel error
+  echo "    만듦: assets/audio/braam.wav"
+fi
 
 echo ">>> [5/5] 밤안개 오버레이 (합성 시 확대해 쓰므로 절반 해상도로 만든다)"
 if have assets/overlays/fog.mp4; then
