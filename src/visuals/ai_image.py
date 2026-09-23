@@ -189,7 +189,9 @@ class AiImageClient:
         }
         try:
             response = requests.post(
-                self.vertex.model_url(self.vertex_model, "generateContent"),
+                # Gemini 이미지 생성은 리전 엔드포인트(us-central1 등)에는 없고
+                # global 에만 있다 — 콘솔 코드 샘플로 확인됐다.
+                self.vertex.model_url(self.vertex_model, "generateContent", location="global"),
                 headers=self.auth.headers(),
                 json=payload,
                 timeout=TIMEOUT,

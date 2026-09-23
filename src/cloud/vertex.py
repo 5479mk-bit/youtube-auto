@@ -31,11 +31,22 @@ class VertexConfig:
 
     @property
     def base_url(self) -> str:
-        host = f"https://{self.location}-aiplatform.googleapis.com/v1"
-        return f"{host}/projects/{self.project_id}/locations/{self.location}/publishers/google/models"
+        return self.base_url_at(self.location)
 
-    def model_url(self, model: str, method: str) -> str:
-        return f"{self.base_url}/{model}:{method}"
+    def base_url_at(self, location: str) -> str:
+        # "global" 위치는 지역 접두사 없이 aiplatform.googleapis.com 으로 바로 간다.
+        # 새로 나온 멀티모달 모델 일부(예: Gemini 이미지 생성)가 리전 엔드포인트에는
+        # 없고 global 에만 있는 경우가 있다 — 콘솔의 코드 샘플로 확인된 사실이다.
+        host = (
+            "https://aiplatform.googleapis.com/v1"
+            if location == "global"
+            else f"https://{location}-aiplatform.googleapis.com/v1"
+        )
+        return f"{host}/projects/{self.project_id}/locations/{location}/publishers/google/models"
+
+    def model_url(self, model: str, method: str, location: str | None = None) -> str:
+        base = self.base_url_at(location) if location else self.base_url
+        return f"{base}/{model}:{method}"
 
 
 class VertexAuth:
