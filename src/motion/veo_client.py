@@ -29,10 +29,12 @@ MODELS = {
     "standard": "veo-3.1-generate-preview",
 }
 # Vertex 쪽 모델 이름. lite 는 Vertex 에 없어서 fast 로 올라간다(단가가 3배라 로그로 알린다).
+# "-preview" 로 불렀더니 404 였다 — 콘솔 코드 샘플로 확인해 보니 이 프로젝트에는 정식
+# GA 버전(-001)으로 올라와 있었다. Imagen/Gemini 이미지 때와 같은 부류의 문제였다.
 VERTEX_MODELS = {
-    "lite": "veo-3.1-fast-generate-preview",
-    "fast": "veo-3.1-fast-generate-preview",
-    "standard": "veo-3.1-generate-preview",
+    "lite": "veo-3.1-fast-generate-001",
+    "fast": "veo-3.1-fast-generate-001",
+    "standard": "veo-3.1-generate-001",
 }
 POLL_INTERVAL_SECONDS = 10
 POLL_TIMEOUT_SECONDS = 600
@@ -209,6 +211,14 @@ class VeoClient:
 
     def _download_vertex(self, uri: str, dest: Path) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
+        # storageUri 를 안 줘도 일부 응답은 gs:// 링크로 돌아온다. gs:// 는 HTTP GET 이
+        # 안 되니 Cloud Storage JSON API(다운로드) 주소로 바꿔 같은 Bearer 토큰으로 받는다.
+        if uri.startswith("gs://"):
+            bucket, _, obj = uri.removeprefix("gs://").partition("/")
+            uri = (
+                f"https://storage.googleapis.com/storage/v1/b/{bucket}/o/"
+                f"{requests.utils.quote(obj, safe='')}?alt=media"
+            )
         response = self.session.get(uri, headers=self.auth.headers(), timeout=300)
         response.raise_for_status()
         dest.write_bytes(response.content)
@@ -316,7 +326,8 @@ def _find_video_uri(body: dict) -> str | None:
     def walk(node) -> str | None:
         if isinstance(node, dict):
             for key, value in node.items():
-                if key in {"uri", "videoUri", "fileUri"} and isinstance(value, str):
+                # gcsUri: 콘솔 코드 샘플의 실제 응답 형태(response.videos[].gcsUri).
+                if key in {"uri", "videoUri", "fileUri", "gcsUri"} and isinstance(value, str):
                     return value
                 found = walk(value)
                 if found:
