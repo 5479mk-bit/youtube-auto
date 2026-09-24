@@ -35,21 +35,19 @@ subtitle:
   max_chars_per_line: 16
 
 audio:
-  # edge = 완전 무료(pip install -r requirements.txt 에 edge-tts 가 이미 포함돼
-  # 있어 따로 설치할 게 없다), GCP 콘솔 설정(API 활성화 등)에 기대지 않는다.
-  # 문장별 속도(훅 -10%/본문 +2%/닫는 문장 -6%)는 narration/pacing.py 가 그대로
-  # 정하고, 피치만 아래 edge_pitch 로 전체에 고정 적용해 미스터리 톤을 깐다.
-  engine: edge
-  edge_voice: injoon          # ko-KR-InJoonNeural — 차분하고 신뢰감 있는 남성 톤
-  edge_pitch: "-5Hz"          # 미스터리한 분위기로 톤을 살짝 낮춘다
-  # cloud_tts/gemini 는 이제 기본 경로가 아니다 — 설정 한 줄(engine)로 되돌릴 수
-  # 있게 값은 남겨둔다.
-  cloud_tts_voice: ko-KR-Neural2-C
-  cloud_tts_pitch: -1.5
-  gemini_voice: Charon
+  # gemini = Vertex 크레딧으로 쓰는 Gemini TTS. 스타일을 말로 지시할 수 있어
+  # edge-tts 보다 사람 목소리에 훨씬 가깝다 — "자연스러운 목소리"가 우선이라
+  # 무료인 edge 대신 이걸 기본으로 되돌렸다(edge 는 실패 시 폴백으로 남아있다).
+  engine: gemini
+  gemini_voice: Charon        # 차분하고 신뢰감 있는 남성 톤(다큐 내레이터에 맞음)
   gemini_model: gemini-2.5-flash-preview-tts
   gemini_style_prompt: "차분한 다큐멘터리 내레이터처럼, 진짜 사람이 말하듯 자연스러운 속도로"
   gemini_min_request_interval: 1.5
+  edge_voice: injoon          # ko-KR-InJoonNeural (gemini 실패 시 폴백)
+  edge_pitch: "-5Hz"
+  # cloud_tts 는 기본 경로가 아니다 — 설정 한 줄(engine)로 되돌릴 수 있게 남겨둔다.
+  cloud_tts_voice: ko-KR-Neural2-C
+  cloud_tts_pitch: -1.5
   # 다크 앰비언트 드론을 전체에 깔고, 사건이 터지는 문장에 초저음 타격음을 얹는다.
   bgm_volume_db: -16
   bgm_hook_volume_db: -12
