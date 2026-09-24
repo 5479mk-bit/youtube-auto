@@ -45,6 +45,11 @@ def main() -> int:
         help="이미 다룬 주제도 다시 고른다 (연출을 고치며 같은 소재를 재렌더할 때)",
     )
     run_parser.add_argument(
+        "--part1-only",
+        action="store_true",
+        help="1부만 렌더/전송한다 (검증 사이클용 임시 옵션, 과금·시간을 아낀다)",
+    )
+    run_parser.add_argument(
         "--review",
         action="store_true",
         help="렌더 후 텔레그램으로 검수 요청을 보내고 승인 시 업로드한다",
@@ -120,6 +125,7 @@ def main() -> int:
             render=not args.dry_run,
             use_veo=not args.no_veo,
             reuse_topic=args.reuse_topic,
+            part1_only=args.part1_only,
         )
     except Exception as exc:
         # 작업 스케줄러로 무인 실행될 때는 아무도 콘솔을 안 본다. 조용히 죽으면 며칠 뒤에야

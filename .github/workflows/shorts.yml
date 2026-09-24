@@ -18,6 +18,10 @@ on:
         description: "렌더 후 텔레그램으로 검수 요청을 보낸다"
         type: boolean
         default: true
+      part1_only:
+        description: "1부만 렌더/전송한다 (검증 사이클용 — 만족하면 false 로 되돌릴 것)"
+        type: boolean
+        default: true
   # 매일 돌리려면 아래 두 줄의 주석을 푼다 (UTC 기준 — 09:00 KST = 00:00 UTC).
   # schedule:
   #   - cron: "0 0 * * *"
@@ -195,6 +199,7 @@ jobs:
           ARGS=""
           if [ "${{ inputs.no_veo }}" = "true" ]; then ARGS="$ARGS --no-veo"; fi
           if [ "${{ inputs.reuse_topic }}" != "false" ]; then ARGS="$ARGS --reuse-topic"; fi
+          if [ "${{ inputs.part1_only }}" != "false" ]; then ARGS="$ARGS --part1-only"; fi
           # 승인을 기다리며 러너를 몇십 분 켜두는 건 낭비다. 보내고 짧게만 기다린다.
           if [ "${{ inputs.review }}" != "false" ]; then ARGS="$ARGS --review --wait 90"; fi
           python main.py run $ARGS

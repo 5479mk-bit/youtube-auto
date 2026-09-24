@@ -20,6 +20,7 @@ from .models import PhotoCredit, RenderedPart, Script, ScriptPart, StoryCandidat
 from .motion.veo_budget import VeoBudget
 from .motion.veo_client import VeoClient
 from .narration import tts_engine
+from .narration.tts_cloud import GoogleCloudTTS
 from .narration.tts_edge import EdgeTTS
 from .narration.tts_gemini import GeminiTTS
 from .publish import seo_metadata
@@ -200,9 +201,19 @@ def build_tts_engines(settings: Settings) -> list:
         cost_krw=settings.get("cloud.tts_cost_krw", 50),
     )
     edge = EdgeTTS(settings.get("audio.edge_voice", "hyunsu"))
+    cloud_tts = GoogleCloudTTS(
+        auth=auth,
+        voice=settings.get("audio.cloud_tts_voice", "ko-KR-Neural2-C"),
+        pitch_semitones=settings.get("audio.cloud_tts_pitch", -1.5),
+        spend_guard=build_spend_guard(settings),
+        cost_krw=settings.get("cloud.tts_cost_krw", 50),
+    )
 
-    if settings.get("audio.engine", "gemini") == "edge":
+    engine = settings.get("audio.engine", "gemini")
+    if engine == "edge":
         return [edge]
+    if engine == "cloud_tts":
+        return [cloud_tts, edge]
     return [gemini, edge]
 
 
@@ -290,6 +301,7 @@ def run(
     render: bool = True,
     use_veo: bool = True,
     reuse_topic: bool = False,
+    part1_only: bool = False,
 ) -> PipelineResult | None:
     candidate = select_topic(settings, ignore_history=reuse_topic)
     if candidate is None:
@@ -323,8 +335,11 @@ def run(
 
     parts: list[RenderedPart] = []
     credits: list[PhotoCredit] = []
+    parts_to_render = (script.part1,) if part1_only else (script.part1, script.part2)
+    if part1_only:
+        logger.info("검증 모드: 1부만 렌더/전송합니다 (--part1-only)")
     try:
-        for part in (script.part1, script.part2):
+        for part in parts_to_render:
             rendered, part_credits = _render_part(
                 settings,
                 script,

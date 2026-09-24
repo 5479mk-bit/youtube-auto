@@ -126,23 +126,19 @@ SILLOK_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 �
   문장에 걸쳐 속도감 있게 나눠서 쓴다.**
 
 [말투 — 이게 제일 중요하다]
-글이 아니라 말을 쓴다. 소리 내어 읽었을 때 어색하면 틀린 것이다.
-- **매우 짧게 끊는다 (줄글 자막 금지).** JSON 의 `text` 하나는 영상에서 1~2초만 휙
-  지나가는 **'자막 한 칸'**이다. 시청자가 글을 읽게 만들지 마라.
-- 한 문장에 정보 하나만 넣고, **15~20자가 넘어가면 무조건 엔터를 치듯 두 개의 문장(두
-  개의 JSON object)으로 강제로 쪼갠다.**
-- 문장 길이를 섞는다. "근데 이상하죠." 같은 6자 문장과 15자 문장이 번갈아 나와야 말이 된다.
-- 같은 어미를 세 번 연속 쓰지 않는다.
-- 백과사전 문체 금지: "~로 알려져 있다", "~라 할 수 있다", "~을 자랑한다" 같은 말은 안 쓴다.
-- **반말로 쓴다.** "~했어", "~거든", "~였을까?" 처럼. "~습니다"로 끝내지 않는다.
-- 국역의 옛 표현은 그대로 읽지 말고 지금 말로 바꾼다. 단, 뜻을 바꾸면 안 된다.
-  (예: "치계하였다" → "장계를 올렸다", "사시(巳時)" → "오전 아홉 시에서 열한 시 사이")
-- 기록에 적힌 사물 이름을 다른 물건으로 바꾸지 않는다. "동이"를 "항아리"로, "세숫대야"를
-  "접시"로 바꾸면 그 순간 실록이 아니라 창작이 된다. 모르면 원문 표현을 그대로 쓴다.
-- **사람들이 어떤 기분이었는지 기록에 없으면 쓰지 않는다.** "기겁했어", "공포에 떨었어",
-  "혼비백산했지" 같은 건 사관이 적은 게 아니라 네가 지어낸 것이다. 기록에 적힌 행동만
-  쓴다 (예: "사람들이 모두 우러러 보았다" → "사람들이 다 하늘을 올려다봤어"). 사물 이름과
-  똑같은 규칙이다 — 감정은 눈에 잘 안 띄어서 더 잘 새어 나간다.
+글이 아니라 말을 쓴다. 소리 내어 읽었을 때 로봇 같거나 교양 다큐멘터리 같으면 실패다.
+- **매우 짧게 끊는다 (줄글 자막 금지).** JSON의 `text` 하나는 영상에서 1~2초만 휙 지나가는
+  '자막 한 칸'이다. 15~20자가 넘어가면 무조건 두 개의 문장(두 개의 JSON object)으로
+  강제로 쪼갠다.
+- **추임새와 감탄사 필수:** 문장 시작 부분에 "근데,", "진짜 소름 돋는 건,", "와, 미쳤지?",
+  "이게 말이 돼?" 같은 구어체 추임새를 적극적으로 넣어서 진짜 사람이 썰을 푸는 것처럼
+  만들어라.
+- **정적과 호흡(뜸 들이기):** 시청자를 긴장시키거나 충격적인 사실을 말하기 직전에는 반드시
+  말줄임표(`...`)나 쉼표(`,`)를 넣어라. (예: "하늘을 봤는데...", "거기서 갑자기,", "두
+  조각이 나더니...")
+- 같은 어미를 세 번 연속 쓰지 않는다. 반말로 쓴다. ("~했어", "~거든", "~였을까?")
+- 기록에 적힌 사물 이름이나 행동은 원문 그대로 쓰되, 뜻만 현대어로 바꾼다. 감정을 지어내지
+  않는 원칙은 동일하다.
 - emphasis 에는 그 문장에서 자막으로 크게 강조할 짧은 조각만 넣는다.
 
 [화면 — '유출된 감시 영상(Found Footage)' 콘셉트 절대 엄수]
@@ -161,27 +157,25 @@ SILLOK_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 �
 - "MAP_MOTION": 지명이 나오는 문장. 부마다 **1문장**. `map_region` 과
   `map_spots`(고을 이름 한글)를 채운다.
 
-`prompt` 는 VEO/AI_IMAGE 일 때만 채우는 **영문** 프롬프트다.
-우리는 지금 다큐멘터리가 아니라 **'극도로 기괴하고 거친 찐 CCTV 감시 영상'**을
-만들고 있다. AI 이미지 생성을 위해 **아래 스타일 문구를 프롬프트 맨 끝에 반드시
-쉼표(,)와 함께 그대로 붙인다:**
+`prompt` 는 VEO/AI_IMAGE 일 때만 채우는 영문 프롬프트다.
+**[경고: 피사체 실종 방지]** 단순히 어둡고 노이즈 낀 빈 화면을 그리지 마라. 프롬프트
+맨 앞에는 반드시 **'사건의 주된 피사체(예: 하늘에 뜬 거대한 발광 물체, 놀란 표정의
+인물들, 흙바닥에 떨어진 기이한 물건)'**를 명확하고 구체적으로 묘사해야 한다.
+
+그 피사체 묘사 뒤에 아래의 CCTV 앵글과 스타일 문구를 붙여서 완성해라.
+
+1) CCTV 앵글 지시 (프롬프트 중간에 삽입):
+- 벽 구석에 매달린 뷰: "corner-mounted security cam looking down at"
+- 숨겨진 몰래카메라 뷰: "hidden spy cam recording from a dark crevice"
+- 흙바닥 블랙박스 뷰: "extreme low angle discarded dashcam perspective on the dirt
+  ground"
+
+2) CCTV 스타일 문구 (프롬프트 맨 끝에 쉼표와 함께 무조건 덧붙일 것):
   ", raw unedited CCTV security footage, authentic 1980s surveillance camera
    perspective, harsh infrared night vision lighting, overexposed blown-out
    highlights, extreme fisheye lens distortion, heavy dark vignette, brutalist
-   VHS static glitch, distorted CRT scanlines, severely desaturated
-   monochrome, terrifying found footage aesthetic, no text, no watermark"
-
-**[CCTV 앵글 및 연출 지시 규칙 - 매우 중요]**
-단조로운 정면 구도는 절대 금지한다. 모든 컷은 **'어딘가에 매달린 싸구려 카메라'**
-또는 **'바닥에 버려진 카메라'**의 시점이어야 한다. 식별 가능한 얼굴 클로즈업은
-여전히 피하고(안전 필터 및 기괴함 유지), 프롬프트 앞에 아래와 같은 극단적 CCTV
-구도 지시어를 반드시 포함해라.
-- 벽이나 처마 구석에 매달린 보안 카메라 시점 (시야각이 둥글게 휘어짐):
-  "corner-mounted security cam looking down at"
-- 어두운 틈새에서 몰래 녹화하는 시점 (주변부가 까맣게 가려짐): "hidden spy cam
-  recording from a dark crevice"
-- 흙바닥에 나뒹구는 블랙박스 시점 (앵글이 삐딱하게 기울어짐): "extreme low angle
-  discarded dashcam perspective on the dirt ground"
+   VHS static glitch, severely desaturated monochrome, terrifying found footage
+   aesthetic, no text, no watermark"
 
 **[VEO 무브먼트 지시]**
 VEO 로 가는 문장(1부 첫 문장, 가장 센 장면)은 부드러운 영화적 줌인 대신, 아래와
@@ -444,10 +438,13 @@ CINEMATIC_STYLE = (
     "footage, authentic 1980s surveillance camera perspective, harsh infrared "
     "night vision lighting, overexposed blown-out highlights, extreme fisheye "
     "lens distortion, heavy dark vignette, brutalist VHS static glitch, "
-    "distorted CRT scanlines, severely desaturated monochrome, terrifying "
-    "found footage aesthetic, no text, no watermark"
+    "severely desaturated monochrome, terrifying found footage aesthetic, "
+    "no text, no watermark"
 )
-FALLBACK_IMAGE_PROMPT = f"night sky over a Joseon village, {CINEMATIC_STYLE}"
+FALLBACK_IMAGE_PROMPT = (
+    f"a strange glowing object hanging in the night sky over a Joseon village, "
+    f"{CINEMATIC_STYLE}"
+)
 
 _HANJA = re.compile(r"[\u4e00-\u9fff]{2,}")
 

@@ -35,17 +35,22 @@ subtitle:
   max_chars_per_line: 16
 
 audio:
-  # gemini 는 스타일을 말로 지시할 수 있어 톤이 살고, edge 는 키 없이 동작한다.
-  # gemini 가 한도에 걸리거나 실패하면 자동으로 edge 로 내려간다.
-  engine: gemini
-  # "에너지 있게, 빠른 속도" 로 시켰더니 톤이 인공적이고, 문장 사이 쉼이 뭉개져
-  # 자막 분리(무음 감지)도 자주 어긋났다. 차분한 다큐 톤으로 바꾸고 문장 사이 쉼을
-  # 명확히 요구해 사람 목소리에 가깝게 + 자막 싱크도 같이 잡는다.
-  gemini_voice: Charon        # 차분하고 설명체에 가까운 남성 톤(다큐 내레이터에 맞음)
+  # cloud_tts = 진짜 SSML 합성 API(Google Cloud Text-to-Speech). 말줄임표를
+  # <break> 로, 톤을 <prosody pitch> 로 직접 지시할 수 있어 Gemini TTS 보다 정적·
+  # 피치 제어가 정확하다. 하루 호출 한도가 없어 문장마다 개별 호출한다(싱크 어긋남 없음).
+  # 실패하면 edge 로 내려간다.
+  engine: cloud_tts
+  cloud_tts_voice: ko-KR-Neural2-C   # SSML/피치 완전 지원 확인된 보이스로 시작한다.
+                                      # ko-KR-Journey-F 는 SSML 미지원일 가능성이 높아
+                                      # (구글 문서상 Journey 계열은 순수 텍스트만 받는다)
+                                      # 검증 단계에서 실제 응답으로 확인 후 필요하면 바꾼다.
+  cloud_tts_pitch: -1.5              # 세미톤. 낮을수록 톤이 무겁게 내려간다.
+  # gemini 는 이제 안 쓴다(폴백 목록에서도 뺐다) — 되돌릴 수도 있어 코드는 남겨뒀다.
+  gemini_voice: Charon
   gemini_model: gemini-2.5-flash-preview-tts
   gemini_style_prompt: "차분한 다큐멘터리 내레이터처럼, 진짜 사람이 말하듯 자연스러운 속도로"
-  gemini_min_request_interval: 1.5   # preview 모델의 분당 요청 한도를 피한다
-  edge_voice: hyunsu          # hyunsu | injoon | sunhi
+  gemini_min_request_interval: 1.5
+  edge_voice: hyunsu          # hyunsu | injoon | sunhi (cloud_tts 실패 시 최종 폴백)
   # 다크 앰비언트 드론을 전체에 깔고, 사건이 터지는 문장에 초저음 타격음을 얹는다.
   bgm_volume_db: -16
   bgm_hook_volume_db: -12
