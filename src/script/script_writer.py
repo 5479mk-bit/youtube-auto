@@ -145,33 +145,56 @@ SILLOK_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 �
   똑같은 규칙이다 — 감정은 눈에 잘 안 띄어서 더 잘 새어 나간다.
 - emphasis 에는 그 문장에서 자막으로 크게 강조할 짧은 조각만 넣는다.
 
-[화면 — 사진을 검색하지 않는다]
-조선 사건에는 사진이 존재하지 않는다. 그래서 웹 이미지 검색은 아예 쓰지 않고, 문장마다
-아래 네 갈래 중 하나를 **네가 직접 정해서** 화면을 만든다(`scene_type`).
+[화면 — '유출된 감시 영상(Found Footage)' 콘셉트 절대 엄수]
+조선 사건에는 사진이 존재하지 않는다. 대신 우리는 "조선시대 현장에 숨겨진 CCTV나
+바닥에 버려진 블랙박스에 찍힌 기괴한 유출 영상"이라는 콘셉트로 화면을 만든다. 웹
+이미지 검색은 쓰지 않고, 문장마다 아래 네 갈래 중 하나를 네가 직접 정해서 화면을
+만든다(`scene_type`).
 
-- "VEO": 영상 전체를 통틀어 **딱 한 문장**에만 준다. 가장 센 장면(훅)이다. 보통 1부 첫 문장.
+- "VEO": 영상 전체를 통틀어 **딱 한 문장**에만 준다. 가장 센 장면(훅)이다. 보통
+  1부 첫 문장.
 - "AI_IMAGE": 사건·상황 묘사. 부마다 **2~3문장**.
-- "HISTORICAL_DOC": 실록 원문을 화면에 띄우는 컷. 부마다 **1~2문장**. "실록에 이렇게 적혀
-  있어" 류의 문장에 준다. `doc_title`(예: 光海君日記)과 `doc_highlight`(밑줄 그을 한자
-  원문 구절, 5~12자)를 같이 채운다. **원문에 실제로 있는 구절만 쓴다.**
-- "MAP_MOTION": 지명이 나오는 문장. 부마다 **1문장**. `map_region` 과 `map_spots`(고을
-  이름 한글)를 채운다.
+- "HISTORICAL_DOC": 실록 원문을 화면에 띄우는 컷. 부마다 **1~2문장**. "실록에
+  이렇게 적혀 있어" 류의 문장에 준다. `doc_title`(예: 光海君日記)과
+  `doc_highlight`(밑줄 그을 한자 원문 구절, 5~12자)를 같이 채운다. **원문에
+  실제로 있는 구절만 쓴다.**
+- "MAP_MOTION": 지명이 나오는 문장. 부마다 **1문장**. `map_region` 과
+  `map_spots`(고을 이름 한글)를 채운다.
 
-`prompt` 는 VEO/AI_IMAGE 일 때만 채우는 **영문** 프롬프트다. 아래 스타일 문구를 반드시
-끝에 그대로 붙인다:
-  "dark historical Joseon dynasty, chiaroscuro lighting, heavy volumetric fog,
-   eerie atmosphere, 35mm film grain, 8k"
-**식별 가능한 얼굴 클로즈업은 여전히 피한다**(안전 필터에 걸리거나 생성물이 어색해진다).
-그 밖은 과감하게 간다 — 인물을 실루엣·후면·역광·갑옷과 무기의 클로즈업(얼굴 없이)으로
-담아 긴장감을 준다. 하늘·산·기와지붕·횃불·안개만 반복해서 쓰지 말고, 컷마다 카메라
-앵글과 조명을 다르게 지시한다(로우앵글, 버즈아이, 오브젝트 클로즈업, 역광 실루엣을
-번갈아 쓴다) — 같은 구도가 반복되면 화면이 단조로워진다. 스타일 문구 앞에 그 컷에 맞는
-동세·구도 수식어를 한두 개 덧붙인다(예: "dramatic low-angle composition", "dynamic
-motion, dust and embers flying", "intense dramatic side lighting"). VEO 로 가는 문장
-(1부 첫 문장, 가장 센 장면)은 카메라 무브먼트 지시를 반드시 포함한다(예: "slow dramatic
-push-in", "camera pans up to reveal"). **사실 기반 원칙은 그대로다** — 바뀌는 건
-"어떻게 찍을까"(카메라·조명·구도)이지 "무슨 일이 있었나"가 아니다. 실록에 없는 장면을
-지어내 그리지 않는다.
+`prompt` 는 VEO/AI_IMAGE 일 때만 채우는 **영문** 프롬프트다.
+우리는 지금 다큐멘터리가 아니라 **'극도로 기괴하고 거친 찐 CCTV 감시 영상'**을
+만들고 있다. AI 이미지 생성을 위해 **아래 스타일 문구를 프롬프트 맨 끝에 반드시
+쉼표(,)와 함께 그대로 붙인다:**
+  ", raw unedited CCTV security footage, authentic 1980s surveillance camera
+   perspective, harsh infrared night vision lighting, overexposed blown-out
+   highlights, extreme fisheye lens distortion, heavy dark vignette, brutalist
+   VHS static glitch, distorted CRT scanlines, severely desaturated
+   monochrome, terrifying found footage aesthetic, no text, no watermark"
+
+**[CCTV 앵글 및 연출 지시 규칙 - 매우 중요]**
+단조로운 정면 구도는 절대 금지한다. 모든 컷은 **'어딘가에 매달린 싸구려 카메라'**
+또는 **'바닥에 버려진 카메라'**의 시점이어야 한다. 식별 가능한 얼굴 클로즈업은
+여전히 피하고(안전 필터 및 기괴함 유지), 프롬프트 앞에 아래와 같은 극단적 CCTV
+구도 지시어를 반드시 포함해라.
+- 벽이나 처마 구석에 매달린 보안 카메라 시점 (시야각이 둥글게 휘어짐):
+  "corner-mounted security cam looking down at"
+- 어두운 틈새에서 몰래 녹화하는 시점 (주변부가 까맣게 가려짐): "hidden spy cam
+  recording from a dark crevice"
+- 흙바닥에 나뒹구는 블랙박스 시점 (앵글이 삐딱하게 기울어짐): "extreme low angle
+  discarded dashcam perspective on the dirt ground"
+
+**[VEO 무브먼트 지시]**
+VEO 로 가는 문장(1부 첫 문장, 가장 센 장면)은 부드러운 영화적 줌인 대신, 아래와
+같은 싸구려 기계식/에러 무브먼트를 반드시 지시한다.
+- "stiff robotic security camera pan with motion blur" (뚝뚝 끊기며 기계적으로
+  돌아가는 감시 카메라 패닝)
+- "sudden signal loss glitch and heavy VHS tracking noise" (갑자기 신호가
+  끊기며 화면이 지지직거리는 극단적 노이즈)
+- "creepy digital zoom-in with heavy pixelation" (화질이 픽셀 단위로 자글자글
+  깨지면서 억지로 줌인)
+
+**사실 기반 원칙은 그대로다.** 바뀌는 건 "어떻게 찍을까"(싸구려 CCTV 앵글과
+조명)이지 "무슨 일이 있었나"가 아니다. 실록에 없는 장면을 지어내 그리지 않는다.
 
 `sfx` 는 그 문장이 시작될 때 때릴 소리다. 문장이 10~15개로 늘었으니 **부마다 3~5문장에
 골고루 배정**한다 — 한두 개뿐이면 나머지 구간이 너무 밋밋하고, 매 문장에 넣으면 반대로
@@ -417,8 +440,12 @@ def _template_script(candidate: StoryCandidate) -> Script:
 
 # 생성 컷의 고정 스타일. LLM 이 프롬프트를 못 준 컷에도 이 톤은 유지된다.
 CINEMATIC_STYLE = (
-    "dark historical Joseon dynasty, chiaroscuro lighting, heavy volumetric fog, "
-    "eerie atmosphere, 35mm film grain, 8k"
+    "corner-mounted security cam looking down at, raw unedited CCTV security "
+    "footage, authentic 1980s surveillance camera perspective, harsh infrared "
+    "night vision lighting, overexposed blown-out highlights, extreme fisheye "
+    "lens distortion, heavy dark vignette, brutalist VHS static glitch, "
+    "distorted CRT scanlines, severely desaturated monochrome, terrifying "
+    "found footage aesthetic, no text, no watermark"
 )
 FALLBACK_IMAGE_PROMPT = f"night sky over a Joseon village, {CINEMATIC_STYLE}"
 
