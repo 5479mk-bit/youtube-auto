@@ -23,8 +23,9 @@ VOICES = {
 class EdgeTTS:
     name = "edge"
 
-    def __init__(self, voice: str):
+    def __init__(self, voice: str, pitch: str = "+0Hz"):
         self.voice = VOICES.get(voice, voice)
+        self.pitch = pitch
 
     @property
     def enabled(self) -> bool:
@@ -40,7 +41,7 @@ class EdgeTTS:
 
             async def run() -> None:
                 communicate = edge_tts.Communicate(
-                    text=text, voice=self.voice, rate=rate, proxy=proxy
+                    text=text, voice=self.voice, rate=rate, pitch=self.pitch, proxy=proxy
                 )
                 await communicate.save(str(out_path))
 

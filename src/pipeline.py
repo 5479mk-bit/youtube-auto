@@ -200,7 +200,10 @@ def build_tts_engines(settings: Settings) -> list:
         spend_guard=build_spend_guard(settings),
         cost_krw=settings.get("cloud.tts_cost_krw", 50),
     )
-    edge = EdgeTTS(settings.get("audio.edge_voice", "hyunsu"))
+    edge = EdgeTTS(
+        settings.get("audio.edge_voice", "hyunsu"),
+        pitch=settings.get("audio.edge_pitch", "+0Hz"),
+    )
     cloud_tts = GoogleCloudTTS(
         auth=auth,
         voice=settings.get("audio.cloud_tts_voice", "ko-KR-Neural2-C"),
