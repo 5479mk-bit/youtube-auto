@@ -141,9 +141,9 @@ SILLOK_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 �
   않는 원칙은 동일하다.
 - emphasis 에는 그 문장에서 자막으로 크게 강조할 짧은 조각만 넣는다.
 
-[화면 — '유출된 감시 영상(Found Footage)' 콘셉트 절대 엄수]
-조선 사건에는 사진이 존재하지 않는다. 대신 우리는 "조선시대 현장에 숨겨진 CCTV나
-바닥에 버려진 블랙박스에 찍힌 기괴한 유출 영상"이라는 콘셉트로 화면을 만든다. 웹
+[화면 — '고품질 실사 역사 재난 드라마' 콘셉트 절대 엄수]
+조선 사건에는 사진이 존재하지 않는다. 대신 우리는 "영화 한 장면처럼 극적이고
+선명한, 포토리얼리스틱한 역사 재난 드라마"라는 콘셉트로 화면을 만든다. 웹
 이미지 검색은 쓰지 않고, 문장마다 아래 네 갈래 중 하나를 네가 직접 정해서 화면을
 만든다(`scene_type`).
 
@@ -158,37 +158,36 @@ SILLOK_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 �
   `map_spots`(고을 이름 한글)를 채운다.
 
 `prompt` 는 VEO/AI_IMAGE 일 때만 채우는 영문 프롬프트다.
-**[경고: 피사체 실종 방지]** 단순히 어둡고 노이즈 낀 빈 화면을 그리지 마라. 프롬프트
-맨 앞에는 반드시 **'사건의 주된 피사체(예: 하늘에 뜬 거대한 발광 물체, 놀란 표정의
-인물들, 흙바닥에 떨어진 기이한 물건)'**를 명확하고 구체적으로 묘사해야 한다.
+**[경고: 피사체 실종 방지]** 단순히 텅 빈 배경만 그리지 마라. 프롬프트 맨 앞에는
+반드시 **'사건의 주된 피사체(예: 굶주려 쓰러진 백성들, 곡식을 나눠 주는 관리,
+말라붙은 논밭, 눈보라 속 피난민)'**를 명확하고 구체적으로 묘사해야 한다.
 
-그 피사체 묘사 뒤에 아래의 CCTV 앵글과 스타일 문구를 붙여서 완성해라.
+그 피사체 묘사 뒤에 아래의 카메라 구도와 스타일 문구를 붙여서 완성해라.
 
-1) CCTV 앵글 지시 (프롬프트 중간에 삽입):
-- 벽 구석에 매달린 뷰: "corner-mounted security cam looking down at"
-- 숨겨진 몰래카메라 뷰: "hidden spy cam recording from a dark crevice"
-- 흙바닥 블랙박스 뷰: "extreme low angle discarded dashcam perspective on the dirt
-  ground"
+1) 영화적 카메라 구도 (프롬프트 중간에 삽입, 장면마다 다르게 골라 단조롭지 않게):
+- 압도적 스케일을 보여주는 부감/드론 샷: "sweeping aerial drone shot revealing"
+- 인물 눈높이의 몰입형 로우앵글: "dramatic low-angle shot looking up at"
+- 감정을 클로즈업하는 구도(얼굴은 피하고 손·발·소지품 위주): "intimate close-up on
+  weathered hands clutching"
 
-2) CCTV 스타일 문구 (프롬프트 맨 끝에 쉼표와 함께 무조건 덧붙일 것):
-  ", raw unedited CCTV security footage, authentic 1980s surveillance camera
-   perspective, harsh infrared night vision lighting, overexposed blown-out
-   highlights, extreme fisheye lens distortion, heavy dark vignette, brutalist
-   VHS static glitch, severely desaturated monochrome, terrifying found footage
-   aesthetic, no text, no watermark"
+2) 영화적 재난 드라마 스타일 문구 (프롬프트 맨 끝에 쉼표와 함께 무조건 덧붙일 것):
+  ", cinematic historical disaster drama, photorealistic 8k detail, dramatic
+   stormy sky with heavy clouds and lightning, warm torchlight against cold
+   famine-stricken landscape, rich saturated color grading, epic movie still,
+   painterly realism, no text, no watermark"
 
 **[VEO 무브먼트 지시]**
-VEO 로 가는 문장(1부 첫 문장, 가장 센 장면)은 부드러운 영화적 줌인 대신, 아래와
-같은 싸구려 기계식/에러 무브먼트를 반드시 지시한다.
-- "stiff robotic security camera pan with motion blur" (뚝뚝 끊기며 기계적으로
-  돌아가는 감시 카메라 패닝)
-- "sudden signal loss glitch and heavy VHS tracking noise" (갑자기 신호가
-  끊기며 화면이 지지직거리는 극단적 노이즈)
-- "creepy digital zoom-in with heavy pixelation" (화질이 픽셀 단위로 자글자글
-  깨지면서 억지로 줌인)
+VEO 로 가는 문장(1부 첫 문장, 가장 센 장면)은 아래와 같은 웅장한 영화적 무브먼트를
+반드시 지시한다.
+- "slow dramatic push-in revealing the scale of the disaster" (재해의 규모가
+  드러나도록 천천히 다가가는 줌인)
+- "sweeping cinematic pan across the devastated landscape" (황폐해진 땅을
+  가로지르는 웅장한 패닝)
+- "slow motion with dust and embers drifting through the air" (먼지와 잔불이
+  느리게 흩날리는 슬로모션)
 
-**사실 기반 원칙은 그대로다.** 바뀌는 건 "어떻게 찍을까"(싸구려 CCTV 앵글과
-조명)이지 "무슨 일이 있었나"가 아니다. 실록에 없는 장면을 지어내 그리지 않는다.
+**사실 기반 원칙은 그대로다.** 바뀌는 건 "어떻게 찍을까"(영화적 구도와 조명)이지
+"무슨 일이 있었나"가 아니다. 실록에 없는 장면을 지어내 그리지 않는다.
 
 `sfx` 는 그 문장이 시작될 때 때릴 소리다. 문장이 10~15개로 늘었으니 **부마다 3~5문장에
 골고루 배정**한다 — 한두 개뿐이면 나머지 구간이 너무 밋밋하고, 매 문장에 넣으면 반대로
@@ -434,15 +433,13 @@ def _template_script(candidate: StoryCandidate) -> Script:
 
 # 생성 컷의 고정 스타일. LLM 이 프롬프트를 못 준 컷에도 이 톤은 유지된다.
 CINEMATIC_STYLE = (
-    "corner-mounted security cam looking down at, raw unedited CCTV security "
-    "footage, authentic 1980s surveillance camera perspective, harsh infrared "
-    "night vision lighting, overexposed blown-out highlights, extreme fisheye "
-    "lens distortion, heavy dark vignette, brutalist VHS static glitch, "
-    "severely desaturated monochrome, terrifying found footage aesthetic, "
-    "no text, no watermark"
+    "cinematic historical disaster drama, photorealistic 8k detail, dramatic "
+    "stormy sky with heavy clouds and lightning, warm torchlight against cold "
+    "famine-stricken landscape, rich saturated color grading, epic movie "
+    "still, painterly realism, no text, no watermark"
 )
 FALLBACK_IMAGE_PROMPT = (
-    f"a strange glowing object hanging in the night sky over a Joseon village, "
+    f"starving villagers gathered on a barren, cracked Joseon-era farmland, "
     f"{CINEMATIC_STYLE}"
 )
 
