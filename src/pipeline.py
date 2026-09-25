@@ -333,6 +333,26 @@ def _print_script_preview(script: Script) -> None:
     print("=====================================\n")
 
 
+def _truncate_script_for_preview(script: Script, target_seconds: float) -> None:
+    """콘셉트만 싸게 확인할 때 쓴다 — 1부만 남기고, 목표 초 안쪽으로 문장을 줄인다.
+
+    아직 TTS 를 돌리기 전이라 정확한 길이는 모른다. `tts_engine` 이 무음 폴백 길이를
+    추정할 때 쓰는 것과 같은 대략치(글자수 ÷ CHARS_PER_SECOND)로 충분하다 — 정밀한
+    초가 아니라 "이쯤에서 끊으면 몇 문장"만 알면 된다. 씬(컷) 수가 줄어드는 만큼
+    AI 이미지/Veo 호출 수도 그대로 줄어 비용이 실제로 낮아진다.
+    """
+    kept = []
+    total = 0.0
+    for line in script.part1.lines:
+        estimate = max(len(line.narration) / tts_engine.CHARS_PER_SECOND, tts_engine.MIN_DURATION)
+        if kept and total + estimate > target_seconds:
+            break
+        kept.append(line)
+        total += estimate
+    script.part1.lines = kept or script.part1.lines[:1]
+    script.part2.lines = []
+
+
 def run(
     settings: Settings,
     render: bool = True,
@@ -340,6 +360,7 @@ def run(
     reuse_topic: bool = False,
     part1_only: bool = False,
     confirm_before_render: bool = False,
+    preview_seconds: float | None = None,
 ) -> PipelineResult | None:
     candidate = select_topic(settings, ignore_history=reuse_topic)
     if candidate is None:
@@ -354,6 +375,10 @@ def run(
     write_json(work_dir / "topic.json", candidate)
 
     script = write_script(settings, candidate)
+    if preview_seconds is not None:
+        _truncate_script_for_preview(script, preview_seconds)
+        part1_only = True
+        logger.info(f"프리뷰 모드: 1부를 약 {preview_seconds:.0f}초 분량({len(script.part1.lines)}문장)으로 줄여 렌더합니다")
     write_json(work_dir / "script.json", script)
 
     if not render:

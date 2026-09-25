@@ -50,6 +50,14 @@ def main() -> int:
         help="1부만 렌더/전송한다 (검증 사이클용 임시 옵션, 과금·시간을 아낀다)",
     )
     run_parser.add_argument(
+        "--preview-seconds",
+        type=float,
+        default=None,
+        help="1부를 이 초수 안쪽으로 줄여서 렌더한다(컷 수 자체가 줄어 과금도 그만큼 "
+        "준다). 콘셉트(화면 스타일·자막·톤)만 싸고 빠르게 반복 확인할 때 쓴다. "
+        "예: --preview-seconds 10 --no-veo 로 거의 무료에 가깝게 확인",
+    )
+    run_parser.add_argument(
         "--confirm",
         action="store_true",
         help="렌더 전에 대본·영문 프롬프트를 콘솔에 보여주고 Y/N 승인을 받는다 "
@@ -133,6 +141,7 @@ def main() -> int:
             reuse_topic=args.reuse_topic,
             part1_only=args.part1_only,
             confirm_before_render=args.confirm,
+            preview_seconds=args.preview_seconds,
         )
     except Exception as exc:
         # 작업 스케줄러로 무인 실행될 때는 아무도 콘솔을 안 본다. 조용히 죽으면 며칠 뒤에야
