@@ -120,7 +120,7 @@ def _build_background(
     credits: list[PhotoCredit] = []
     for scene in scenes:
         clip, credit = build_scene_clip(
-            scene, collector, veo_client, size, parallax_amount, dolly_amount, ai_client
+            scene, collector, veo_client, size, parallax_amount, dolly_amount, ai_client, settings
         )
         clips.append(clip.with_duration(scene.duration))
         if credit not in credits:

@@ -48,6 +48,7 @@ def build_scene_clip(
     parallax_amount: float,
     dolly_amount: float,
     ai_client=None,
+    settings=None,
 ) -> tuple[object, PhotoCredit]:
     """컷 하나를 클립으로. 씬 종류에 따라 만드는 방식이 완전히 갈린다.
 
@@ -56,7 +57,7 @@ def build_scene_clip(
     영상)는 지금까지처럼 사진을 쓴다.
     """
     if scene.engine in ("historical_doc", "map_motion", "ai_image", "veo"):
-        return _build_generated_clip(scene, veo_client, ai_client, size)
+        return _build_generated_clip(scene, veo_client, ai_client, size, settings)
 
     found = collector.collect(scene.image_query_ko, scene.image_query_en)
     if found is None:
@@ -84,7 +85,7 @@ def build_scene_clip(
     )
 
 
-def _build_generated_clip(scene: Scene, veo_client, ai_client, size: tuple[int, int]):
+def _build_generated_clip(scene: Scene, veo_client, ai_client, size: tuple[int, int], settings=None):
     """사진을 검색하지 않는 컷들.
 
     생성(Veo/이미지)이 막히면 대체 화면(먹빛 플레이트)으로 내려간다. 무료 티어는 영상·
@@ -120,7 +121,21 @@ def _build_generated_clip(scene: Scene, veo_client, ai_client, size: tuple[int, 
         logger.warning("Veo 클립을 만들지 못해 이 컷은 생성 이미지로 대체합니다")
 
     if image_path is not None:
-        return scene_renderers.render_ai_image_motion(image_path, scene.duration, size), credit
+        s = settings.get if settings is not None else (lambda key, default: default)
+        return (
+            scene_renderers.render_ai_image_motion(
+                image_path,
+                scene.duration,
+                size,
+                saturation=s("visuals.ai_image_motion.saturation", 1.0),
+                contrast=s("visuals.ai_image_motion.contrast", 1.0),
+                brightness=s("visuals.ai_image_motion.brightness", 0.0),
+                vignette=s("visuals.ai_image_motion.vignette", 0.0),
+                fog_opacity=s("visuals.ai_image_motion.fog_opacity", 0.0),
+                zoom_amount=s("visuals.ai_image_motion.zoom_amount", 0.15),
+            ),
+            credit,
+        )
 
     logger.warning(f"생성이 막혀 대체 화면을 씁니다 ({scene.scene_type})")
     seed = scene.prompt or scene.image_query_ko or scene.scene_type

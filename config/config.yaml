@@ -35,10 +35,13 @@ subtitle:
   max_chars_per_line: 16
 
 audio:
-  # supertonic(로컬 서버)이 항상 1순위로 시도된다(build_tts_engines 참고). 이 engine
-  # 값은 supertonic 이 꺼져 있을 때 내려갈 다음 엔진을 고른다 — edge 는 무료라
-  # 기본값으로 둔다.
-  engine: edge
+  # voxcpm(GPU 전용)과 supertonic(로컬 서버 전용)이 항상 1·2순위로 시도된다
+  # (build_tts_engines 참고) — GitHub Actions 러너에는 GPU도 로컬 서버도 없어
+  # 둘 다 조용히 폴백된다. 이 engine 값은 그다음(진짜 쓰이는) 엔진을 고른다.
+  # "edge"는 완전 무료지만 기계음에 가깝다 — Vertex 인증이 붙어 있으면(cloud-check
+  # 통과) "gemini"가 훨씬 자연스러운 목소리를 낸다. 비용을 각오하고 무조건 무료로만
+  # 가려는 게 아니면 edge 로 내리지 않는다.
+  engine: gemini
   supertonic_url: "http://127.0.0.1:5000/api/synthesize"
   supertonic_voice: default
   gemini_voice: Charon        # 차분하고 신뢰감 있는 남성 톤(다큐 내레이터에 맞음)
@@ -106,6 +109,19 @@ visuals:
     - cc-by
     - cc-by-sa
     - public domain
+  # 생성 정지화(AI_IMAGE)에 거는 색 보정·안개·줌. 기본값은 "그레이딩 없음"이다 —
+  # 3D 엔지니어링 단면도(밝은 스튜디오 배경, 붉은 기술선) 콘셉트에 조선시대/CCTV
+  # 시절의 어두운 밤안개 톤을 계속 덮어씌우고 있던 게 "화면이 여전히 정적이고
+  # 칙칙하다"는 지적의 실제 원인이었다(scene_renderers.render_ai_image_motion 참고).
+  # sillok(실록) 콘셉트로 되돌릴 때만 아래 주석의 원래 값으로 올린다.
+  ai_image_motion:
+    saturation: 1.0     # sillok 콘셉트였을 때는 0.70(채도 30% 감소)
+    contrast: 1.0        # sillok 콘셉트였을 때는 1.20
+    brightness: 0.0       # sillok 콘셉트였을 때는 -0.05(더 어둡게)
+    vignette: 0.0          # sillok 콘셉트였을 때는 0.42
+    fog_opacity: 0.0        # sillok 콘셉트였을 때는 0.35(밤안개 오버레이)
+    zoom_amount: 0.15        # 컷 전체에 걸친 확대 비율. 기존 0.06 은 거의 안 보일
+                              # 정도로 미미해 "정적으로 보인다"는 지적에 같이 걸렸다.
 
 publish:
   privacy_status: private

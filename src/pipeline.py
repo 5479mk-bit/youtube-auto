@@ -228,13 +228,19 @@ def build_tts_engines(settings: Settings) -> list:
         cost_krw=settings.get("cloud.tts_cost_krw", 50),
     )
 
-    engine = settings.get("audio.engine", "edge")
-    if engine == "gemini":
-        rest = [gemini, edge]
-    elif engine == "cloud_tts":
-        rest = [cloud_tts, edge]
-    else:
+    # voxcpm(GPU 전용)과 supertonic(로컬 서버 전용)은 GitHub Actions 러너에서는
+    # 구조적으로 절대 못 뜬다 — 폴백 자체는 정상 동작이다. 문제는 그다음이었다:
+    # Vertex 인증이 이미 붙어 있는데도(cloud-check 통과) Gemini TTS(자연스러운
+    # 목소리, 스타일 지시 가능)를 건너뛰고 edge-tts(기계음)로 바로 떨어지고
+    # 있었다 — `audio.engine` 기본값이 "edge"였기 때문이다. 이제 edge 를 명시적으로
+    # 고르지 않는 한 Gemini 를 항상 먼저 시도한다.
+    engine = settings.get("audio.engine", "gemini")
+    if engine == "cloud_tts":
+        rest = [cloud_tts, gemini, edge]
+    elif engine == "edge":
         rest = [edge]
+    else:
+        rest = [gemini, edge]
     return [voxcpm, supertonic, *rest]
 
 
@@ -378,7 +384,12 @@ def run(
     if preview_seconds is not None:
         _truncate_script_for_preview(script, preview_seconds)
         part1_only = True
-        logger.info(f"프리뷰 모드: 1부를 약 {preview_seconds:.0f}초 분량({len(script.part1.lines)}문장)으로 줄여 렌더합니다")
+        logger.warning(
+            f"프리뷰 모드: 1부를 약 {preview_seconds:.0f}초 분량({len(script.part1.lines)}문장)으로 "
+            "줄여 렌더합니다 — 이 결과는 [0~5초 오프닝 훅]만 보여줍니다. [중반 반전 훅]· "
+            "[클라이맥스 후킹](2부)은 이 컷에 아예 포함되지 않으니, 대본 구조나 톤을 "
+            "평가할 때는 --preview-seconds 없이 전체 렌더로 다시 확인하세요."
+        )
     write_json(work_dir / "script.json", script)
 
     if not render:

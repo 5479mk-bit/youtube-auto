@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import re
 
+from loguru import logger
+
 from ..models import SCENE_TYPES, Script, ScriptLine, ScriptPart, StoryCandidate
 from ..text_ko import particle as _particle
 from ..text_ko import read_aloud
@@ -386,6 +388,14 @@ def _prompt(candidate: StoryCandidate, part1_chars: int, part2_chars: int) -> st
     )
 
 
+
+# GLOBAL_DISASTER_PROMPT가 요구하는 "부마다 10~15개의 짧은 문장"의 안전 하한. LLM이
+# 지시를 무시하고 2~5문장짜리 얇은 대본을 내면(3중 후킹 구조가 통째로 들어갈 자리가
+# 없다), 파싱은 성공해도 여기서 걸러 템플릿 폴백으로 넘긴다 — "검증 없이 통과되던
+# 얇은 대본"이 실제 원인이었다.
+_DISASTER_MIN_LINES_PER_PART = 8
+
+
 def _parse(raw: dict | None, candidate: StoryCandidate) -> Script | None:
     if not raw:
         return None
@@ -396,6 +406,17 @@ def _parse(raw: dict | None, candidate: StoryCandidate) -> Script | None:
         return None
 
     if not part1.lines or not part2.lines:
+        return None
+
+    if candidate.dataset == "disaster" and (
+        len(part1.lines) < _DISASTER_MIN_LINES_PER_PART
+        or len(part2.lines) < _DISASTER_MIN_LINES_PER_PART
+    ):
+        logger.warning(
+            f"[script] 3중 후킹 구조를 담기엔 대본이 너무 짧습니다 "
+            f"(1부 {len(part1.lines)}문장·2부 {len(part2.lines)}문장, "
+            f"최소 {_DISASTER_MIN_LINES_PER_PART}문장 필요) — 템플릿 폴백으로 넘깁니다"
+        )
         return None
 
     return Script(

@@ -106,17 +106,34 @@ def render_ai_image_motion(
     image_path: Path,
     duration: float,
     size: tuple[int, int],
-    fog_opacity: float = 0.35,
+    fog_opacity: float = 0.0,
+    saturation: float = 1.0,
+    contrast: float = 1.0,
+    brightness: float = 0.0,
+    vignette: float = 0.0,
+    zoom_amount: float = 0.15,
 ) -> VideoClip:
-    """생성 정지화를 시네마틱 컷으로: 느린 푸시인 + 밤안개 + 채도를 뺀 어두운 톤."""
+    """생성 정지화를 컷으로: 느린 푸시인 + (선택적) 색 보정.
+
+    기본값은 그레이딩을 걸지 않는다 — 3D 엔지니어링 단면도(밝은 스튜디오 배경, 붉은
+    기술선)를 조선시대/CCTV 콘셉트 시절의 "밤안개 + 채도를 뺀 어두운 톤"으로 덮으면
+    생성 이미지가 아무리 역동적이어도 화면이 칙칙하고 정적으로 보인다 — 실제로
+    사용자가 지적한 "여전히 정적인 화면"의 원인이 이 하드코딩된 그레이딩이었다.
+    사료 콘셉트로 되돌아갈 때는 호출부에서 fog_opacity/saturation/vignette 값을
+    설정으로 다시 올리면 된다(코드는 그대로 재사용 가능).
+    """
     base = _fit(Image.open(image_path).convert("RGB"), size)
-    frame = _grade(np.asarray(base, dtype=np.float32))
+    pixels = np.asarray(base, dtype=np.float32)
+    if saturation != 1.0 or contrast != 1.0 or brightness != 0.0 or vignette != 0.0:
+        frame = _grade(pixels, saturation=saturation, contrast=contrast, brightness=brightness, vignette=vignette)
+    else:
+        frame = pixels
 
     def make_frame(t: float) -> np.ndarray:
-        return _zoom(frame.astype(np.uint8), 1.0 + 0.06 * (t / max(duration, 0.01)))
+        return _zoom(frame.astype(np.uint8), 1.0 + zoom_amount * (t / max(duration, 0.01)))
 
     clip = VideoClip(make_frame, duration=duration)
-    fog = _fog_layer(duration, size, fog_opacity)
+    fog = _fog_layer(duration, size, fog_opacity) if fog_opacity > 0 else None
     if fog is None:
         return clip
 
@@ -404,8 +421,11 @@ def _grade(
     saturation: float = 0.70,
     contrast: float = 1.20,
     brightness: float = -0.05,
+    vignette: float = 0.42,
 ) -> np.ndarray:
-    """채도를 빼고 대비를 올린 뒤 어둡게. 다큐 톤의 절반은 색 보정에서 나온다."""
+    """채도/대비/밝기와 비네팅 세기를 조절한다. 사료(어두운 다큐) 콘셉트의 기본값은
+    이렇게 강했지만, 3D 엔지니어링 단면도 콘셉트는 호출부(`render_ai_image_motion`)에서
+    전부 중립값을 넘겨 이 함수 자체를 사실상 건너뛴다."""
     grey = pixels.mean(axis=2, keepdims=True)
     graded = grey + (pixels - grey) * saturation
     graded = (graded / 255.0 - 0.5) * contrast + 0.5 + brightness
@@ -414,8 +434,8 @@ def _grade(
     height, width = graded.shape[:2]
     ys = np.linspace(-1, 1, height)[:, None]
     xs = np.linspace(-1, 1, width)[None, :]
-    vignette = 1.0 - 0.42 * np.clip((xs**2 + ys**2) / 1.9, 0, 1)
-    return graded * vignette[:, :, None]
+    vignette_field = 1.0 - vignette * np.clip((xs**2 + ys**2) / 1.9, 0, 1)
+    return graded * vignette_field[:, :, None]
 
 
 def _zoom(frame: np.ndarray, scale: float) -> np.ndarray:
