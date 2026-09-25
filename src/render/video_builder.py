@@ -90,6 +90,11 @@ def build_part(
         # 러너는 2코어라 medium 으로는 한 편에 10분이 넘게 걸린다. 쇼츠 해상도에서
         # veryfast 와 medium 의 화질 차이는 눈에 띄지 않는다.
         preset=settings.get("video.preset", "veryfast"),
+        # 비트레이트를 안 정하면 moviepy가 넉넉하게 잡아 40초짜리가 70MB를 넘기도
+        # 한다 — 텔레그램 봇 API 는 50MB 가 상한이라 그러면 검수 전송이 통째로
+        # 실패한다(413). 캡을 걸어 40초 기준 20MB 안쪽으로 들어오게 한다.
+        bitrate=settings.get("video.bitrate", "3000k"),
+        audio_bitrate=settings.get("video.audio_bitrate", "128k"),
         threads=settings.get("video.threads", 0) or os.cpu_count() or 2,
         # 지정하지 않으면 moviepy 가 임시 오디오를 현재 디렉터리에 떨군다.
         temp_audiofile=str(work_dir / f"temp_audio_part{part.part}.m4a"),
