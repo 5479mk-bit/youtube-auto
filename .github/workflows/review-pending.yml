@@ -71,7 +71,32 @@ jobs:
           mkdir -p credentials
           [ -n "$CLIENT_SECRET" ] && printf '%s' "$CLIENT_SECRET" > credentials/youtube_client_secret.json
           [ -n "$TOKEN_JSON" ] && printf '%s' "$TOKEN_JSON" > credentials/youtube_token.json
+          if [ -z "$CLIENT_SECRET" ] || [ -z "$TOKEN_JSON" ]; then
+            echo "::warning::YouTube 인증 시크릿이 비어 있습니다 — 승인해도 업로드는 건너뜁니다"
+          fi
           true
+          # 값이 있으면 실제로 JSON 으로 파싱되고 필요한 키가 있는지만 확인한다(내용은 찍지 않는다).
+          python - <<'PY'
+          import json, pathlib
+          for name, path, required_keys in [
+              ("client_secret", "credentials/youtube_client_secret.json", ["installed", "web"]),
+              ("token", "credentials/youtube_token.json", ["refresh_token"]),
+          ]:
+              p = pathlib.Path(path)
+              if not p.exists() or p.stat().st_size == 0:
+                  print(f"[{name}] 파일이 비어있거나 없습니다 ({path})")
+                  continue
+              try:
+                  data = json.loads(p.read_text())
+              except Exception as exc:
+                  print(f"[{name}] JSON 파싱 실패: {exc}")
+                  continue
+              if name == "client_secret":
+                  ok = any(k in data for k in required_keys)
+              else:
+                  ok = "refresh_token" in data
+              print(f"[{name}] JSON 파싱 성공, {p.stat().st_size}바이트, 필요한 키 있음={ok}")
+          PY
 
       - name: 대기 중인 승인 확인 및 업로드
         env:
