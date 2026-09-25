@@ -26,6 +26,12 @@ on:
         description: "Vertex 점검(이미지 1장, 약 30원)까지만 하고 전체 렌더는 건너뛴다"
         type: boolean
         default: false
+      preview_seconds:
+        description: "컨셉만 싸게 확인할 때: 1부를 이 초수 안쪽으로 줄여서 렌더한다
+          (컷 수가 줄어 과금도 그만큼 준다). 비워두면 평소처럼 전체 길이로 렌더한다.
+          예: 10 을 넣고 no_veo 도 켜면 AI 이미지 1~2장 수준(약 30~60원)으로 끝난다."
+        type: string
+        default: ""
       review_wait_seconds:
         description: "텔레그램 승인을 기다리는 시간(초). 이 안에 승인하면 같은 실행에서
           바로 업로드까지 끝난다 — 못 받으면 review-pending 스케줄 워크플로가 나중에 잡는다."
@@ -281,6 +287,10 @@ jobs:
           if [ "${{ inputs.no_veo || 'false' }}" = "true" ]; then ARGS="$ARGS --no-veo"; fi
           if [ "${{ inputs.reuse_topic }}" != "false" ]; then ARGS="$ARGS --reuse-topic"; fi
           if [ "${{ inputs.part1_only }}" != "false" ]; then ARGS="$ARGS --part1-only"; fi
+          # 컨셉만 싸게 확인할 때: 1부를 이 초수 안쪽으로 줄여서 컷 수(=과금)를 그만큼 줄인다.
+          if [ -n "${{ inputs.preview_seconds }}" ]; then
+            ARGS="$ARGS --preview-seconds ${{ inputs.preview_seconds }}"
+          fi
           # 여기서 승인이 오면 같은 실행 안에서 바로 업로드까지 끝난다. 못 받으면
           # review-pending 스케줄 워크플로가 캐시에 남은 state.sqlite3/output 으로 잡는다.
           if [ "${{ inputs.review }}" != "false" ]; then
