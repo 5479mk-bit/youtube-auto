@@ -26,6 +26,11 @@ on:
         description: "Vertex 점검(이미지 1장, 약 30원)까지만 하고 전체 렌더는 건너뛴다"
         type: boolean
         default: false
+      review_wait_seconds:
+        description: "텔레그램 승인을 기다리는 시간(초). 이 안에 승인하면 같은 실행에서
+          바로 업로드까지 끝난다 — 못 받으면 review-pending 스케줄 워크플로가 나중에 잡는다."
+        type: string
+        default: "1200"
   # 매일 돌리려면 아래 두 줄의 주석을 푼다 (UTC 기준 — 09:00 KST = 00:00 UTC).
   # schedule:
   #   - cron: "0 0 * * *"
@@ -38,7 +43,9 @@ permissions:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 렌더(최대 ~20분/부) + 검수 대기(review_wait_seconds, 기본 20분)를 합치면
+    # 60분을 넘길 수 있어 여유를 둔다.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -190,6 +197,39 @@ jobs:
           VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID || vars.VERTEX_PROJECT_ID || env.VERTEX_PROJECT_ID }}
         run: python main.py cloud-check --generate
 
+      # 승인 대기 중 GitHub 이 끊기거나(타임아웃) 사람이 늦게 눌러도, 다음 실행이나
+      # review-pending 스케줄 워크플로가 이어받을 수 있게 검수 상태(state.sqlite3)와
+      # 렌더 산출물(output/)을 이 저장소 캐시에 남긴다. 러너는 실행마다 새로 뜨는
+      # 빈 컨테이너라 이게 없으면 "나중에 다시 확인" 자체가 불가능하다.
+      - name: 검수 대기 상태 복원
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            output
+            state.sqlite3
+          key: shorts-pending-review-nonexistent-${{ github.run_id }}
+          restore-keys: shorts-pending-review-
+
+      # YouTube 업로드는 OAuth 로 한다(서비스 계정이 아니라 실제 채널 계정 동의가
+      # 필요하다) — client_secret.json 과 최초 1회 로컬 로그인으로 받은 token.json 을
+      # 시크릿에서 풀어 settings.py 가 기대하는 기본 경로에 그대로 둔다.
+      # (발급 방법: tools/get_youtube_token.py)
+      - name: YouTube 인증 파일 준비
+        env:
+          CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET_JSON }}
+          TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+        run: |
+          mkdir -p credentials
+          if [ -n "$CLIENT_SECRET" ]; then
+            printf '%s' "$CLIENT_SECRET" > credentials/youtube_client_secret.json
+          fi
+          if [ -n "$TOKEN_JSON" ]; then
+            printf '%s' "$TOKEN_JSON" > credentials/youtube_token.json
+          fi
+          if [ -z "$CLIENT_SECRET" ] || [ -z "$TOKEN_JSON" ]; then
+            echo "::warning::YouTube 인증 시크릿이 비어 있습니다 — 승인해도 업로드는 건너뜁니다"
+          fi
+
       - name: 한 회차 생성
         if: inputs.image_only != true
         env:
@@ -205,13 +245,25 @@ jobs:
           if [ "${{ inputs.no_veo }}" = "true" ]; then ARGS="$ARGS --no-veo"; fi
           if [ "${{ inputs.reuse_topic }}" != "false" ]; then ARGS="$ARGS --reuse-topic"; fi
           if [ "${{ inputs.part1_only }}" != "false" ]; then ARGS="$ARGS --part1-only"; fi
-          # 승인을 기다리며 러너를 몇십 분 켜두는 건 낭비다. 보내고 짧게만 기다린다.
-          if [ "${{ inputs.review }}" != "false" ]; then ARGS="$ARGS --review --wait 90"; fi
+          # 여기서 승인이 오면 같은 실행 안에서 바로 업로드까지 끝난다. 못 받으면
+          # review-pending 스케줄 워크플로가 캐시에 남은 state.sqlite3/output 으로 잡는다.
+          if [ "${{ inputs.review }}" != "false" ]; then
+            ARGS="$ARGS --review --wait ${{ inputs.review_wait_seconds }}"
+          fi
           python main.py run $ARGS
 
       - name: 지출 현황
         if: always()
         run: python main.py credits
+
+      - name: 검수 대기 상태 저장
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            output
+            state.sqlite3
+          key: shorts-pending-review-${{ github.run_id }}
 
       - name: 영상 내려받기용으로 올리기
         if: always()

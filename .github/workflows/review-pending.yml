@@ -1,0 +1,92 @@
+name: 대기 중인 승인 확인
+
+# 쇼츠 한 회차 만들기(shorts.yml)가 텔레그램 승인을 review_wait_seconds 안에 못 받고
+# 끝나면, 그 회차는 state.sqlite3 에 "대기 중"으로 남고 렌더 산출물은 캐시에 남는다.
+# 이 워크플로가 주기적으로 깨서 그 캐시를 복원하고 `review-pending` 으로 승인 여부를
+# 다시 확인한다 — 사람이 뒤늦게 버튼을 눌러도 업로드까지 자동으로 이어지게 하는 자리다.
+#
+# 승인/거절 자체는 텔레그램에서 바로 일어나지만(콜백은 즉시 응답), "그 결과를 읽어서
+# 유튜브에 올리는" 동작은 이 프로세스가 떠 있어야만 일어난다 — 그래서 폴링이 필요하다.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "*/15 * * * *"   # 15분마다. 텔레그램 승인 후 최대 15분 안에는 업로드된다.
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # shorts.yml 이 남겨둔 검수 대기 상태(state.sqlite3)와 렌더된 mp4(output/)를
+      # 그대로 이어받는다. 없으면(대기 중인 회차가 없으면) 그냥 빈 채로 시작하고,
+      # main.py 가 "대기 중인 승인이 없습니다"로 조용히 끝낸다.
+      - name: 검수 대기 상태 복원
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            output
+            state.sqlite3
+          key: shorts-pending-review-nonexistent-${{ github.run_id }}
+          restore-keys: shorts-pending-review-
+
+      - name: 의존성 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: DOTENV 시크릿 풀기
+        env:
+          DOTENV: ${{ secrets.DOTENV }}
+        run: |
+          if [ -z "$DOTENV" ]; then
+            echo "DOTENV 시크릿이 없습니다 — 개별 시크릿을 씁니다"
+            exit 0
+          fi
+          printf '%s\n' "$DOTENV" > .env
+          while IFS= read -r line; do
+            case "$line" in ''|'#'*) continue ;; esac
+            name="${line%%=*}"
+            value="${line#*=}"
+            [ -z "$value" ] && continue
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          done < .env
+
+      - name: YouTube 인증 파일 준비
+        env:
+          CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET_JSON }}
+          TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+        run: |
+          mkdir -p credentials
+          [ -n "$CLIENT_SECRET" ] && printf '%s' "$CLIENT_SECRET" > credentials/youtube_client_secret.json
+          [ -n "$TOKEN_JSON" ] && printf '%s' "$TOKEN_JSON" > credentials/youtube_token.json
+          true
+
+      - name: 대기 중인 승인 확인 및 업로드
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || env.TELEGRAM_CHAT_ID }}
+        run: python main.py review-pending --wait 30
+
+      # 승인 처리 결과(state.sqlite3 갱신, 업로드된 회차의 output/ 은 더는 필요
+      # 없지만 지우지 않는다 — 다음 실행이 또 지웠다 새로 받을 이유가 없다)를 다시
+      # 캐시에 남긴다. shorts.yml 의 저장 스텝과 같은 패턴이다.
+      - name: 검수 대기 상태 저장
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            output
+            state.sqlite3
+          key: shorts-pending-review-${{ github.run_id }}
