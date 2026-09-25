@@ -31,9 +31,19 @@ on:
           바로 업로드까지 끝난다 — 못 받으면 review-pending 스케줄 워크플로가 나중에 잡는다."
         type: string
         default: "1200"
-  # 매일 돌리려면 아래 두 줄의 주석을 푼다 (UTC 기준 — 09:00 KST = 00:00 UTC).
+  # ⚠ 아직 비활성 (2026-09-25, 사용자 요청 — 테스트 기간이라 자동 실행은 보류).
+  # "이제 켜줘"라는 요청을 받으면 아래 체크리스트대로 켠다:
+  #   1) 아래 push/schedule 블록 주석을 푼다. cron 주기는 그때 다시 정한다(사용자가
+  #      아직 정하지 않았다 — 임의로 매일/매시간 등을 추측해 넣지 않는다).
+  #   2) part1_only 기본값(지금 workflow_dispatch 쪽은 true)을 운영 목적에 맞게
+  #      재검토한다 — false 면 1부/2부 전체를 렌더한다.
+  #   3) 이 워크플로 파일이 'main' 브랜치에 있어야 push/schedule 이 실제로 동작한다
+  #      (GitHub 은 default 브랜치에 있는 워크플로 정의만 push/schedule 트리거로
+  #      읽는다 — 지금 이 파일이 있는 feature 브랜치에선 주석을 풀어도 안 움직인다).
+  # push:
+  #   branches: [main]
   # schedule:
-  #   - cron: "0 0 * * *"
+  #   - cron: "0 0 * * *"   # UTC 00:00 = KST 09:00 (예시일 뿐, 활성화 시 다시 정할 것)
 
 # WIF(키 없는 인증)에 필요하다. id-token 이 없으면 GCP 가 GitHub 을 못 알아본다.
 permissions:
@@ -263,14 +273,18 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || env.TELEGRAM_CHAT_ID }}
           VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID || vars.VERTEX_PROJECT_ID || env.VERTEX_PROJECT_ID }}
         run: |
+          # inputs.* 는 workflow_dispatch 에서만 채워진다. push/schedule 처럼 다른
+          # 이벤트로 실행되면 전부 빈 문자열이 되는데, 대부분의 bash 비교는 그래도
+          # 안전한 기본값 쪽으로 떨어진다 — 단 review_wait_seconds 만은 "--wait" 뒤에
+          # 아무 값도 안 남아 argparse 가 즉시 실패하므로 명시적 기본값이 꼭 필요하다.
           ARGS=""
-          if [ "${{ inputs.no_veo }}" = "true" ]; then ARGS="$ARGS --no-veo"; fi
+          if [ "${{ inputs.no_veo || 'false' }}" = "true" ]; then ARGS="$ARGS --no-veo"; fi
           if [ "${{ inputs.reuse_topic }}" != "false" ]; then ARGS="$ARGS --reuse-topic"; fi
           if [ "${{ inputs.part1_only }}" != "false" ]; then ARGS="$ARGS --part1-only"; fi
           # 여기서 승인이 오면 같은 실행 안에서 바로 업로드까지 끝난다. 못 받으면
           # review-pending 스케줄 워크플로가 캐시에 남은 state.sqlite3/output 으로 잡는다.
           if [ "${{ inputs.review }}" != "false" ]; then
-            ARGS="$ARGS --review --wait ${{ inputs.review_wait_seconds }}"
+            ARGS="$ARGS --review --wait ${{ inputs.review_wait_seconds || '1200' }}"
           fi
           python main.py run $ARGS
 
