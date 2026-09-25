@@ -25,6 +25,7 @@ from .narration.tts_cloud import GoogleCloudTTS
 from .narration.tts_edge import EdgeTTS
 from .narration.tts_gemini import GeminiTTS
 from .narration.tts_supertonic import SupertonicEngine
+from .narration.tts_voxcpm import VoxCPMEngine
 from .publish import seo_metadata
 from .render.thumbnail import build_thumbnail
 from .render.video_builder import build_part
@@ -194,10 +195,12 @@ def fetch_official_video(
 def build_tts_engines(settings: Settings) -> list:
     """설정한 엔진을 앞에 두고, 실패했을 때 내려갈 자리를 뒤에 붙인다.
 
-    Supertonic(로컬 서버)은 설정과 무관하게 항상 1순위다 — 무료·로컬이라 먼저 시도해서
-    손해볼 게 없고, 서버가 꺼져 있으면 그냥 다음 엔진으로 자연스럽게 넘어간다.
+    VoxCPM(로컬 GPU 모델)이 항상 1순위, Supertonic(로컬 HTTP 서버)이 2순위다 —
+    설정과 무관하게 둘 다 항상 시도한다. GPU 가 없는 환경(GitHub Actions 러너 등)에서는
+    VoxCPM 로딩이 조용히 실패해 Supertonic 으로 자연스럽게 넘어간다.
     """
     vertex, auth = build_vertex(settings)
+    voxcpm = VoxCPMEngine()
     supertonic = SupertonicEngine(
         base_url=settings.get("audio.supertonic_url", "http://127.0.0.1:5000/api/synthesize"),
         voice=settings.get("audio.supertonic_voice", "default"),
@@ -232,7 +235,7 @@ def build_tts_engines(settings: Settings) -> list:
         rest = [cloud_tts, edge]
     else:
         rest = [edge]
-    return [supertonic, *rest]
+    return [voxcpm, supertonic, *rest]
 
 
 def build_spend_guard(settings: Settings) -> SpendGuard:
@@ -314,12 +317,29 @@ def build_ai_image_client(
     )
 
 
+def _print_script_preview(script: Script) -> None:
+    """비싼 렌더(Veo/전체 TTS) 전에 대본과 영문 AI 프롬프트를 콘솔에 요약 출력한다.
+
+    사용자가 이 요약만 보고 Y/N 으로 전체 렌더 진행 여부를 정할 수 있게 한다 —
+    외부 API 를 다시 부르지 않고 이미 만들어진 `script` 객체만 순회한다.
+    """
+    print(f"\n===== 대본 미리보기: {script.title_seed} =====")
+    for part in (script.part1, script.part2):
+        print(f"\n--- {part.part}부 · {part.hook_number} ---")
+        for line in part.lines:
+            print(f"  [{line.scene_type}] {line.text}")
+            if line.prompt:
+                print(f"      prompt: {line.prompt}")
+    print("=====================================\n")
+
+
 def run(
     settings: Settings,
     render: bool = True,
     use_veo: bool = True,
     reuse_topic: bool = False,
     part1_only: bool = False,
+    confirm_before_render: bool = False,
 ) -> PipelineResult | None:
     candidate = select_topic(settings, ignore_history=reuse_topic)
     if candidate is None:
@@ -339,6 +359,13 @@ def run(
     if not render:
         logger.info(f"dry-run: 텍스트 산출물만 생성했습니다 → {work_dir}")
         return PipelineResult(task_id, candidate, script, [], work_dir, [])
+
+    if confirm_before_render:
+        _print_script_preview(script)
+        answer = input("이대로 전체 렌더링을 진행할까요? (Y/N): ").strip().lower()
+        if answer not in ("y", "yes"):
+            logger.info("사용자가 렌더링을 취소했습니다 (--confirm 에서 N 응답)")
+            return PipelineResult(task_id, candidate, script, [], work_dir, [])
 
     assets.warn_if_missing()
     spend_guard = build_spend_guard(settings)

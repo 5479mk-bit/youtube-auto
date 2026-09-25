@@ -153,8 +153,10 @@ parallax:
   shift: 0.06   # 좌우/상하 이동 시 가까운 것과 먼 것의 최대 시차(화면 폭 대비)
   dolly: 0.12   # 전진/후퇴 시 깊이별 배율 차이
 
-# Veo 클립과 파랄랙스 컷을 한 카메라로 찍은 것처럼 묶는 마감.
+# 3D 엔지니어링 단면도 인포그래픽 스타일은 그레인·비네팅이 없는 깔끔한 렌더가 맞다
+# (25단계). video_builder.py 의 기본값도 0 이지만, 여기 값이 우선 적용되므로 반드시
+# 0 으로 맞춰둔다.
 film_look:
-  grain: 6.0
-  vignette: 0.30
-  exposure_breathing: 0.02
+  grain: 0
+  vignette: 0
+  exposure_breathing: 0

@@ -50,6 +50,12 @@ def main() -> int:
         help="1부만 렌더/전송한다 (검증 사이클용 임시 옵션, 과금·시간을 아낀다)",
     )
     run_parser.add_argument(
+        "--confirm",
+        action="store_true",
+        help="렌더 전에 대본·영문 프롬프트를 콘솔에 보여주고 Y/N 승인을 받는다 "
+        "(로컬 대화형 실행 전용 — TTY 가 없는 무인 실행에는 쓰지 않는다)",
+    )
+    run_parser.add_argument(
         "--review",
         action="store_true",
         help="렌더 후 텔레그램으로 검수 요청을 보내고 승인 시 업로드한다",
@@ -126,6 +132,7 @@ def main() -> int:
             use_veo=not args.no_veo,
             reuse_topic=args.reuse_topic,
             part1_only=args.part1_only,
+            confirm_before_render=args.confirm,
         )
     except Exception as exc:
         # 작업 스케줄러로 무인 실행될 때는 아무도 콘솔을 안 본다. 조용히 죽으면 며칠 뒤에야
