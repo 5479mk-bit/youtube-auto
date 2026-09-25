@@ -16,6 +16,7 @@ from loguru import logger
 from .datasource.datagokr import DataGoKrClient
 from .heritage import heritage_media
 from . import assets
+from . import disasters
 from .models import PhotoCredit, RenderedPart, Script, ScriptPart, StoryCandidate, write_json
 from .motion.veo_budget import VeoBudget
 from .motion.veo_client import VeoClient
@@ -23,6 +24,7 @@ from .narration import tts_engine
 from .narration.tts_cloud import GoogleCloudTTS
 from .narration.tts_edge import EdgeTTS
 from .narration.tts_gemini import GeminiTTS
+from .narration.tts_supertonic import SupertonicEngine
 from .publish import seo_metadata
 from .render.thumbnail import build_thumbnail
 from .render.video_builder import build_part
@@ -62,12 +64,15 @@ class PipelineResult:
 def select_topic(settings: Settings, ignore_history: bool = False) -> StoryCandidate | None:
     """이번 회차 주제 하나. 소스는 `topics.source` 로 고른다.
 
-    문화재 경로는 지우지 않았다 — 궁궐·유물 화면이 필요할 때 그대로 다시 쓴다.
+    문화재·실록 경로는 지우지 않았다 — 다른 소재가 필요할 때 그대로 다시 쓴다.
     """
     source = settings.get("topics.source", "heritage")
     if source == "sillok":
         candidates = sillok.collect_candidates(settings.get("topics.sillok.article_ids", []))
         weights = settings.get("topics.sillok.weights", {})
+    elif source == "disaster":
+        candidates = disasters.collect_candidates(settings.get("topics.disaster.titles", []))
+        weights = settings.get("topics.disaster.weights", {})
     else:
         client = DataGoKrClient(settings.secrets.data_go_kr_service_key)
         candidates = heritage.collect_candidates(
@@ -105,14 +110,14 @@ def write_script(settings: Settings, candidate: StoryCandidate) -> Script:
 
 
 def build_collector(settings: Settings, candidate: StoryCandidate | None = None) -> ImageCollector:
-    """사진 소스 체인. 실록 소재에서는 **웹 검색을 아예 끈다.**
+    """사진 소스 체인. 실록·재난 소재에서는 **웹 검색을 아예 끈다.**
 
     "하늘에 호리병 같은 게 떠올랐다"를 텍스트로 검색하면 현대 우체국·카페 사진이 끌려
-    들어온다. 조선 사건의 화면은 사료·지도·생성으로 만들고, 실사 검색은 문화재 소재에서만
-    쓴다.
+    들어온다. 재난 소재도 마찬가지로 3D 단면도 인포그래픽을 생성으로만 만든다 — 실제
+    사고 사진은 유가족·저작권 문제가 있어 쓰지 않는다. 실사 검색은 문화재 소재에서만 쓴다.
     """
-    if candidate is not None and candidate.dataset == "sillok":
-        logger.info("[visuals] 실록 소재 — 웹 이미지 검색을 사용하지 않습니다")
+    if candidate is not None and candidate.dataset in ("sillok", "disaster"):
+        logger.info(f"[visuals] {candidate.dataset} 소재 — 웹 이미지 검색을 사용하지 않습니다")
         return ImageCollector([], CACHE_DIR / "images")
 
     sources = build_chain(
@@ -187,8 +192,16 @@ def fetch_official_video(
 
 
 def build_tts_engines(settings: Settings) -> list:
-    """설정한 엔진을 앞에 두고, 실패했을 때 내려갈 자리를 뒤에 붙인다."""
+    """설정한 엔진을 앞에 두고, 실패했을 때 내려갈 자리를 뒤에 붙인다.
+
+    Supertonic(로컬 서버)은 설정과 무관하게 항상 1순위다 — 무료·로컬이라 먼저 시도해서
+    손해볼 게 없고, 서버가 꺼져 있으면 그냥 다음 엔진으로 자연스럽게 넘어간다.
+    """
     vertex, auth = build_vertex(settings)
+    supertonic = SupertonicEngine(
+        base_url=settings.get("audio.supertonic_url", "http://127.0.0.1:5000/api/synthesize"),
+        voice=settings.get("audio.supertonic_voice", "default"),
+    )
     gemini = GeminiTTS(
         api_keys=settings.secrets.gemini_api_keys,
         voice=settings.get("audio.gemini_voice", "Fenrir"),
@@ -212,12 +225,14 @@ def build_tts_engines(settings: Settings) -> list:
         cost_krw=settings.get("cloud.tts_cost_krw", 50),
     )
 
-    engine = settings.get("audio.engine", "gemini")
-    if engine == "edge":
-        return [edge]
-    if engine == "cloud_tts":
-        return [cloud_tts, edge]
-    return [gemini, edge]
+    engine = settings.get("audio.engine", "edge")
+    if engine == "gemini":
+        rest = [gemini, edge]
+    elif engine == "cloud_tts":
+        rest = [cloud_tts, edge]
+    else:
+        rest = [edge]
+    return [supertonic, *rest]
 
 
 def build_spend_guard(settings: Settings) -> SpendGuard:

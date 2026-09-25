@@ -58,31 +58,24 @@ def build_part(
     background = apply_film_look(
         background,
         size,
-        grain=settings.get("film_look.grain", 6.0),
-        vignette=settings.get("film_look.vignette", 0.30),
-        exposure_breathing=settings.get("film_look.exposure_breathing", 0.02),
+        grain=settings.get("film_look.grain", 0),
+        vignette=settings.get("film_look.vignette", 0),
+        exposure_breathing=settings.get("film_look.exposure_breathing", 0),
     )
 
-    # 포스터형 레이아웃: 풀스크린 영상이 아니라 어두운 캔버스 위에 액자 박스로 영상을
-    # 앉힌다. 위에는 후킹 타이틀이 내내 떠 있고, 박스 아래에 자막이 붙는다.
-    box = _frame_box(size, settings)
-    layers = [
-        _canvas_layer(size, background.duration, settings),
-        _boxed_clip(background, box),
-        _frame_border_layer(size, box, background.duration, work_dir, part.part, settings),
-    ]
-
-    chart_frames = _chart_frames(candidate, part, work_dir, size)
-    layers.extend(_chart_layers(scenes, chart_frames, size))
+    # 풀스크린 레이아웃: 3D 엔지니어링 단면도 인포그래픽 스타일은 액자 박스 없이
+    # 화면 전체를 꽉 채운다. `_build_background`가 이미 `size` 그대로(1080×1920)
+    # 클립을 만들어주므로 추가 리사이즈·크롭이 필요 없다.
+    total_duration = max(background.duration - 1e-3, 0.1)
+    layers = [background.with_duration(total_duration)]
     layers.extend(_title_layers(part, work_dir, size, settings, background.duration))
-    layers.extend(_subtitle_layers(cues, work_dir, part.part, size, settings, box=box))
+    layers.extend(_subtitle_layers(cues, work_dir, part.part, size, settings, box=None))
     layers.extend(
         _badge_layers(script, part, work_dir, size, background.duration, credits)
     )
 
     # 이어붙인 클립은 마지막 프레임 시각이 총 길이와 같아질 때 어느 컷에도 속하지 않아
     # 인덱스 오류가 난다. 끝을 아주 살짝 당겨 그 경계를 피한다.
-    total_duration = max(background.duration - 1e-3, 0.1)
     video = CompositeVideoClip(layers, size=size).with_duration(total_duration)
     audio = _build_audio(part, settings, background.duration, scenes)
     if audio is not None:

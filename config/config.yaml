@@ -35,15 +35,17 @@ subtitle:
   max_chars_per_line: 16
 
 audio:
-  # gemini = Vertex 크레딧으로 쓰는 Gemini TTS. 스타일을 말로 지시할 수 있어
-  # edge-tts 보다 사람 목소리에 훨씬 가깝다 — "자연스러운 목소리"가 우선이라
-  # 무료인 edge 대신 이걸 기본으로 되돌렸다(edge 는 실패 시 폴백으로 남아있다).
-  engine: gemini
+  # supertonic(로컬 서버)이 항상 1순위로 시도된다(build_tts_engines 참고). 이 engine
+  # 값은 supertonic 이 꺼져 있을 때 내려갈 다음 엔진을 고른다 — edge 는 무료라
+  # 기본값으로 둔다.
+  engine: edge
+  supertonic_url: "http://127.0.0.1:5000/api/synthesize"
+  supertonic_voice: default
   gemini_voice: Charon        # 차분하고 신뢰감 있는 남성 톤(다큐 내레이터에 맞음)
   gemini_model: gemini-2.5-flash-preview-tts
   gemini_style_prompt: "차분한 다큐멘터리 내레이터처럼, 진짜 사람이 말하듯 자연스러운 속도로"
   gemini_min_request_interval: 1.5
-  edge_voice: injoon          # ko-KR-InJoonNeural (gemini 실패 시 폴백)
+  edge_voice: injoon          # ko-KR-InJoonNeural (supertonic 실패 시 최종 폴백)
   edge_pitch: "-5Hz"
   # cloud_tts 는 기본 경로가 아니다 — 설정 한 줄(engine)로 되돌릴 수 있게 남겨둔다.
   cloud_tts_voice: ko-KR-Neural2-C
@@ -64,9 +66,20 @@ script:
   part2_target_chars: 200
 
 topics:
-  # sillok(조선왕조실록) | heritage(국가유산청 해설문). 해설문은 서사가 없어 실록으로 옮겼고,
-  # 문화재 경로는 궁궐·유물 화면이 필요할 때 다시 쓰려고 남겨둔다.
-  source: sillok
+  # sillok(조선왕조실록) | heritage(국가유산청 해설문) | disaster(해외 자연재해·인재).
+  # 25단계: 해외 재난 소재 + 3D 엔지니어링 단면도 연출로 전환.
+  source: disaster
+  disaster:
+    # 손으로 고른 실제 사건 제목(위키백과 문서명). 전체 자동 발굴은 나중.
+    # 대한민국 내 인재는 여기 절대 적지 않는다 — src/disasters/ 에 코드 레벨
+    # 방어선도 따로 있다.
+    titles:
+      - 타이타닉호
+      - 체르노빌 원자력 발전소 사고
+      - 리스본 대지진
+    weights:
+      story_density: 0.5
+      freshness: 0.5
   sillok:
     # 샘플 단계라 기사를 사람이 지목한다. 왕대 전체 색인은 샘플을 보고 판단한다.
     article_ids:

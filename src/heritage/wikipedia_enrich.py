@@ -120,6 +120,15 @@ def _split_sections(text: str) -> list[tuple[str, str]]:
     return sections
 
 
+def fetch_full_text(title: str) -> str:
+    """문서 전문(요약이 아니라 본문 전체)을 그대로 돌려준다.
+
+    재난 소재처럼 "전설/설화" 필터 없이 본문 전체를 사실 재료로 쓰는 경우를 위한
+    공개 진입점이다 — `_fetch_plaintext` 를 외부 모듈에서 직접 import하지 않도록 감싼다.
+    """
+    return _fetch_plaintext(title)
+
+
 def enrich(candidate: StoryCandidate) -> StoryCandidate:
     """후보의 wiki_excerpt 를 채우고, 해설문+위키 합산으로 mystery_score/story_density 를
     다시 매긴다. 위키에 문서가 없거나 네트워크가 막혀도 해설문만으로 후보는 유효하다 —

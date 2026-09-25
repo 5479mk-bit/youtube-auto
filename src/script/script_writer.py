@@ -222,6 +222,101 @@ VEO 로 가는 문장(1부 첫 문장, 가장 센 장면)은 아래와 같은 �
 """
 
 
+GLOBAL_DISASTER_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 작가입니다.
+아래는 위키백과에 실린 실제 재난·사고 하나입니다. 이걸 30~40초짜리 세로 쇼츠 2편으로
+나눠 씁니다.
+
+시청자는 3초 안에 넘길지 말지 정합니다. 교양 프로그램 해설이 아니라, 친구한테 "야 이거
+진짜 있었던 일이야" 하고 말 거는 톤으로 씁니다.
+
+[소재]
+제목: {headline}
+위키백과 본문(이게 유일한 사실 재료다):
+{context}
+
+[사실 검증 규칙 — 반드시 지킬 것]
+- 본문에 없는 사실을 지어내지 않는다. 날짜·지명·인명·숫자를 바꾸지 않는다.
+- 사망자 수·피해 규모처럼 본문에 박힌 구체적인 숫자가 가장 센 재료다. 그걸 앞으로 꺼낸다.
+- **대한민국 내에서 발생한 사건이나 인재(人災)는 절대 다루지 마시오.** 글로벌
+  자연재해나 해외의 역사적 공학 실패 사례만 다루시오. 소재 자체가 한국 국내 사건이면
+  이 프롬프트를 거부하고 빈 결과를 내야 한다.
+
+[작성 규칙]
+- 1부: 첫 문장이 전부다. 가장 충격적인 장면이나 숫자 하나를 배경 설명 없이 바로 던진다.
+  마지막은 답을 주지 않고 끊는다.
+- **원인 설명은 1부의 3~4번째 문장쯤부터 시작한다.** 첫 문장에 원인·배경을 넣지 마라.
+  나머지 문장은 전부 **무슨 일이 있었는지**에 쓴다.
+- 2부: 1부의 의문을 한 문장으로 되짚고 바로 본론. **왜 그런 공학적·구조적 실패가
+  일어났는지**를 설명한다(본문에 근거가 있는 범위 안에서). 마지막은 시청자에게 묻고
+  끝낸다.
+- **1부가 던진 질문에 2부는 반드시 정면으로 답한다.** 답이 본문에 없으면 "정확한 원인은
+  아직도 밝혀지지 않았다"고 분명히 말한 뒤 이어간다.
+- 1부 합계 약 {part1_chars}자, 2부 합계 약 {part2_chars}자. **부마다 10~15개의 짧은
+  문장(JSON object)으로 잘게 쪼갠다.**
+
+[말투 — 이게 제일 중요하다]
+글이 아니라 말을 쓴다. 소리 내어 읽었을 때 로봇 같거나 교양 다큐멘터리 같으면 실패다.
+- **매우 짧게 끊는다.** `text` 하나는 영상에서 1~2초만 휙 지나가는 '자막 한 칸'이다.
+  15~20자가 넘어가면 무조건 두 개의 문장으로 강제로 쪼갠다.
+- **추임새와 감탄사 필수:** "근데,", "진짜 소름 돋는 건,", "와, 미쳤지?", "이게 말이
+  돼?" 같은 구어체 추임새를 적극적으로 넣는다.
+- **정적과 호흡:** 충격적인 사실을 말하기 직전에는 말줄임표(`...`)나 쉼표(`,`)를 넣는다.
+- 같은 어미를 세 번 연속 쓰지 않는다. 반말로 쓴다.
+- emphasis 에는 그 문장에서 자막으로 크게 강조할 짧은 조각만 넣는다.
+
+[화면 — '3D 엔지니어링 단면도(isometric cutaway)' 콘셉트 절대 엄수]
+실제 사진을 쓰지 않는다. 대신 우리는 "신비한 건축사전"류 채널처럼 사고 구조물·현장을
+**반투명 3D 단면도로 파헤쳐 보여주는 인포그래픽**으로 화면을 만든다. 문장마다 아래
+두 갈래 중 하나를 네가 직접 정한다(`scene_type` — 이 소재에는 `HISTORICAL_DOC`,
+`MAP_MOTION` 을 쓰지 않는다).
+
+- "VEO": 영상 전체를 통틀어 **딱 한 문장**에만 준다. 가장 센 장면(훅)이다. 보통
+  1부 첫 문장.
+- "AI_IMAGE": 사건·구조 설명. 나머지 전부.
+
+`prompt` 는 VEO/AI_IMAGE 일 때만 채우는 영문 프롬프트다.
+**[경고: 피사체 실종 방지]** 프롬프트 맨 앞에는 반드시 **'사건의 주된 구조물·장면
+(예: 침몰하는 선체 단면, 무너지는 건물의 골조, 균열이 번지는 댐 벽)'**을 구체적으로
+묘사해야 한다.
+
+그 뒤에 아래 스타일 문구를 프롬프트 맨 끝에 쉼표와 함께 무조건 그대로 덧붙인다:
+  ", Semi-stylized 3D engineering diagram, isometric cutaway view, neutral gray
+   studio background, clean clay-render texture, glowing red technical lines
+   pointing to key parts, 8k resolution, smooth camera movement, no text,
+   no watermark"
+
+**[VEO 무브먼트 지시]**
+VEO 로 가는 문장은 아래와 같은 차분한 인포그래픽 무브먼트를 반드시 지시한다.
+- "slow smooth orbit revealing the internal structure" (내부 구조가 드러나도록
+  천천히 도는 궤도 회전)
+- "camera glides through the cutaway cross-section" (단면을 가로질러 미끄러지듯
+  이동)
+
+**사실 기반 원칙은 그대로다.** 바뀌는 건 "어떻게 보여줄까"(3D 단면도 스타일)이지
+"무슨 일이 있었나"가 아니다. 본문에 없는 장면을 지어내 그리지 않는다.
+
+`sfx` 는 그 문장이 시작될 때 때릴 소리다. 부마다 3~5문장에 골고루 배정한다.
+- "sub_boom": 충격적인 사실·장면 전환이 나오는 문장
+- "braam": 1부 마지막 클리프행어 한 곳에만
+- "none": 나머지 전부
+
+[출력 형식] 아래 JSON 만 출력한다.
+{{
+  "title_seed": "채널 제목에 쓸 한 줄",
+  "part1": {{"hook_number": "화면 상단에 크게 띄울 호기심 자극 타이틀. 절대 연도나 날짜,
+                              회차 번호를 쓰지 마라.", "lines": [
+    {{"text": "내레이션 한 문장 (반드시 15~20자 이내로 짧게)",
+     "scene_type": "VEO | AI_IMAGE",
+     "prompt": "위 스타일 문구로 끝나는 영문 프롬프트",
+     "sfx": "sub_boom | braam | none",
+     "emphasis": ["자막에서 크게 강조할 조각"]}}
+  ]}},
+  "part2": {{"hook_number": "2부 화면 상단 타이틀. 역시 연도나 날짜 금지.",
+              "lines": [ ...위와 같은 구조... ]}}
+}}
+"""
+
+
 def generate(
     candidate: StoryCandidate,
     provider: LLMProvider | None,
@@ -235,24 +330,32 @@ def generate(
         if script is not None:
             return script
 
-    return (
-        _sillok_template_script(candidate)
-        if candidate.dataset == "sillok"
-        else _template_script(candidate)
-    )
+    if candidate.dataset == "sillok":
+        return _sillok_template_script(candidate)
+    if candidate.dataset == "disaster":
+        return _disaster_template_script(candidate)
+    return _template_script(candidate)
 
 
 def _prompt(candidate: StoryCandidate, part1_chars: int, part2_chars: int) -> str:
     """소재에 맞는 프롬프트를 고른다.
 
-    문화재는 "이름/지정 등급/해설문", 실록은 "왕대·날짜/국역 전문"이라 재료의 모양이
-    아예 다르다. `dataset` 하나로 갈린다.
+    문화재는 "이름/지정 등급/해설문", 실록은 "왕대·날짜/국역 전문", 재난은
+    "제목/위키백과 본문"이라 재료의 모양이 아예 다르다. `dataset` 하나로 갈린다.
     """
     if candidate.dataset == "sillok":
         return SILLOK_PROMPT.format(
             headline=candidate.headline,
             headline_number=candidate.headline_number,
             categories=", ".join(candidate.topic_tags) or "(없음)",
+            context=candidate.context,
+            part1_chars=part1_chars,
+            part2_chars=part2_chars,
+        )
+
+    if candidate.dataset == "disaster":
+        return GLOBAL_DISASTER_PROMPT.format(
+            headline=candidate.headline,
             context=candidate.context,
             part1_chars=part1_chars,
             part2_chars=part2_chars,
@@ -443,6 +546,18 @@ FALLBACK_IMAGE_PROMPT = (
     f"{CINEMATIC_STYLE}"
 )
 
+# 재난 소재(3D 엔지니어링 단면도) 전용 고정 스타일. LLM 이 없을 때만 쓰인다.
+ENGINEERING_DIAGRAM_STYLE = (
+    "Semi-stylized 3D engineering diagram, isometric cutaway view, neutral "
+    "gray studio background, clean clay-render texture, glowing red "
+    "technical lines pointing to key parts, 8k resolution, smooth camera "
+    "movement, no text, no watermark"
+)
+FALLBACK_DISASTER_IMAGE_PROMPT = (
+    f"a large structure with visible structural damage and cracks, "
+    f"{ENGINEERING_DIAGRAM_STYLE}"
+)
+
 _HANJA = re.compile(r"[\u4e00-\u9fff]{2,}")
 
 
@@ -516,6 +631,58 @@ def _sillok_template_script(candidate: StoryCandidate) -> Script:
         title_seed=candidate.headline,
         part1=ScriptPart(part=1, hook_number=when, lines=part1_lines),
         part2=ScriptPart(part=2, hook_number=when, lines=part2_lines),
+        source_note=f"출처: {candidate.source_name}",
+        is_sample=candidate.is_sample,
+    )
+
+
+def _disaster_template_script(candidate: StoryCandidate) -> Script:
+    """LLM 없이 위키백과 본문만으로 짜는 대본.
+
+    본문 문단을 그대로 나눠 쓴다 — 사실 재료를 임의로 바꾸지 않는다는 원칙은
+    실록 폴백과 같다.
+    """
+    queries_ko = candidate.image_queries_ko or [candidate.subject or "재난"]
+    queries_en = candidate.image_queries_en or ["disaster"]
+    facts = [fact for fact in candidate.facts if fact]
+
+    def line(
+        index: int,
+        text: str,
+        emphasis: list[str] | None = None,
+        scene_type: str = "AI_IMAGE",
+        sfx: str = "none",
+    ) -> ScriptLine:
+        return ScriptLine(
+            text=text,
+            spoken_text=read_aloud(text),
+            visual_query_ko=queries_ko[index % len(queries_ko)],
+            visual_query_en=queries_en[index % len(queries_en)],
+            show_chart=False,
+            emphasis=emphasis or [],
+            scene_type=scene_type,
+            prompt=FALLBACK_DISASTER_IMAGE_PROMPT if scene_type in ("VEO", "AI_IMAGE") else "",
+            sfx=sfx,
+        )
+
+    part1_lines = [
+        line(0, f"{candidate.headline}, 실제로 있었던 일이야.", emphasis=[candidate.headline], scene_type="VEO")
+    ]
+    part1_lines += [line(i, fact) for i, fact in enumerate(facts[:6], start=1)]
+    part1_lines.append(line(7, "그래서 원인이 뭐였을까?", emphasis=["원인"], sfx="braam"))
+
+    part2_lines = [line(0, "1부에서 남긴 질문이었지.")]
+    part2_lines += [line(i, fact) for i, fact in enumerate(facts[6:12], start=1)]
+    part2_lines.append(
+        line(7, "위키백과에는 여기까지만 나와 있어.", emphasis=["여기까지만"], sfx="sub_boom")
+    )
+    part2_lines.append(line(8, "너는 이게 왜 일어났다고 생각해?"))
+
+    return Script(
+        topic_key=candidate.topic_key,
+        title_seed=candidate.headline,
+        part1=ScriptPart(part=1, hook_number=candidate.headline, lines=part1_lines),
+        part2=ScriptPart(part=2, hook_number=candidate.headline, lines=part2_lines),
         source_note=f"출처: {candidate.source_name}",
         is_sample=candidate.is_sample,
     )
