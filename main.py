@@ -237,8 +237,10 @@ def _cloud_check(settings, generate: bool) -> int:
 
     logger.info("5) 이미지 1장을 실제로 만들어 봅니다…")
     path = client.generate(
-        "dark historical Joseon dynasty night sky over a mountain village, "
-        "chiaroscuro lighting, heavy volumetric fog, eerie atmosphere, 35mm film grain, 8k"
+        "a large ship structure partially submerged with visible hull damage, "
+        "Semi-stylized 3D engineering diagram, isometric cutaway view, neutral "
+        "gray studio background, clean clay-render texture, glowing red "
+        "technical lines pointing to key parts, 8k resolution, no text, no watermark"
     )
     if path is None:
         logger.error(
@@ -248,6 +250,11 @@ def _cloud_check(settings, generate: bool) -> int:
         return 1
 
     logger.info(f"5) 성공: {path}")
+    sample_dir = OUTPUT_DIR / "sample_images"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    sample_copy = sample_dir / f"sample{path.suffix}"
+    sample_copy.write_bytes(path.read_bytes())
+    logger.info(f"5) 확인용 사본: {sample_copy}")
     logger.info(f"6) {guard.summary()}")
     return 0
 
