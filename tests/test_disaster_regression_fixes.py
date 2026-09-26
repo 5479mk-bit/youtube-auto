@@ -278,6 +278,42 @@ def test_trim_and_pad_output_is_lossless_wav(tmp_path):
     assert not src_path.exists()
 
 
+def test_pad_to_duration_freezes_last_frame_instead_of_stretching_metadata():
+    # Veo 가 반올림 오차로 요청보다 몇십 ms 짧게 돌려줘도, with_duration()으로 길이
+    # 메타데이터만 늘리면 존재하지 않는 프레임을 읽으려다 깨질 수 있다 — 마지막
+    # 프레임을 진짜로 이어붙여 항상 실제 프레임이 있게 해야 한다("8초 만들었으면
+    # 8초 다 써야지" 피드백에 맞춰 씬 길이를 생성 길이에 바짝 맞췄기 때문에 이제
+    # 이 경로가 실제로 자주 탄다).
+    from moviepy import ImageClip
+
+    from src.render.motion_sources import _pad_to_duration
+
+    short_clip = ImageClip(np.zeros((10, 10, 3), dtype=np.uint8)).with_duration(1.0)
+    padded = _pad_to_duration(short_clip, target_duration=1.5)
+    assert padded.duration == pytest.approx(1.5, abs=0.02)
+
+
+def test_pad_to_duration_is_noop_when_already_long_enough():
+    from moviepy import ImageClip
+
+    from src.render.motion_sources import _pad_to_duration
+
+    clip = ImageClip(np.zeros((10, 10, 3), dtype=np.uint8)).with_duration(2.0)
+    result = _pad_to_duration(clip, target_duration=1.0)
+    assert result is clip
+
+
+def test_veo_scene_default_floor_matches_full_generated_duration():
+    # config 기본값(veo.duration_seconds=8)과 min_scene_seconds 가 같은 값이어야
+    # "실제로 만든 8초를 다 쓴다"는 요구가 지켜진다.
+    from src.settings import load_settings
+
+    settings = load_settings()
+    assert settings.get("veo.min_scene_seconds", None) == settings.get(
+        "veo.duration_seconds", None
+    )
+
+
 def test_ai_image_scene_uses_depth_parallax_not_flat_zoom():
     # 평평한 줌(render_ai_image_motion)으로는 "화면이 정지 사진 같다"는 지적이
     # 안 풀렸다 — 사진 컷과 동일한 깊이 기반 파랄랙스를 타야 한다.

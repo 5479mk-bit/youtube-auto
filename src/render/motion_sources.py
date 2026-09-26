@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from loguru import logger
-from moviepy import VideoFileClip
+from moviepy import ImageClip, VideoFileClip, concatenate_videoclips
 
 from ..models import PhotoCredit, Scene
 from ..motion.parallax import make_parallax_clip
@@ -32,6 +32,23 @@ VEO_PROMPT = (
     "다큐멘터리 영상. {subject}. 카메라가 아주 천천히 움직이고, 장면 속 사람과 차량이"
     " 자연스럽게 움직인다. 과장된 효과 없이 실제 촬영한 것처럼."
 )
+
+
+def _pad_to_duration(clip, target_duration: float):
+    """생성 영상이 목표 길이보다 짧으면 마지막 프레임을 정지시켜 채운다.
+
+    씬 길이(scene.duration)는 이제 실제 생성 길이(veo.duration_seconds)를 다 쓰도록
+    맞춰지는데, Veo 가 요청한 초 수를 프레임 단위로 반올림해 실제로는 몇십 ms 짧게
+    돌려줄 수 있다. `with_duration()`으로 길이 메타데이터만 늘리면 존재하지 않는
+    프레임을 읽으려다 리더가 깨질 위험이 있어, 마지막 프레임을 진짜 정지 이미지로
+    이어붙여 항상 실제 프레임이 있게 한다.
+    """
+    shortfall = target_duration - clip.duration
+    if shortfall <= 0.02:
+        return clip
+    last_frame = clip.get_frame(max(clip.duration - 0.04, 0))
+    freeze = ImageClip(last_frame).with_duration(shortfall)
+    return concatenate_videoclips([clip, freeze])
 
 
 class PhotoMissing(RuntimeError):
@@ -171,7 +188,7 @@ def _official_video_clip(path: Path, scene: Scene, size: tuple[int, int]):
         y1 = max((height - new_height) // 2, 0)
         clip = clip.cropped(y1=y1, height=new_height)
 
-    return clip.resized(size)
+    return _pad_to_duration(clip.resized(size), scene.duration)
 
 
 def _veo_clip(veo_client, image_path: Path, scene: Scene, size: tuple[int, int]):
@@ -193,6 +210,8 @@ def _veo_clip(veo_client, image_path: Path, scene: Scene, size: tuple[int, int])
         return None
 
     clip = VideoFileClip(str(clip_path)).without_audio()
-    # 생성 길이가 씬보다 짧으면 남는 구간은 마지막 프레임이 아니라 컷 길이에 맞춰 자른다.
+    # 생성 길이가 씬보다 길면 씬 길이에 맞춰 자르고, 짧으면(반올림 오차 등) 마지막
+    # 프레임을 정지시켜 채운다 — 어느 쪽이든 돈 주고 만든 영상은 끝까지 쓴다.
     usable = min(clip.duration, scene.duration)
-    return clip.subclipped(0, usable).resized(size)
+    clip = clip.subclipped(0, usable).resized(size)
+    return _pad_to_duration(clip, scene.duration)
