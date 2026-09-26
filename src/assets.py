@@ -26,14 +26,35 @@ AUDIO_DRONE = ASSETS_DIR / "audio" / "dark_ambient_drone.mp3"
 # "배경음이 초저음 드론뿐이라 웅장함이 없다"는 지적에 맞춰 추가한 화음 패드(합성,
 # 특정 곡 아님) — video_builder._load_bgm 이 드론보다 우선해서 쓴다.
 AUDIO_EPIC_PAD = ASSETS_DIR / "audio" / "epic_pad.mp3"
-AUDIO_SUB_BOOM = ASSETS_DIR / "audio" / "sub_boom.wav"
 AUDIO_PAPER_RUSTLE = ASSETS_DIR / "audio" / "paper_rustle.wav"
-AUDIO_BRAAM = ASSETS_DIR / "audio" / "braam.wav"
-# "효과음이 sub_boom/braam 뿐이라 밋밋하다"는 지적에 맞춰 추가한 갈래(전부 ffmpeg
-# 합성이라 저작권 걱정 없음) — 구조물 균열/물·잔해 쏟아짐/경보.
-AUDIO_CRACK = ASSETS_DIR / "audio" / "crack.wav"
-AUDIO_WHOOSH = ASSETS_DIR / "audio" / "whoosh.wav"
-AUDIO_ALARM = ASSETS_DIR / "audio" / "alarm.wav"
+
+# ffmpeg 합성 효과음(사인파+노이즈)은 "짜치다"는 지적을 두 번 받고 폐기했다 — 대신
+# Mixkit(상업적 이용 포함 완전 무료, 출처 표기 불필요) 라이브러리에서 받은 실제
+# 효과음 10개를 태그당 2개씩 묶었다(download_assets.sh 참고). video_builder 가
+# 태그 하나가 나올 때마다 풀에서 무작위로 골라 써서, 같은 태그가 여러 번 나와도
+# 매번 다른 소리가 난다.
+SFX_POOLS: dict[str, list[Path]] = {
+    "sub_boom": [
+        ASSETS_DIR / "audio" / "sfx_boom_1.mp3",
+        ASSETS_DIR / "audio" / "sfx_boom_2.mp3",
+    ],
+    "crack": [
+        ASSETS_DIR / "audio" / "sfx_crack_1.mp3",
+        ASSETS_DIR / "audio" / "sfx_crack_2.mp3",
+    ],
+    "whoosh": [
+        ASSETS_DIR / "audio" / "sfx_whoosh_1.mp3",
+        ASSETS_DIR / "audio" / "sfx_whoosh_2.mp3",
+    ],
+    "alarm": [
+        ASSETS_DIR / "audio" / "sfx_alarm_1.mp3",
+        ASSETS_DIR / "audio" / "sfx_alarm_2.mp3",
+    ],
+    "braam": [
+        ASSETS_DIR / "audio" / "sfx_braam_1.mp3",
+        ASSETS_DIR / "audio" / "sfx_braam_2.mp3",
+    ],
+}
 
 _REQUIRED = (FONT_MYEONGJO, FONT_SERIF_HANJA, FONT_SANS, TEXTURE_HANJI, MAP_DAEDONG, OVERLAY_FOG, AUDIO_DRONE)
 

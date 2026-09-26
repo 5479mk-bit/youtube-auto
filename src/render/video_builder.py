@@ -354,36 +354,39 @@ def _build_audio(part: ScriptPart, settings, duration: float, scenes: list[Scene
     return CompositeAudioClip(layers).with_duration(total)
 
 
-_SFX_FILES = {
-    "sub_boom": assets.AUDIO_SUB_BOOM,
-    "paper_rustle": assets.AUDIO_PAPER_RUSTLE,
-    "braam": assets.AUDIO_BRAAM,
-    "crack": assets.AUDIO_CRACK,
-    "whoosh": assets.AUDIO_WHOOSH,
-    "alarm": assets.AUDIO_ALARM,
-}
+_SFX_FILES = {"paper_rustle": assets.AUDIO_PAPER_RUSTLE}
+
+
+def _pick_sfx_path(tag: str) -> Path | None:
+    """태그에 맞는 실제 효과음 파일을 하나 고른다.
+
+    `assets.SFX_POOLS` 는 태그당 실제 효과음(Mixkit, 무료 라이선스) 2개씩을 묶어
+    둔다 — 같은 태그가 여러 번 나와도 매번 다른 소리가 나게 무작위로 고른다.
+    `paper_rustle` 처럼 풀이 없는 태그는 `_SFX_FILES` 단일 경로를 그대로 쓴다.
+    """
+    pool = assets.SFX_POOLS.get(tag)
+    if pool:
+        existing = [path for path in pool if path.exists()]
+        if existing:
+            return random.choice(existing)
+    return _SFX_FILES.get(tag)
 
 
 def _sfx_layers(scenes: list[Scene], settings, total: float):
-    """`sfx` 태그가 붙은 컷이 시작될 때 그 태그에 맞는 소리를 얹는다.
-
-    세 가지가 서로 다른 소리다 — sub_boom(초저역 타격), paper_rustle(사료 컷의 종이
-    넘기는 소리), braam(1부 클리프행어의 길게 끄는 저음). 예전엔 셋 다 sub_boom 을
-    길이만 다르게 재활용해서 사료 컷에도 타격음이 울렸다. 타격음은 초저역이라
-    내레이션과 주파수가 겹치지 않는다.
-    """
+    """`sfx` 태그가 붙은 컷이 시작될 때 그 태그에 맞는 소리를 얹는다."""
     gain = _db_to_gain(settings.get("audio.sfx_volume_db", -4))
     layers = []
     for scene in scenes:
         if scene.sfx == "none" or scene.start >= total:
             continue
-        path = _SFX_FILES.get(scene.sfx)
+        path = _pick_sfx_path(scene.sfx)
         if path is None or not path.exists():
-            # 매핑된 파일 경로가 없거나 실제로 없으면(에셋 다운로드 누락 등) 완전히
-            # 조용해지는 대신 기본 임팩트음으로 대체한다 — 사용자가 요청한 안전 장치.
-            path = assets.AUDIO_SUB_BOOM
-            if not path.exists():
+            # 매핑된 파일이 없거나 실제로 없으면(에셋 다운로드 누락 등) 완전히
+            # 조용해지는 대신 기본 임팩트음 풀에서 대체한다 — 안전 장치.
+            fallback_pool = [p for p in assets.SFX_POOLS.get("sub_boom", []) if p.exists()]
+            if not fallback_pool:
                 continue
+            path = random.choice(fallback_pool)
         try:
             hit = AudioFileClip(str(path))
         except Exception as exc:

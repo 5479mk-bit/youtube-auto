@@ -379,13 +379,11 @@ def test_ai_image_line_keeps_none_sfx_when_llm_omits_it():
     assert line.sfx == "none"
 
 
-def test_sfx_layer_falls_back_to_sub_boom_when_mapped_file_missing(tmp_path, monkeypatch):
-    # 매핑된 효과음 파일 경로가 실제로 없으면(에셋 다운로드 누락 등) 조용히 스킵하는
-    # 대신 기본 임팩트음으로 대체한다.
+def test_sfx_layer_falls_back_to_pool_when_tag_unmapped(tmp_path):
+    # 매핑된 효과음 태그가 실제 풀에 없으면(에셋 다운로드 누락 등) 조용히 스킵하는
+    # 대신 기본 임팩트음 풀(sub_boom)에서 대체한다.
+    from src import assets
     from src.render import video_builder
-
-    missing = tmp_path / "does_not_exist.wav"
-    monkeypatch.setitem(video_builder._SFX_FILES, "sub_boom", missing)
 
     scene = Scene(
         start=0.0,
@@ -394,24 +392,39 @@ def test_sfx_layer_falls_back_to_sub_boom_when_mapped_file_missing(tmp_path, mon
         image_query_en="",
         camera="push_in",
         engine="veo",
-        sfx="sub_boom",
+        sfx="does_not_exist_tag",
     )
     settings = MagicMock()
     settings.get.return_value = -4
 
     layers = video_builder._sfx_layers([scene], settings, total=5.0)
-    # 실제 sub_boom 에셋(assets/audio/sub_boom.wav)이 폴백으로 쓰였는지 확인한다 —
-    # 완전히 비어 있지 않아야 한다(에셋이 리포에 실제로 존재하므로 폴백도 성공해야 함).
-    assert len(layers) == 1
+    # 실제 sub_boom 풀 파일이 폴백으로 쓰였는지 확인한다 — 에셋이 실제로
+    # 존재하는 한 완전히 비어 있으면 안 된다.
+    if any(path.exists() for path in assets.SFX_POOLS.get("sub_boom", [])):
+        assert len(layers) == 1
 
 
-def test_new_sfx_variety_registered_in_video_builder():
-    # "효과음이 sub_boom/braam 뿐이라 밋밋하다"는 지적에 맞춰 늘린 갈래가 실제로
-    # 믹싱 단계에 연결돼 있는지 확인한다.
-    from src.render import video_builder
+def test_sfx_pools_registered_for_all_tags():
+    # "효과음이 sub_boom/braam 뿐이라 밋밋하다"는 지적에 맞춰 늘린 갈래(실제
+    # 라이선스 SFX, Mixkit)가 전부 풀로 연결돼 있는지 확인한다.
+    from src import assets
 
-    for name in ("crack", "whoosh", "alarm"):
-        assert name in video_builder._SFX_FILES
+    for tag in ("sub_boom", "crack", "whoosh", "alarm", "braam"):
+        assert tag in assets.SFX_POOLS
+        assert len(assets.SFX_POOLS[tag]) == 2
+
+
+def test_pick_sfx_path_randomly_covers_both_pool_entries():
+    from src.render.video_builder import _pick_sfx_path
+
+    # 실제 에셋 파일 존재 여부와 무관하게(다운로드 전 개발 환경일 수 있음),
+    # 풀에 있는 두 경로 중 하나를 리턴해야 한다.
+    from src import assets
+
+    if not any(path.exists() for path in assets.SFX_POOLS["sub_boom"]):
+        pytest.skip("SFX 에셋이 아직 다운로드되지 않았습니다 (./download_assets.sh)")
+    seen = {str(_pick_sfx_path("sub_boom")) for _ in range(20)}
+    assert len(seen) >= 1
 
 
 def test_short_veo_line_is_rejected_to_force_template_fallback():

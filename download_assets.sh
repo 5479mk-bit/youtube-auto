@@ -64,21 +64,6 @@ else
     assets/audio/dark_ambient_drone.mp3 -loglevel error
   echo "    만듦: assets/audio/dark_ambient_drone.mp3"
 fi
-if have assets/audio/sub_boom.wav; then
-  echo "    건너뜀 (이미 있음): assets/audio/sub_boom.wav"
-else
-  # 충격적 사실·전환에 때리는 묵직한 타격음. 저음(80Hz) 몸통에 아주 짧은 고역
-  # 클릭(타격 순간의 "딱")을 얹어야 진짜 임팩트처럼 들린다 — 저음 하나만 있으면
-  # 뭉툭하고 "짜치게" 들린다는 지적이 있었다.
-  "$FFMPEG" -y \
-    -f lavfi -i "sine=frequency=80:duration=1.5" \
-    -f lavfi -i "anoisesrc=d=0.05:c=white:a=1.0" \
-    -filter_complex "[0]afade=t=out:st=0.1:d=1.4,lowpass=f=110,volume=1.5[boom];\
-[1]highpass=f=2500,afade=t=out:st=0.015:d=0.04,volume=0.9[click];\
-[boom][click]amix=inputs=2:duration=first:dropout_transition=0" \
-    assets/audio/sub_boom.wav -loglevel error
-  echo "    만듦: assets/audio/sub_boom.wav"
-fi
 if have assets/audio/paper_rustle.wav; then
   echo "    건너뜀 (이미 있음): assets/audio/paper_rustle.wav"
 else
@@ -89,57 +74,40 @@ else
     assets/audio/paper_rustle.wav -loglevel error
   echo "    만듦: assets/audio/paper_rustle.wav"
 fi
-if have assets/audio/braam.wav; then
-  echo "    건너뜀 (이미 있음): assets/audio/braam.wav"
-else
-  # 1부 마지막 클리프행어 전용 — sub_boom 보다 낮고 길게, 여운(에코)을 크게 준다.
-  "$FFMPEG" -y -f lavfi -i "sine=frequency=42:duration=2.6" \
-    -af "afade=t=out:st=0.2:d=2.4,lowpass=f=95,aecho=0.8:0.9:600:0.5,volume=1.6" \
-    assets/audio/braam.wav -loglevel error
-  echo "    만듦: assets/audio/braam.wav"
-fi
-# 아래 세 개는 "효과음이 sub_boom/braam 뿐이라 밋밋하다"는 지적에 맞춰 추가했다 —
-# 화면 내용에 맞는 효과음을 고를 수 있게 갈래를 늘린다(구조물 균열/물·잔해 쏟아짐/
-# 경보). 전부 sub_boom 과 같은 방식(ffmpeg 합성)이라 저작권 걱정이 없다.
-if have assets/audio/crack.wav; then
-  echo "    건너뜀 (이미 있음): assets/audio/crack.wav"
-else
-  # 구조물이 갈라지는 순간 — 날카로운 노이즈 버스트(고역 "딱") 밑에 짧은 저음
-  # "퍽"을 깔아 몸집을 준다. 노이즈 하나만 쓰면 라디오 잡음처럼 얇게 들린다.
-  "$FFMPEG" -y \
-    -f lavfi -i "anoisesrc=d=0.35:c=white:a=0.9" \
-    -f lavfi -i "sine=frequency=180:duration=0.3" \
-    -filter_complex "[0]highpass=f=1200,afade=t=in:st=0:d=0.005,afade=t=out:st=0.06:d=0.2,volume=1.3[snap];\
-[1]lowpass=f=300,afade=t=out:st=0.02:d=0.25,volume=0.5[thud];\
-[snap][thud]amix=inputs=2:duration=first:dropout_transition=0" \
-    assets/audio/crack.wav -loglevel error
-  echo "    만듦: assets/audio/crack.wav"
-fi
-if have assets/audio/whoosh.wav; then
-  echo "    건너뜀 (이미 있음): assets/audio/whoosh.wav"
-else
-  # 물·잔해가 쏟아지거나 카메라가 빠르게 휩쓸고 지나가는 순간 — 저역에서 고역으로
-  # 실제로 올라가는 주파수 스윕(aevalsrc)에 핑크노이즈 질감을 살짝 얹는다.
-  # 예전엔 고정 대역폭 밴드패스라 스윕감이 없어 그냥 뭉개진 노이즈로 들렸다.
-  "$FFMPEG" -y \
-    -f lavfi -i "aevalsrc=0.6*sin(2*PI*(250+900*t)*t):d=0.9" \
-    -f lavfi -i "anoisesrc=d=0.9:c=pink:a=0.5" \
-    -filter_complex "[0]afade=t=in:st=0:d=0.15,afade=t=out:st=0.55:d=0.35[sweep];\
-[1]bandpass=f=1200:width_type=o:w=2,afade=t=in:st=0:d=0.2,afade=t=out:st=0.55:d=0.35[noise];\
-[sweep][noise]amix=inputs=2:duration=longest,volume=1.2" \
-    assets/audio/whoosh.wav -loglevel error
-  echo "    만듦: assets/audio/whoosh.wav"
-fi
-if have assets/audio/alarm.wav; then
-  echo "    건너뜀 (이미 있음): assets/audio/alarm.wav"
-else
-  # 경보·위험 신호 — 주파수가 위아래로 흔들리는 사이렌형 진동(진짜 경보기에 가깝다).
-  # 예전엔 고정음 트레몰로라 장난감 삐삐 소리 같았다.
-  "$FFMPEG" -y -f lavfi -i "aevalsrc=0.5*sin(2*PI*(900+300*sin(2*PI*2.2*t))*t):d=1.2" \
-    -af "afade=t=in:st=0:d=0.05,afade=t=out:st=1.0:d=0.2,volume=1.0" \
-    assets/audio/alarm.wav -loglevel error
-  echo "    만듦: assets/audio/alarm.wav"
-fi
+# ffmpeg 합성 효과음(사인파+노이즈)은 "짜치다"는 지적을 두 번 받고 폐기했다.
+# 대신 Mixkit(상업적 이용 포함 완전 무료, 출처 표기 불필요 — mixkit.co/license)
+# 라이브러리에서 재난 컨셉에 맞는 실제 효과음 10개를 받아, 각각 임팩트 구간만
+# 잘라내고(afade 로 끊김 없이) 라우드니스를 비슷하게 맞춘다. 태그 하나당 2개씩
+# 묶어두면(SFX_POOLS, video_builder.py) 같은 태그가 여러 번 나와도 매번 같은
+# 소리만 반복되지 않는다.
+declare -A SFX_TRACKS=(
+  [sfx_boom_1]="788 3.0 7.1"      # Big cinematic impact
+  [sfx_boom_2]="2782 4.57 -5.8"   # Epic impact afar explosion
+  [sfx_crack_1]="2958 4.0 -2.5"   # Collapsing structure
+  [sfx_crack_2]="1687 4.05 2.3"   # Dramatic metal explosion impact
+  [sfx_whoosh_1]="1143 4.1 5.9"   # Cinematic whoosh deep impact
+  [sfx_whoosh_2]="2405 4.0 5.0"   # Thunder strike in storm
+  [sfx_alarm_1]="995 3.5 9.6"     # Classic alarm
+  [sfx_alarm_2]="990 4.0 -5.4"    # Vintage warning alarm
+  [sfx_braam_1]="1278 6.0 6.3"    # Distant thunder explosion
+  [sfx_braam_2]="2974 3.24 1.4"   # Orchestral emergency alarm
+)
+for name in "${!SFX_TRACKS[@]}"; do
+  dest="assets/audio/${name}.mp3"
+  if have "$dest"; then
+    echo "    건너뜀 (이미 있음): $dest"
+    continue
+  fi
+  read -r sfx_id trim_sec gain_db <<< "${SFX_TRACKS[$name]}"
+  raw="/tmp/${name}_raw.mp3"
+  python3 tools/fetch_asset.py "https://assets.mixkit.co/active_storage/sfx/${sfx_id}/${sfx_id}-preview.mp3" "$raw"
+  fade_start=$(python3 -c "print(max(${trim_sec}-0.2, 0.1))")
+  "$FFMPEG" -y -i "$raw" -t "$trim_sec" \
+    -af "volume=${gain_db}dB,afade=t=out:st=${fade_start}:d=0.2" \
+    "$dest" -loglevel error
+  rm -f "$raw"
+  echo "    만듦: $dest"
+done
 if have assets/audio/epic_pad.mp3; then
   echo "    건너뜀 (이미 있음): assets/audio/epic_pad.mp3"
 else
