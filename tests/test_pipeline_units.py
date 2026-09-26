@@ -339,10 +339,15 @@ class TestReadAloud:
 
 class TestPacing:
     def test_hook_is_slower_and_gets_a_longer_pause(self):
+        # 절대 배속(부호)이 아니라 본문보다 상대적으로 느린지를 본다 — 사용자 청취
+        # 검증으로 전체 기준 속도가 "-"(0.85~0.9배속)에서 "+"(1.05~1.1배속)로
+        # 바뀌었지만, 훅이 본문보다 느리게 시작한다는 관계는 그대로다.
+        from src.narration.pacing import BODY_RATE, _rate_to_percent
+
         part = make_part([("훅", 2.0, False), ("본문", 3.0, False), ("마무리", 3.0, False)])
         apply_pacing(part)
         assert part.lines[0].pause_after == pytest.approx(HOOK_PAUSE)
-        assert part.lines[0].speech_rate.startswith("-")
+        assert _rate_to_percent(part.lines[0].speech_rate) < _rate_to_percent(BODY_RATE)
 
     def test_every_line_gets_a_pause_so_sentences_never_collide(self):
         part = make_part([(f"문장{index}", 3.0, False) for index in range(5)])

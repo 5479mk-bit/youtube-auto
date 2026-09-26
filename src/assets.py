@@ -26,6 +26,11 @@ AUDIO_DRONE = ASSETS_DIR / "audio" / "dark_ambient_drone.mp3"
 AUDIO_SUB_BOOM = ASSETS_DIR / "audio" / "sub_boom.wav"
 AUDIO_PAPER_RUSTLE = ASSETS_DIR / "audio" / "paper_rustle.wav"
 AUDIO_BRAAM = ASSETS_DIR / "audio" / "braam.wav"
+# "효과음이 sub_boom/braam 뿐이라 밋밋하다"는 지적에 맞춰 추가한 갈래(전부 ffmpeg
+# 합성이라 저작권 걱정 없음) — 구조물 균열/물·잔해 쏟아짐/경보.
+AUDIO_CRACK = ASSETS_DIR / "audio" / "crack.wav"
+AUDIO_WHOOSH = ASSETS_DIR / "audio" / "whoosh.wav"
+AUDIO_ALARM = ASSETS_DIR / "audio" / "alarm.wav"
 
 _REQUIRED = (FONT_MYEONGJO, FONT_SERIF_HANJA, FONT_SANS, TEXTURE_HANJI, MAP_DAEDONG, OVERLAY_FOG, AUDIO_DRONE)
 

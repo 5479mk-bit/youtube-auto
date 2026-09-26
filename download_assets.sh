@@ -92,6 +92,37 @@ else
     assets/audio/braam.wav -loglevel error
   echo "    만듦: assets/audio/braam.wav"
 fi
+# 아래 세 개는 "효과음이 sub_boom/braam 뿐이라 밋밋하다"는 지적에 맞춰 추가했다 —
+# 화면 내용에 맞는 효과음을 고를 수 있게 갈래를 늘린다(구조물 균열/물·잔해 쏟아짐/
+# 경보). 전부 sub_boom 과 같은 방식(ffmpeg 합성)이라 저작권 걱정이 없다.
+if have assets/audio/crack.wav; then
+  echo "    건너뜀 (이미 있음): assets/audio/crack.wav"
+else
+  # 구조물이 갈라지는 순간 — 짧고 날카로운 노이즈 버스트.
+  "$FFMPEG" -y -f lavfi -i "anoisesrc=d=0.35:c=white:a=0.9" \
+    -af "highpass=f=800,afade=t=in:st=0:d=0.01,afade=t=out:st=0.1:d=0.25,volume=1.3" \
+    assets/audio/crack.wav -loglevel error
+  echo "    만듦: assets/audio/crack.wav"
+fi
+if have assets/audio/whoosh.wav; then
+  echo "    건너뜀 (이미 있음): assets/audio/whoosh.wav"
+else
+  # 물·잔해가 쏟아지거나 카메라가 빠르게 휩쓸고 지나가는 순간 — 저역에서 고역으로
+  # 쓸려 올라가는 노이즈.
+  "$FFMPEG" -y -f lavfi -i "anoisesrc=d=0.8:c=pink:a=0.8" \
+    -af "asetrate=44100*1.0,bandpass=f=400:width_type=o:w=2,afade=t=in:st=0:d=0.3,afade=t=out:st=0.5:d=0.3,volume=1.2" \
+    assets/audio/whoosh.wav -loglevel error
+  echo "    만듦: assets/audio/whoosh.wav"
+fi
+if have assets/audio/alarm.wav; then
+  echo "    건너뜀 (이미 있음): assets/audio/alarm.wav"
+else
+  # 경보·위험 신호 — 고음이 두 번 펄스로 울린다.
+  "$FFMPEG" -y -f lavfi -i "sine=frequency=1100:duration=1.0" \
+    -af "tremolo=f=5:d=0.9,afade=t=out:st=0.8:d=0.2,volume=0.9" \
+    assets/audio/alarm.wav -loglevel error
+  echo "    만듦: assets/audio/alarm.wav"
+fi
 
 echo ">>> [5/5] 밤안개 오버레이 (합성 시 확대해 쓰므로 절반 해상도로 만든다)"
 if have assets/overlays/fog.mp4; then

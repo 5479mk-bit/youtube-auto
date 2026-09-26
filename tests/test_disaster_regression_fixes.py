@@ -352,7 +352,7 @@ def test_unrecognized_sfx_tag_falls_back_to_sub_boom_not_silence():
 
     assert _sfx("impact") == "sub_boom"
     assert _sfx("explosion") == "sub_boom"
-    assert _sfx("water_rushing") == "braam"
+    assert _sfx("water_rushing") == "whoosh"
     assert _sfx("완전히-모르는-태그") == "sub_boom"
     assert _sfx("none") == "none"
     assert _sfx(None) == "none"
@@ -403,3 +403,12 @@ def test_sfx_layer_falls_back_to_sub_boom_when_mapped_file_missing(tmp_path, mon
     # 실제 sub_boom 에셋(assets/audio/sub_boom.wav)이 폴백으로 쓰였는지 확인한다 —
     # 완전히 비어 있지 않아야 한다(에셋이 리포에 실제로 존재하므로 폴백도 성공해야 함).
     assert len(layers) == 1
+
+
+def test_new_sfx_variety_registered_in_video_builder():
+    # "효과음이 sub_boom/braam 뿐이라 밋밋하다"는 지적에 맞춰 늘린 갈래가 실제로
+    # 믹싱 단계에 연결돼 있는지 확인한다.
+    from src.render import video_builder
+
+    for name in ("crack", "whoosh", "alarm"):
+        assert name in video_builder._SFX_FILES

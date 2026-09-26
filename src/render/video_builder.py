@@ -358,6 +358,9 @@ _SFX_FILES = {
     "sub_boom": assets.AUDIO_SUB_BOOM,
     "paper_rustle": assets.AUDIO_PAPER_RUSTLE,
     "braam": assets.AUDIO_BRAAM,
+    "crack": assets.AUDIO_CRACK,
+    "whoosh": assets.AUDIO_WHOOSH,
+    "alarm": assets.AUDIO_ALARM,
 }
 
 
