@@ -55,9 +55,13 @@ audio:
   # 예전 값(127.0.0.1:5000/api/synthesize)은 실존하지 않는 엔드포인트였다 — 그래서
   # 항상 연결 거부로 폴백됐다.
   supertonic_url: "http://127.0.0.1:7788/v1/tts"
-  supertonic_voice: M1   # 내장 보이스: M1~M5(남성)/F1~F5(여성). 들어보고 마음에
-                          # 안 들면 이 이름만 바꾸면 된다.
+  supertonic_voice: M1   # 내장 보이스: M1~M5(남성)/F1~F5(여성). 실제 샘플 7개를
+                          # 청취 비교해 M1 로 확정했다(사용자 청취 검증).
   supertonic_lang: ko
+  # 합성 정밀도(diffusion steps, 1~100). 서버 기본값은 낮아 로보틱하게 들린다 —
+  # steps=10/32/64/100 을 청취 비교해 64로 확정했다(사람 목소리에 가깝고, 문장당
+  # 약 14초로 100(약 22초)보다 빠르다). 값을 낮추면 더 로보틱해지는 대신 빨라진다.
+  supertonic_steps: 64
   gemini_voice: Charon        # 차분하고 신뢰감 있는 남성 톤(다큐 내레이터에 맞음)
   gemini_model: gemini-2.5-flash-preview-tts
   gemini_style_prompt: "차분한 다큐멘터리 내레이터처럼, 진짜 사람이 말하듯 자연스러운 속도로"

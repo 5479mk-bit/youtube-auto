@@ -35,11 +35,16 @@ class SupertonicEngine:
         voice: str = "M1",
         lang: str = "ko",
         timeout: int = DEFAULT_TIMEOUT,
+        steps: int | None = None,
     ):
         self.base_url = base_url
         self.voice = voice
         self.lang = lang
         self.timeout = timeout
+        # 합성 정밀도(diffusion steps). 기본값(서버 쪽 낮은 값)은 사람 목소리와
+        # 거리가 있어 로보틱하게 들린다 — 64로 올리면 자연스러워지고, 문장 하나에
+        # 약 14초 걸린다(10이면 2.4초). 목소리 청취 검증(M1, steps=64)으로 확정됐다.
+        self.steps = steps
         self.session = requests.Session()
 
     @property
@@ -49,16 +54,19 @@ class SupertonicEngine:
         return True
 
     def synthesize(self, text: str, rate: str, out_path: Path) -> bool:
+        payload = {
+            "text": text,
+            "voice": self.voice,
+            "lang": self.lang,
+            "speed": _rate_to_speed(rate),
+            "response_format": "wav",
+        }
+        if self.steps is not None:
+            payload["steps"] = self.steps
         try:
             response = self.session.post(
                 self.base_url,
-                json={
-                    "text": text,
-                    "voice": self.voice,
-                    "lang": self.lang,
-                    "speed": _rate_to_speed(rate),
-                    "response_format": "wav",
-                },
+                json=payload,
                 timeout=self.timeout,
             )
             response.raise_for_status()

@@ -205,6 +205,7 @@ def build_tts_engines(settings: Settings) -> list:
         base_url=settings.get("audio.supertonic_url", "http://127.0.0.1:7788/v1/tts"),
         voice=settings.get("audio.supertonic_voice", "M1"),
         lang=settings.get("audio.supertonic_lang", "ko"),
+        steps=settings.get("audio.supertonic_steps", 64),
     )
     gemini = GeminiTTS(
         api_keys=settings.secrets.gemini_api_keys,
