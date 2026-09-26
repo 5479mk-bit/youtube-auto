@@ -520,6 +520,11 @@ def _render_part(
         build_tts_engines(settings),
         work_dir / "audio",
         require_quality=settings.get("audio.require_quality_voice", True),
+        # VEO 로 지정된 문장은 대본 규칙상 15~20자(약 3~4초)라, 씬 길이가 그 문장
+        # 길이를 그대로 물려받으면 Veo 가 실제로 만든 8초짜리 영상도 그만큼만 잘려
+        # 화면 대부분이 정지 이미지처럼 보인다. 무음을 더해 문장 길이를 최소 5.5초로
+        # 맞춘다(실제 생성 길이 veo.duration_seconds=8초보다 짧게 둬 잘리지 않는다).
+        min_veo_line_duration=settings.get("veo.min_scene_seconds", 5.5),
     )
 
     cues = subtitle_builder.build_cues(

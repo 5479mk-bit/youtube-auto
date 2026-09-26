@@ -155,6 +155,129 @@ def test_synthesize_part_falls_back_to_silence_when_quality_not_required(tmp_pat
     assert result.lines[0].audio_path
 
 
+def test_veo_line_is_padded_to_minimum_duration(tmp_path):
+    # VEO 문장이 대본 규칙(15~20자, 약 3~4초)대로 짧게 나오면, scene_planner 가
+    # 그 문장 길이를 그대로 씬 길이로 물려받아 Veo 가 실제로 만든 8초짜리 영상도
+    # 그만큼만 잘려 쓰인다 — "맨처음+중간 2번은 5초 이상 움직여야" 피드백의 원인.
+    # min_veo_line_duration 만큼 무음을 더해 문장 자체의 길이를 늘려야 한다.
+    from src.models import ScriptLine, ScriptPart
+    from src.narration.tts_engine import synthesize_part
+
+    engine = MagicMock()
+    engine.name = "test"
+    engine.enabled = True
+    engine.supports_batch = False
+
+    def fake_synthesize(text, rate, out_path):
+        import subprocess
+
+        import imageio_ffmpeg
+
+        subprocess.run(
+            [
+                imageio_ffmpeg.get_ffmpeg_exe(),
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=1.0",
+                str(out_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        return True
+
+    engine.synthesize.side_effect = fake_synthesize
+
+    part = ScriptPart(
+        part=1,
+        hook_number="훅",
+        lines=[
+            ScriptLine(
+                text="문장", visual_query_ko="", visual_query_en="", scene_type="VEO"
+            )
+        ],
+    )
+    synthesize_part(part, [engine], tmp_path, min_veo_line_duration=5.5)
+    assert part.lines[0].duration >= 5.5
+
+
+def test_non_veo_line_is_not_padded(tmp_path):
+    # min_veo_line_duration 은 VEO 문장에만 적용된다 — AI_IMAGE 등 다른 문장까지
+    # 늘리면 전체 길이(30~40초 목표)가 불필요하게 늘어난다.
+    from src.models import ScriptLine, ScriptPart
+    from src.narration.tts_engine import synthesize_part
+
+    engine = MagicMock()
+    engine.name = "test"
+    engine.enabled = True
+    engine.supports_batch = False
+
+    def fake_synthesize(text, rate, out_path):
+        import subprocess
+
+        import imageio_ffmpeg
+
+        subprocess.run(
+            [
+                imageio_ffmpeg.get_ffmpeg_exe(),
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=1.0",
+                str(out_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        return True
+
+    engine.synthesize.side_effect = fake_synthesize
+
+    part = ScriptPart(
+        part=1,
+        hook_number="훅",
+        lines=[
+            ScriptLine(
+                text="문장", visual_query_ko="", visual_query_en="", scene_type="AI_IMAGE"
+            )
+        ],
+    )
+    synthesize_part(part, [engine], tmp_path, min_veo_line_duration=5.5)
+    assert part.lines[0].duration < 5.5
+
+
+def test_trim_and_pad_output_is_lossless_wav(tmp_path):
+    # 예전엔 이 단계가 mp3 로 다시 인코딩해 문장마다 수십 ms 씩 길이 오차가 쌓였다
+    # (부 후반부로 갈수록 자막이 밀리는 원인). 이제는 무손실 WAV 여야 한다.
+    import subprocess
+
+    import imageio_ffmpeg
+
+    from src.narration.tts_engine import _trim_and_pad
+
+    src_path = tmp_path / "line.mp3"
+    subprocess.run(
+        [
+            imageio_ffmpeg.get_ffmpeg_exe(),
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=1.0",
+            str(src_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    final_path = _trim_and_pad(src_path, pause=0.25)
+    assert final_path.suffix == ".wav"
+    assert final_path.exists()
+    assert not src_path.exists()
+
+
 def test_ai_image_scene_uses_depth_parallax_not_flat_zoom():
     # 평평한 줌(render_ai_image_motion)으로는 "화면이 정지 사진 같다"는 지적이
     # 안 풀렸다 — 사진 컷과 동일한 깊이 기반 파랄랙스를 타야 한다.
