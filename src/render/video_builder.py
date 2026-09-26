@@ -396,22 +396,16 @@ def _pick_sfx_path(tag: str, used_index: dict[str, int]) -> Path | None:
 
 def _sfx_layers(scenes: list[Scene], settings, total: float):
     """`sfx` 태그가 붙은 컷이 시작될 때 그 태그에 맞는 소리를 얹는다."""
-    base_gain = _db_to_gain(settings.get("audio.sfx_volume_db", -4))
-    # 레퍼런스는 거의 모든 컷 전환에 소리가 붙는다. 대본이 sfx 를 안 준 컷에도 작은
-    # 전환음(whoosh)을 깔아 컷이 넘어가는 게 귀로도 느껴지게 한다. 첫 컷은 제외.
-    cut_gain = _db_to_gain(settings.get("audio.cut_sfx_volume_db", -12))
-    cut_whoosh = settings.get("audio.cut_whoosh", True)
+    # "효과음이 난잡하다"는 지적 이후: 대본이 명시한 sfx 만 쓴다(자동 전환음 없음).
+    # plan_typed_scenes 는 문장 하나 = 씬 하나라 대본의 sfx 배정이 이미 컷 전환과
+    # 맞아떨어진다 — 여기에 더 얹으면 겹쳐서 시끄러워진다.
+    gain = _db_to_gain(settings.get("audio.sfx_volume_db", -6))
     layers = []
     used_index: dict[str, int] = {}
-    for position, scene in enumerate(scenes):
-        if scene.start >= total:
+    for scene in scenes:
+        if scene.sfx == "none" or scene.start >= total:
             continue
-        tag, gain = scene.sfx, base_gain
-        if tag == "none":
-            if not cut_whoosh or position == 0:
-                continue
-            tag, gain = "whoosh", cut_gain
-        path = _pick_sfx_path(tag, used_index)
+        path = _pick_sfx_path(scene.sfx, used_index)
         if path is None or not path.exists():
             # 매핑된 파일이 없거나 실제로 없으면(에셋 다운로드 누락 등) 완전히
             # 조용해지는 대신 기본 임팩트음 풀에서 대체한다 — 안전 장치.

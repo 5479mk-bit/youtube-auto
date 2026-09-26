@@ -616,7 +616,9 @@ def test_center_overlay_renders(tmp_path):
     assert image.getbbox() is not None
 
 
-def test_uncued_cuts_get_quiet_whoosh(monkeypatch, tmp_path):
+def test_sfx_none_scenes_stay_silent(monkeypatch, tmp_path):
+    """"효과음이 난잡하다"는 지적 이후: sfx="none" 컷에는 자동으로 아무 소리도
+    안 붙는다 — 대본이 명시한 것만 쓴다(cut_whoosh 자동 채움 제거)."""
     from src.models import Scene
     from src.render import video_builder
 
@@ -624,7 +626,7 @@ def test_uncued_cuts_get_quiet_whoosh(monkeypatch, tmp_path):
 
     def fake_pick(tag, used_index):
         picked.append(tag)
-        return None  # 파일이 없으면 레이어는 안 만든다 — 어떤 태그를 골랐는지만 본다
+        return None
 
     monkeypatch.setattr(video_builder, "_pick_sfx_path", fake_pick)
 
@@ -638,6 +640,7 @@ def test_uncued_cuts_get_quiet_whoosh(monkeypatch, tmp_path):
         Scene(start=6.0, duration=3, image_query_ko="a", image_query_en="a", camera="push_in", sfx="crack"),
     ]
     video_builder._sfx_layers(scenes, S(), 9.0)
-    # 첫 컷은 조용히, 두 번째 컷엔 전환음, 세 번째는 대본이 준 소리.
-    assert picked[0] == "whoosh"
-    assert "crack" in picked
+    # "none" 컷 두 개는 아예 건너뛰고, 대본이 준 crack 하나만 시도된다(파일이 없어
+    # 안전장치로 sub_boom 폴백까지 한 번 더 시도되지만, "none" 컷에서는 아예 호출
+    # 자체가 없다).
+    assert picked == ["crack", "sub_boom"]
