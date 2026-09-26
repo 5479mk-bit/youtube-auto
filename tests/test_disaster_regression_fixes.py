@@ -463,3 +463,62 @@ def test_long_enough_veo_line_is_accepted():
         "part2": {"hook_number": "훅2", "lines": [line(i) for i in range(9)]},
     }
     assert _parse(raw, _disaster_candidate()) is not None
+
+
+def test_split_for_tts_breaks_long_line_into_clauses():
+    # 로컬 TTS(diffusion 기반)가 긴 문장을 한 번에 읽으면 억양이 깨진다는 지적이
+    # 있었다 — 쉼표 기준으로 절을 나눠야 한다.
+    from src.narration.tts_engine import _split_for_tts
+
+    text = "야, 타이타닉호 알아? 인류 역사상 최악의 해상 사고 중 하나인데, 1,514명이나 죽었어."
+    chunks = _split_for_tts(text, max_chars=35)
+    assert len(chunks) > 1
+    assert all(len(chunk) <= 35 for chunk in chunks)
+    # 절을 이어붙이면(쉼표 복원 없이) 원문 내용이 전부 보존돼야 한다.
+    assert any("타이타닉호" in chunk for chunk in chunks)
+
+
+def test_short_line_is_not_chunked():
+    from src.narration.tts_engine import _split_for_tts
+
+    text = "짧은 문장이야."
+    assert _split_for_tts(text, max_chars=35) == [text]
+
+
+def test_synthesize_chunked_concatenates_pieces(tmp_path):
+    import subprocess
+
+    import imageio_ffmpeg
+
+    from src.narration.tts_engine import _synthesize_chunked
+
+    engine = MagicMock()
+
+    def fake_synthesize(text, rate, out_path):
+        subprocess.run(
+            [
+                imageio_ffmpeg.get_ffmpeg_exe(),
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=0.5",
+                str(out_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        return True
+
+    engine.synthesize.side_effect = fake_synthesize
+
+    text = "야, 타이타닉호 알아? 인류 역사상 최악의 해상 사고 중 하나인데, 1,514명이나 죽었어."
+    out_path = tmp_path / "line.wav"
+    ok = _synthesize_chunked(engine, text, "+10%", out_path)
+    assert ok
+    assert out_path.exists()
+    assert engine.synthesize.call_count > 1
+    # 절 개수만큼 이어붙였으니 최종 길이가 절 하나(0.5초)보다는 길어야 한다.
+    from src.narration.tts_engine import _measure_duration
+
+    assert _measure_duration(out_path) > 0.6

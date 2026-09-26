@@ -102,6 +102,9 @@ def synthesize_part(
     return part
 
 
+_LONG_LINE_CHARS = 35  # 이보다 길면 한 번에 안 읽히고 절 단위로 쪼개 합성한다
+
+
 def _synthesize_all(engine: TTSEngine, part: ScriptPart, out_dir: Path) -> list[Path] | None:
     """한 엔진으로 부 전체를 만든다. 하나라도 실패하면 None."""
     texts = [line.narration for line in part.lines]
@@ -114,10 +117,87 @@ def _synthesize_all(engine: TTSEngine, part: ScriptPart, out_dir: Path) -> list[
     paths = []
     for index, line in enumerate(part.lines):
         path = out_dir / f"part{part.part}_line{index:02d}.mp3"
-        if not engine.synthesize(line.narration, line.speech_rate, path):
+        if len(line.narration) > _LONG_LINE_CHARS:
+            # VEO 문장은 8초를 채우려고 40~70자까지 길어졌는데, 로컬 TTS(diffusion
+            # 기반)는 한 번에 그렇게 긴 문장을 읽히면 억양이 깨지고 부자연스러워진다
+            # ("long1 너무 부자연스러워" 지적) — 짧은 절 단위로 나눠 각각 자연스럽게
+            # 합성한 뒤 이어붙이면, 한 문장처럼 들리면서도 품질은 유지된다.
+            ok = _synthesize_chunked(engine, line.narration, line.speech_rate, path)
+        else:
+            ok = engine.synthesize(line.narration, line.speech_rate, path)
+        if not ok:
             return None
         paths.append(path)
     return paths
+
+
+def _synthesize_chunked(engine: TTSEngine, text: str, rate: str, out_path: Path) -> bool:
+    """긴 문장을 절 단위로 쪼개 각각 합성한 뒤 이어붙인다."""
+    chunks = _split_for_tts(text, _LONG_LINE_CHARS)
+    if len(chunks) <= 1:
+        return engine.synthesize(text, rate, out_path)
+
+    chunk_paths = []
+    for index, chunk in enumerate(chunks):
+        chunk_path = out_path.with_name(f"{out_path.stem}_chunk{index}{out_path.suffix}")
+        if not engine.synthesize(chunk, rate, chunk_path):
+            return False
+        chunk_paths.append(chunk_path)
+
+    _concat_audio(chunk_paths, out_path)
+    for chunk_path in chunk_paths:
+        chunk_path.unlink(missing_ok=True)
+    return out_path.exists() and out_path.stat().st_size > 0
+
+
+def _split_for_tts(text: str, max_chars: int) -> list[str]:
+    """쉼표 기준으로 절을 나누고, 그래도 긴 절은 어절 경계에서 더 쪼갠다."""
+    clauses = [c.strip() for c in text.split(",") if c.strip()]
+    if not clauses:
+        return [text]
+
+    chunks: list[str] = []
+    for clause in clauses:
+        if len(clause) <= max_chars:
+            chunks.append(clause)
+            continue
+        words = clause.split()
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if len(candidate) > max_chars and current:
+                chunks.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            chunks.append(current)
+    return chunks
+
+
+def _concat_audio(paths: list[Path], out_path: Path) -> None:
+    import imageio_ffmpeg
+
+    list_file = out_path.with_suffix(".txt")
+    list_file.write_text(
+        "\n".join(f"file '{p.resolve()}'" for p in paths), encoding="utf-8"
+    )
+    subprocess.run(
+        [
+            imageio_ffmpeg.get_ffmpeg_exe(),
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(list_file),
+            str(out_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    list_file.unlink(missing_ok=True)
 
 
 def _finish(part: ScriptPart, paths: list[Path], min_veo_line_duration: float = 0.0) -> None:
