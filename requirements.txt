@@ -11,3 +11,7 @@ google-api-python-client>=2.100.0
 google-auth-oauthlib>=1.2.0
 # Vertex AI 호출 토큰(서비스 계정/WIF). oauthlib 가 끌고 오지만 직접 쓰므로 명시한다.
 google-auth>=2.30.0
+# 사진 컷의 깊이 기반 파랄랙스(motion/parallax.py)가 쓰는 ONNX 추론 런타임.
+# 누락돼 있었다 — heritage(사진) 데이터셋에서만 이 경로를 타서 지금까지 안 걸렸고,
+# disaster 데이터셋의 AI_IMAGE 컷도 같은 경로를 타게 되면서 처음 드러났다.
+onnxruntime>=1.18.0
