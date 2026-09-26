@@ -69,6 +69,7 @@ def build_part(
     total_duration = max(background.duration - 1e-3, 0.1)
     layers = [background.with_duration(total_duration)]
     layers.extend(_title_layers(part, work_dir, size, settings, background.duration))
+    layers.extend(_overlay_layers(part, work_dir, size, total_duration))
     layers.extend(_subtitle_layers(cues, work_dir, part.part, size, settings, box=None))
     layers.extend(
         _badge_layers(script, part, work_dir, size, background.duration, credits)
@@ -244,6 +245,22 @@ def _title_layers(
     return [ImageClip(str(path)).with_start(0).with_duration(duration)]
 
 
+def _overlay_layers(part: ScriptPart, work_dir: Path, size: tuple[int, int], total: float):
+    """문장에 overlay(핵심 숫자/단어)가 있으면 그 문장이 읽히는 동안 화면 중앙에 띄운다."""
+    layers = []
+    cursor = 0.0
+    for index, line in enumerate(part.lines):
+        start, cursor = cursor, cursor + max(line.duration, 0.0)
+        if not line.overlay or start >= total:
+            continue
+        path = overlays.render_center_overlay(
+            line.overlay, work_dir / f"overlay_part{part.part}_{index:02d}.png", size
+        )
+        length = max(min(cursor, total) - start, 0.1)
+        layers.append(ImageClip(str(path)).with_start(start).with_duration(length))
+    return layers
+
+
 def _subtitle_layers(
     cues: list[SubtitleCue],
     work_dir: Path,
@@ -379,13 +396,22 @@ def _pick_sfx_path(tag: str, used_index: dict[str, int]) -> Path | None:
 
 def _sfx_layers(scenes: list[Scene], settings, total: float):
     """`sfx` 태그가 붙은 컷이 시작될 때 그 태그에 맞는 소리를 얹는다."""
-    gain = _db_to_gain(settings.get("audio.sfx_volume_db", -4))
+    base_gain = _db_to_gain(settings.get("audio.sfx_volume_db", -4))
+    # 레퍼런스는 거의 모든 컷 전환에 소리가 붙는다. 대본이 sfx 를 안 준 컷에도 작은
+    # 전환음(whoosh)을 깔아 컷이 넘어가는 게 귀로도 느껴지게 한다. 첫 컷은 제외.
+    cut_gain = _db_to_gain(settings.get("audio.cut_sfx_volume_db", -12))
+    cut_whoosh = settings.get("audio.cut_whoosh", True)
     layers = []
     used_index: dict[str, int] = {}
-    for scene in scenes:
-        if scene.sfx == "none" or scene.start >= total:
+    for position, scene in enumerate(scenes):
+        if scene.start >= total:
             continue
-        path = _pick_sfx_path(scene.sfx, used_index)
+        tag, gain = scene.sfx, base_gain
+        if tag == "none":
+            if not cut_whoosh or position == 0:
+                continue
+            tag, gain = "whoosh", cut_gain
+        path = _pick_sfx_path(tag, used_index)
         if path is None or not path.exists():
             # 매핑된 파일이 없거나 실제로 없으면(에셋 다운로드 누락 등) 완전히
             # 조용해지는 대신 기본 임팩트음 풀에서 대체한다 — 안전 장치.

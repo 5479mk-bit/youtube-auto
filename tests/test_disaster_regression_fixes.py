@@ -582,3 +582,62 @@ def test_minute_and_headcount_still_use_sino_korean():
 
     assert read_aloud("20분") == "이십분"
     assert read_aloud("1,514명") == "천오백십사명"
+
+
+# --- 레퍼런스(건축사전) 스타일 반영 ---------------------------------------------
+
+
+def test_overlay_kept_only_when_in_sentence():
+    from src.script.script_writer import _overlay
+
+    assert _overlay("98m", "해발 98m짜리 봉우리가 서 있습니다") == "98m"
+    # 문장에 없는 숫자는 화면에 띄우지 않는다.
+    assert _overlay("120m", "해발 98m짜리 봉우리가 서 있습니다") == ""
+    assert _overlay("", "아무 문장") == ""
+    assert _overlay("아주아주긴오버레이문구", "아주아주긴오버레이문구입니다") == ""
+
+
+def test_disaster_prompt_is_formal_tone():
+    from src.script.script_writer import GLOBAL_DISASTER_PROMPT
+
+    assert "합니다체" in GLOBAL_DISASTER_PROMPT
+    assert "반말 금지" in GLOBAL_DISASTER_PROMPT
+    assert '"overlay"' in GLOBAL_DISASTER_PROMPT
+
+
+def test_center_overlay_renders(tmp_path):
+    from PIL import Image
+
+    from src.render import overlays
+
+    path = overlays.render_center_overlay("1978", tmp_path / "o.png", (1080, 1920))
+    image = Image.open(path)
+    assert image.size == (1080, 1920)
+    assert image.getbbox() is not None
+
+
+def test_uncued_cuts_get_quiet_whoosh(monkeypatch, tmp_path):
+    from src.models import Scene
+    from src.render import video_builder
+
+    picked = []
+
+    def fake_pick(tag, used_index):
+        picked.append(tag)
+        return None  # 파일이 없으면 레이어는 안 만든다 — 어떤 태그를 골랐는지만 본다
+
+    monkeypatch.setattr(video_builder, "_pick_sfx_path", fake_pick)
+
+    class S:
+        def get(self, key, default=None):
+            return default
+
+    scenes = [
+        Scene(start=0.0, duration=3, image_query_ko="a", image_query_en="a", camera="push_in", sfx="none"),
+        Scene(start=3.0, duration=3, image_query_ko="a", image_query_en="a", camera="push_in", sfx="none"),
+        Scene(start=6.0, duration=3, image_query_ko="a", image_query_en="a", camera="push_in", sfx="crack"),
+    ]
+    video_builder._sfx_layers(scenes, S(), 9.0)
+    # 첫 컷은 조용히, 두 번째 컷엔 전환음, 세 번째는 대본이 준 소리.
+    assert picked[0] == "whoosh"
+    assert "crack" in picked

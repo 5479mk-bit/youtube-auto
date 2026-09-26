@@ -224,12 +224,12 @@ VEO 로 가는 문장(1부 첫 문장, 가장 센 장면)은 아래와 같은 �
 """
 
 
-GLOBAL_DISASTER_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어 쇼츠 작가입니다.
-아래는 위키백과에 실린 실제 재난·사고 하나입니다. 이걸 30~40초짜리 세로 쇼츠 2편으로
+GLOBAL_DISASTER_PROMPT = """당신은 "신비한 건축사전"류 공학 해설 채널의 한국어 쇼츠 작가입니다.
+아래는 위키백과에 실린 실제 재난·사고 하나입니다. 이걸 40~50초짜리 세로 쇼츠 2편으로
 나눠 씁니다.
 
-시청자는 3초 안에 넘길지 말지 정합니다. 교양 프로그램 해설이 아니라, 친구한테 "야 이거
-진짜 있었던 일이야" 하고 말 거는 톤으로 씁니다.
+톤의 기준은 "차분한데 멈출 수 없는 공학 해설"입니다. 흥분한 친구 말투가 아니라, 믿을 만한
+해설자가 담담하게 사실을 쌓아 올리다 한 번씩 뒤집는 방식입니다.
 
 [소재]
 제목: {headline}
@@ -238,122 +238,109 @@ GLOBAL_DISASTER_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어
 
 [사실 검증 규칙 — 반드시 지킬 것]
 - 본문에 없는 사실을 지어내지 않는다. 날짜·지명·인명·숫자를 바꾸지 않는다.
-- 사망자 수·피해 규모처럼 본문에 박힌 구체적인 숫자가 가장 센 재료다. 그걸 앞으로 꺼낸다.
+- 사망자 수·높이·무게·길이처럼 본문에 박힌 구체적인 숫자가 가장 센 재료다. 그걸 앞으로
+  꺼내고, 가능하면 체감되는 비교("아파트 30층을 훌쩍 넘는 높이죠")로 한 번 더 풀어준다.
+  비교에 쓰는 기준(아파트 한 층 약 3m 등)은 상식 수준에서만 쓴다.
 - **대한민국 내에서 발생한 사건이나 인재(人災)는 절대 다루지 마시오.** 글로벌
   자연재해나 해외의 역사적 공학 실패 사례만 다루시오. 소재 자체가 한국 국내 사건이면
   이 프롬프트를 거부하고 빈 결과를 내야 한다.
 
-[작성 규칙 — 3중 후킹 구조]
-이 대본은 한 번의 훅으로 끝나지 않는다. 아래 세 지점에서 각각 시청자를 소름 돋게
-만들어야 한다.
-- **[0~5초 오프닝 훅]**: 1부 첫 문장이 전부다. 가장 충격적인 장면이나 숫자 하나를
-  배경 설명 없이 바로 던진다. **원인 설명은 1부의 3~4번째 문장쯤부터 시작한다** —
-  첫 문장에 원인·배경을 넣지 마라.
-- **[중반 반전/위기 훅]**: 1부 중반(6~8번째 문장 근처)에 흐름을 뒤집는 반전이나
-  "이때 더 큰 위기가 닥쳤다" 류의 문장을 하나 배치한다. "근데 진짜 소름 돋는 건
-  여기부터야" 같은 도발적 구어체로 시작해도 좋다. 1부 마지막은 답을 주지 않고 끊는다.
-- **[클라이맥스 후킹]**: 2부는 1부의 의문을 한 문장으로 되짚고 바로 본론. **왜 그런
-  공학적·구조적 실패가 일어났는지**를 설명하다가(본문에 근거가 있는 범위 안에서),
-  2부 후반부에 가장 결정적인 사실("이 계산이 틀렸던 거지" 같은)을 클라이맥스로
-  던진다. 마지막은 시청자에게 묻고 끝낸다.
+[구조 — 레퍼런스 채널의 흐름을 그대로 따른다]
+1부:
+- **첫 문장**: 지금(또는 사고 직전)의 모습을 장면으로 던진다. 배경 설명 없이
+  "여기 ○○에는 한때 ~던 ~가 있습니다" 처럼 바로 장면에 세운다.
+- **둘째~셋째 문장**: 뒤집는다. "그런데 이 ○○, ~가 아닙니다" — 시청자가 예상한 것과
+  반대되는 사실 하나.
+- 그다음 **숫자 하나를 체감시키고**, "이 사고의 문제는 딱 한 줄로 요약됩니다" 같은
+  **한 줄 요약**으로 이야기의 축을 못박는다.
+- 이어서 시간 순서대로 어떻게 여기까지 왔는지 쌓는다. 중반에 "그랬더니 이번엔 다른 게
+  터졌습니다" 류의 **문제 연쇄**를 한 번 넣는다.
+- 1부 마지막 문장은 답을 주지 않고 가장 궁금한 지점에서 끊는다.
+2부:
+- 첫 문장에서 1부의 의문을 한 문장으로 되짚고 바로 본론.
+- **왜 그런 공학적·구조적 실패가 일어났는지**를 구조물 내부를 들여다보듯 설명한다
+  (본문에 근거가 있는 범위 안에서). "~라고요", "~거든요"로 이유를 짧게 붙인다.
+- 후반부에 가장 결정적인 사실 하나를 클라이맥스로 둔다.
+- 마지막은 현재진행형 여운으로 닫는다("그리고 이 문제는 지금도 끝나지 않았습니다" 류 —
+  본문에 근거가 있을 때만). 근거가 없으면 담담한 결론 한 문장으로 닫는다.
 - **1부가 던진 질문에 2부는 반드시 정면으로 답한다.** 답이 본문에 없으면 "정확한 원인은
-  아직도 밝혀지지 않았다"고 분명히 말한 뒤 이어간다.
-- **대한민국 내에서 발생한 사건·인재는 이 세 훅 어디에도 절대 등장시키지 않는다** —
-  법적·정서적 이유로 영구 금지다(위 [사실 검증 규칙] 참고). 오직 글로벌 자연재해나
-  해외의 역사적 공학 실패 사례만 다룬다.
-- 1부 합계 약 {part1_chars}자, 2부 합계 약 {part2_chars}자. **부마다 10~15개의 짧은
-  문장(JSON object)으로 잘게 쪼갠다.**
+  아직도 밝혀지지 않았습니다"라고 분명히 말한 뒤 이어간다.
+- 1부 합계 약 {part1_chars}자, 2부 합계 약 {part2_chars}자. **부마다 11~14개의
+  문장(JSON object)** 으로 쓴다.
 
 [말투 — 이게 제일 중요하다]
-글이 아니라 말을 쓴다. 소리 내어 읽었을 때 로봇 같거나 교양 다큐멘터리 같으면 실패다.
-로컬 TTS 로 읽히기 때문에 AI 티가 나지 않도록 호흡을 각별히 신경 쓴다.
-- **극단적으로 짧게 끊는다.** `text` 하나는 **10~15음절 이내**로 쓴다(글자 수가 아니라
-  소리 내어 읽을 때의 음절 수 기준). 이걸 넘으면 무조건 두 개 이상의 문장으로 강제로
-  쪼갠다.
-- **추임새는 아예 쓰지 않는다.** "야,", "와, 미쳤지?", "이게 말이 돼?", "근데,"
-  같은 구어체 감탄사·간투사를 문장 맨 앞에 붙이지 않는다 — 로컬 TTS 가 짧은
-  감탄사만 따로 읽을 때 억양이 뜬금없이 늘어져 부자연스럽게 들린다는 지적이
-  있었다("애~" 처럼 들린다는 지적). 모든 문장은 감탄사 없이 사실이나 상황
-  묘사로 바로 시작한다(예: "구명정이, 겨우 20척이었다는 거." ← "야," 없이).
-- **말줄임표·쉼표는 아껴서, 정말 힘줄 곳에만.** 문장이 이미 10~15음절로 짧다 —
-  여기에 매번 말줄임표(`...`)나 쉼표(`,`)까지 넣으면 TTS 가 문장마다 멈칫거려 굼뜨고
-  답답하게 들린다("성우가 아니라 로봇이 자꾸 쉬는 것처럼" 들린다는 지적이 있었다).
-  부 전체에서 **정말 충격적인 반전 한두 곳에만** 말줄임표를 쓰고, 나머지 문장은
-  문장부호 없이 짧고 빠르게 툭툭 던지듯 말한다.
-- 같은 어미를 세 번 연속 쓰지 않는다. 반말로 쓴다.
-- emphasis 에는 그 문장에서 자막으로 크게 강조할 짧은 조각만 넣는다.
+- **합니다체가 기본이다.** 문장의 절반 이상은 "~습니다/~입니다"로 끝낸다.
+- 사이사이 설명을 덧붙일 때만 "~거든요", "~이죠", "~고요", "~는데요"를 섞어 리듬을 만든다.
+  같은 어미를 세 번 연속 쓰지 않는다.
+- **반말 금지.** "~야", "~거야", "~지?" 같은 어미를 쓰지 않는다.
+- **감탄사·간투사 금지.** "와", "야", "진짜", "미쳤", "소름 돋는" 같은 말을 쓰지 않는다.
+  놀라움은 사실과 숫자 자체로 전달한다.
+- 문장 하나는 **12~22음절**(소리 내어 읽는 기준, 약 2~4초). 말줄임표는 쓰지 않고,
+  쉼표는 한 문장에 최대 하나.
+- 문장과 문장은 끊김 없이 이어서 읽힌다. "그런데", "그래서", "그랬더니" 같은 접속어로
+  다음 문장을 끌고 가는 건 좋다(문장 맨 앞 한 단어, 감탄사가 아니다).
+- emphasis 에는 그 문장에서 자막으로 강조할 짧은 조각만 넣는다.
+- `overlay` 에는 그 문장에서 **화면 한가운데 크게 박을 숫자나 짧은 단어**(예: "1978",
+  "98m", "1,514명", "균열")를 넣는다. 부마다 **3~4문장에만** 넣고 나머지는 빈 문자열.
+  반드시 그 문장 안에 실제로 나오는 숫자·단어여야 한다.
 
-[화면 — '3D 엔지니어링 단면도(isometric cutaway)' 콘셉트 절대 엄수]
-실제 사진을 쓰지 않는다. 대신 우리는 "신비한 건축사전"류 채널처럼 사고 구조물·현장을
-**반투명 3D 단면도로 파헤쳐 보여주는 인포그래픽**으로 화면을 만든다. 문장마다 아래
-두 갈래 중 하나를 네가 직접 정한다(`scene_type` — 이 소재에는 `HISTORICAL_DOC`,
-`MAP_MOTION` 을 쓰지 않는다).
+[화면 — '3D 엔지니어링 디오라마' 콘셉트 절대 엄수]
+실제 사진을 쓰지 않는다. 사고 현장을 **회색 격자 스튜디오 바닥 위에 올린 3D 미니어처
+디오라마**로 만들고, 필요한 순간 **땅·선체·벽을 잘라낸 단면(cutaway)** 으로 속을 보여준다.
+문장마다 아래 두 갈래 중 하나를 정한다(`scene_type`).
 
-- "VEO": **부마다 정확히 2문장.** 실제로 카메라와 피사체가 움직이는 유일한 컷이라
-  가장 센 순간에만 쓴다 — **1부는 오프닝 훅 문장(보통 첫 문장)과 중반 반전 훅
-  문장**, **2부는 원인이 밝혀지는 문장과 클라이맥스 문장**에 배정한다. 정지화
-  (AI_IMAGE)만으로는 절대 표현할 수 없는 "무너지고, 쏟아지고, 갈라지는" 순간을
-  이 두 컷에 몰아준다.
-  **이 두 문장은 [말투]의 "10~15음절" 제한을 받지 않는다.** 이 컷은 실제 영상이
-  8초짜리로 통째로 생성되는데, 문장이 짧으면 대사가 2~3초 만에 끝나고 나머지
-  5~6초는 아무 말 없이 화면만 흘러가 버린다("영상은 긴데 대사가 비어 있다"는
-  느낌을 준다). **40~55음절 정도로 길게 써서, 말이 8초 내내 쉬지 않고 이어지게
-  한다.** 한 문장을 억지로 늘리지 말고, 쉼표로 이어지는 2~3개의 짧은 절을 한
-  호흡으로 붙여 쓴다(예: "타이타닉호는 1,514명이 죽었는데, 절대 안 가라앉는다고
-  불렸던 배였다는 게 진짜 소름 돋는 부분이야"). 감탄사 없이 사실로 바로 시작하고,
-  말줄임표로 끊어 숨 돌리지 말고 끝까지 밀어붙이듯 이어 말한다.
-- "AI_IMAGE": 나머지 전부(사건·구조 설명). 렌더 단계에서 깊이 기반 카메라 이동이
-  자동으로 걸리니, 프롬프트 자체는 정적인 도해가 아니라 "지금 막 무너지고 있는
-  순간의 단면"처럼 이미 동세가 담긴 장면으로 써라.
+- "VEO": 실제로 움직이는 4초짜리 영상. **부마다 5~6문장**, 되도록 AI_IMAGE 와 번갈아
+  배치한다(VEO 가 세 번 연속 이어지지 않게). 1부 첫 문장은 반드시 VEO. 물이 흐르고, 가스가
+  차오르고, 구조물이 갈라지는 **움직임이 핵심인 문장**에 준다.
+- "AI_IMAGE": 나머지. 렌더 단계에서 카메라 이동이 자동으로 걸린다.
+
+화면은 문장 순서에 따라 **세 가지 거리를 오간다** — 같은 거리를 세 번 연속 쓰지 않는다.
+- 원경: 디오라마 전체를 내려다보는 항공 시점("aerial view of a miniature diorama of ...")
+- 단면: 구조물을 잘라 내부 층·배관·물길을 보여주는 시점("cross-section cutaway of ...")
+- 근접: 균열·기포·계기판 바늘 같은 디테일 클로즈업("macro close-up of ...")
 
 `prompt` 는 VEO/AI_IMAGE 일 때만 채우는 영문 프롬프트다.
-**[경고: 피사체 실종 방지]** 프롬프트 맨 앞에는 반드시 **'사건의 주된 구조물·장면
-(예: 침몰하는 선체 단면, 무너지는 건물의 골조, 균열이 번지는 댐 벽)'**을 구체적으로
-묘사해야 한다.
+**[경고: 피사체 실종 방지]** 프롬프트 맨 앞에는 반드시 **그 문장이 말하는 구조물·장면**을
+구체적으로 묘사한다(예: "cross-section cutaway of the Titanic hull with seawater flooding
+the forward compartments"). 그 뒤에 **빨간 기술 주석**을 장면에 맞게 한 줄 지시한다
+("bold red arrows showing the water flow, red dimension lines measuring the hull breach,
+red pressure gauge" 처럼 — 화살표·치수선·게이지·X 표시 중 장면에 맞는 것).
+그리고 맨 끝에 아래 스타일 문구를 쉼표와 함께 그대로 덧붙인다:
+  ", stylized 3D miniature diorama on a neutral gray grid studio floor, clean
+   clay-render materials, soft studio lighting, bold red technical annotations,
+   photoreal engineering explainer, 8k, no watermark"
 
-그 뒤에 아래 스타일 문구를 프롬프트 맨 끝에 쉼표와 함께 무조건 그대로 덧붙인다:
-  ", Semi-stylized 3D engineering diagram, isometric cutaway view, neutral gray
-   studio background, clean clay-render texture, glowing red technical lines
-   pointing to key parts, 8k resolution, dynamic motion blur, debris and water
-   frozen mid-air, violent water rushing inside, structural walls cracking
-   violently, massive collapse, chaotic smoke and debris, intense cinematic
-   motion, no text, no watermark"
+**[VEO 무브먼트 지시]**
+VEO 문장의 prompt 에는 아래 중 장면에 맞는 카메라 무브먼트를 하나 넣는다. 카메라는
+부드럽게 움직이고, **움직임은 장면 안의 물·연기·잔해·기포가 만든다.**
+- "slow aerial drone push-in toward ..." (원경에서 천천히 다가가기)
+- "slow orbit around the diorama" (디오라마 주위를 천천히 돌기)
+- "smooth dolly along the cross-section" (단면을 따라 옆으로 미끄러지기)
+- "slow push-in to macro detail" (디테일로 천천히 파고들기)
 
-**[VEO 무브먼트 지시 — 반드시 격렬해야 한다]**
-VEO 로 가는 두 문장은 "차분한 인포그래픽"이 아니라 **재난이 실제로 벌어지는
-순간의 폭력적인 카메라 워크**를 지시한다. 아래 중 장면에 맞는 걸 골라 쓴다.
-- "violent camera shake as the hull ruptures and water bursts through"
-  (선체가 파열되며 물이 터져 들어올 때 카메라가 격렬하게 흔들린다)
-- "rapid whip-pan following collapsing debris as structure crumbles"
-  (구조물이 무너지며 떨어지는 잔해를 따라 카메라가 빠르게 휙 돈다)
-- "fast dramatic push-in as cracks spread violently across the wall"
-  (벽에 균열이 격렬하게 번지는 순간 빠르게 밀고 들어간다)
-"slow smooth orbit" 같은 차분한 무브먼트는 이 소재에 절대 쓰지 않는다 — 재난의
-공포감을 죽인다.
+**사실 기반 원칙은 그대로다.** 바뀌는 건 "어떻게 보여줄까"이지 "무슨 일이 있었나"가
+아니다. 본문에 없는 장면을 지어내 그리지 않는다.
 
-**사실 기반 원칙은 그대로다.** 바뀌는 건 "어떻게 보여줄까"(3D 단면도 스타일)이지
-"무슨 일이 있었나"가 아니다. 본문에 없는 장면을 지어내 그리지 않는다.
-
-`sfx` 는 그 문장이 시작될 때 때릴 소리다. **부마다 5~7문장에 골고루 배정한다**(영상이
-심심해 보이지 않으려면 sfx 없는 문장이 계속 이어지면 안 된다). 내용에 맞는 걸 고른다 —
-아무거나 sub_boom 으로 통일하지 않는다.
-- "sub_boom": 충격적인 사실·숫자 공개, 장면 전환
+`sfx` 는 그 문장(컷)이 시작될 때 때릴 소리다. 레퍼런스처럼 **거의 모든 컷 전환에 소리가
+붙는다** — 부마다 **8문장 이상**에 배정한다. 내용에 맞는 걸 고른다:
+- "sub_boom": 충격적인 사실·숫자 공개, 큰 장면 전환
 - "crack": 구조물이 갈라지거나 부서지는 순간
-- "whoosh": 물·잔해가 쏟아지거나 무언가 빠르게 휩쓸고 지나가는 순간
+- "whoosh": 물·가스·잔해가 흐르거나 카메라가 이동하는 전환
 - "alarm": 경보·위험 신호, 대피 상황
-- "braam": 1부 마지막 클리프행어 한 곳에만(가장 무겁게 끄는 여운)
-- "none": 그 외 설명 위주 문장
+- "braam": 1부 마지막 클리프행어 한 곳에만
+- "none": 그 외(배정하지 않은 컷에는 렌더 단계에서 작은 전환음이 자동으로 붙는다)
 
 [출력 형식] 아래 JSON 만 출력한다.
 {{
   "title_seed": "채널 제목에 쓸 한 줄",
-  "part1": {{"hook_number": "화면 상단에 크게 띄울 호기심 자극 타이틀. 절대 연도나 날짜,
-                              회차 번호를 쓰지 마라.", "lines": [
-    {{"text": "내레이션 한 문장 (반드시 15~20자 이내로 짧게)",
+  "part1": {{"hook_number": "화면 상단에 띄울 호기심 자극 타이틀. 연도·날짜·회차 번호 금지.",
+             "lines": [
+    {{"text": "내레이션 한 문장 (합니다체, 12~22음절)",
      "scene_type": "VEO | AI_IMAGE",
      "prompt": "위 스타일 문구로 끝나는 영문 프롬프트",
      "sfx": "sub_boom | crack | whoosh | alarm | braam | none",
-     "emphasis": ["자막에서 크게 강조할 조각"]}}
+     "overlay": "화면 중앙에 크게 띄울 숫자/단어 또는 빈 문자열",
+     "emphasis": ["자막에서 강조할 조각"]}}
   ]}},
   "part2": {{"hook_number": "2부 화면 상단 타이틀. 역시 연도나 날짜 금지.",
               "lines": [ ...위와 같은 구조... ]}}
@@ -423,12 +410,10 @@ def _prompt(candidate: StoryCandidate, part1_chars: int, part2_chars: int) -> st
 # 없다), 파싱은 성공해도 여기서 걸러 템플릿 폴백으로 넘긴다 — "검증 없이 통과되던
 # 얇은 대본"이 실제 원인이었다.
 _DISASTER_MIN_LINES_PER_PART = 8
-# VEO 컷은 실제로 8초짜리 영상이 통째로 생성되는데, 문장이 짧으면 대사가 몇 초 만에
-# 끝나고 나머지는 대사 없이 화면만 흘러간다("8초 동안 대사가 너무 짧다"는 지적의
-# 원인). 프롬프트에도 "40~55음절"을 못박아뒀지만, LLM 이 그래도 짧게 줄 수 있어
-# 여기서 한 번 더 막는다 — 28자 미만이면 8초를 채우기엔 너무 짧다고 보고 템플릿
-# 폴백으로 넘긴다.
-_VEO_MIN_CHARS = 28
+# VEO 컷은 4초짜리 영상이 통째로 생성된다. 문장이 너무 짧으면 대사가 1~2초 만에 끝나
+# 나머지는 무음으로 채워진다. 12자 미만이면 4초를 채우기엔 짧다고 보고 템플릿 폴백으로
+# 넘긴다(프롬프트는 12~22음절을 요구한다).
+_VEO_MIN_CHARS = 12
 
 
 def _parse(raw: dict | None, candidate: StoryCandidate) -> Script | None:
@@ -463,7 +448,7 @@ def _parse(raw: dict | None, candidate: StoryCandidate) -> Script | None:
         ]
         if short_veo:
             logger.warning(
-                f"[script] VEO 문장이 너무 짧아 8초를 채우지 못합니다 "
+                f"[script] VEO 문장이 너무 짧아 클립 길이를 채우지 못합니다 "
                 f"(최소 {_VEO_MIN_CHARS}자 필요): {short_veo} — 템플릿 폴백으로 넘깁니다"
             )
             return None
@@ -527,7 +512,20 @@ def _parse_line(raw: dict, candidate: StoryCandidate) -> ScriptLine:
         map_region=str(map_data.get("region") or "").strip().upper(),
         map_spots=[str(spot).strip() for spot in map_data.get("spots", []) if str(spot).strip()],
         sfx=sfx,
+        overlay=_overlay(raw.get("overlay"), text),
     )
+
+
+_OVERLAY_MAX_CHARS = 8
+
+
+def _overlay(raw: object, text: str) -> str:
+    """화면 중앙에 크게 박을 숫자/단어. 문장에 실제로 없는 말이면 버린다 — 자막과 다른
+    숫자가 화면에 뜨면 사실 기반 원칙이 깨진다."""
+    value = str(raw or "").strip()
+    if not value or len(value) > _OVERLAY_MAX_CHARS or value not in text:
+        return ""
+    return value
 
 
 # LLM 이 프롬프트에 없는 이름을 쓰더라도, 실제 에셋(assets/audio/*.wav) 중 가장
@@ -672,10 +670,9 @@ FALLBACK_IMAGE_PROMPT = (
 
 # 재난 소재(3D 엔지니어링 단면도) 전용 고정 스타일. LLM 이 없을 때만 쓰인다.
 ENGINEERING_DIAGRAM_STYLE = (
-    "Semi-stylized 3D engineering diagram, isometric cutaway view, neutral "
-    "gray studio background, clean clay-render texture, glowing red "
-    "technical lines pointing to key parts, 8k resolution, smooth camera "
-    "movement, no text, no watermark"
+    "stylized 3D miniature diorama on a neutral gray grid studio floor, clean "
+    "clay-render materials, soft studio lighting, bold red technical "
+    "annotations, photoreal engineering explainer, 8k, no watermark"
 )
 FALLBACK_DISASTER_IMAGE_PROMPT = (
     f"a large structure with visible structural damage and cracks, "
@@ -737,7 +734,7 @@ def _sillok_template_script(candidate: StoryCandidate) -> Script:
     )
     part1_lines.append(line(5, "그래서 이게 뭐였을까?", emphasis=["뭐였을까"], sfx="braam"))
 
-    part2_lines = [line(0, "1부에서 남긴 질문이었지.")]
+    part2_lines = [line(0, "1부에서 남긴 질문부터 보겠습니다.")]
     part2_lines += [line(i, fact) for i, fact in enumerate(facts[3:7], start=1)]
     part2_lines.append(
         line(
@@ -792,20 +789,20 @@ def _disaster_template_script(candidate: StoryCandidate) -> Script:
     part1_lines = [
         line(
             0,
-            f"{candidate.headline}, 실제로 있었던 일인데, 진짜 상상도 못 할 방식으로 벌어졌어.",
+            f"{candidate.headline}, 실제로 있었던 일입니다.",
             emphasis=[candidate.headline],
             scene_type="VEO",
         )
     ]
     part1_lines += [line(i, fact) for i, fact in enumerate(facts[:6], start=1)]
-    part1_lines.append(line(7, "그래서 원인이 뭐였을까?", emphasis=["원인"], sfx="braam"))
+    part1_lines.append(line(7, "그렇다면 원인은 무엇이었을까요?", emphasis=["원인"], sfx="braam"))
 
-    part2_lines = [line(0, "1부에서 남긴 질문이었지.")]
+    part2_lines = [line(0, "1부에서 남긴 질문부터 보겠습니다.")]
     part2_lines += [line(i, fact) for i, fact in enumerate(facts[6:12], start=1)]
     part2_lines.append(
-        line(7, "위키백과에는 여기까지만 나와 있어.", emphasis=["여기까지만"], sfx="sub_boom")
+        line(7, "기록에 남은 건 여기까지입니다.", emphasis=["여기까지"], sfx="sub_boom")
     )
-    part2_lines.append(line(8, "너는 이게 왜 일어났다고 생각해?"))
+    part2_lines.append(line(8, "여러분은 이 사고가 왜 일어났다고 보시나요?"))
 
     return Script(
         topic_key=candidate.topic_key,

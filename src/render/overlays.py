@@ -151,6 +151,40 @@ def render_hook_number(
     return out_path
 
 
+def render_center_overlay(
+    text: str, out_path: Path, size: tuple[int, int], color: str = "#FFFFFF"
+) -> Path:
+    """문장 동안 화면 한가운데 크게 박는 숫자/단어("1978", "98m").
+
+    레퍼런스 채널이 핵심 숫자를 굵은 산세리프로 화면 중앙에 띄우는 방식이다. 자막(하단)과
+    상단 타이틀 사이, 세로 42% 지점에 둔다.
+    """
+    width, height = size
+    image = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    font_size = int(width * 0.2)
+    font = _font(font_size)
+    while draw.textlength(text, font=font) > width * 0.84 and font_size > 48:
+        font_size = int(font_size * 0.9)
+        font = _font(font_size)
+
+    text_width = draw.textlength(text, font=font)
+    _draw_text_with_shadow(
+        draw,
+        ((width - text_width) / 2, height * 0.42 - font_size / 2),
+        text,
+        font,
+        color,
+        shadow_blur=12,
+        shadow_alpha=220,
+    )
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(out_path)
+    return out_path
+
+
 def _wrap_lines(draw: ImageDraw.ImageDraw, text: str, font, max_width: float) -> list[str]:
     """단어 단위로 최대 두 줄까지 접는다. 한국어는 공백이 성기니 어절 단위로 접어도
     자연스럽다."""

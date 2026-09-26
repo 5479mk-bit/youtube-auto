@@ -112,6 +112,8 @@ class ScriptLine:
     map_spots: list[str] = field(default_factory=list)
     # 이 문장 시작 지점에 때릴 효과음.
     sfx: str = "none"
+    # 이 문장 동안 화면 한가운데 크게 띄울 숫자/짧은 단어("1978", "98m"). 비어 있으면 없음.
+    overlay: str = ""
     # 이 문장을 읽고 나서 쉬는 시간. 숨 쉴 틈이 없으면 기계가 읽는 것처럼 들린다.
     pause_after: float = 0.0
     speech_rate: str = "+0%"

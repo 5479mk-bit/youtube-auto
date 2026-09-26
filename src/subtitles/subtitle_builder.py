@@ -17,7 +17,7 @@ from pathlib import Path
 
 from ..models import ScriptPart
 
-MAX_SCREEN_LINES = 2  # 한 화면에 띄우는 자막 줄 수 상한
+MAX_SCREEN_LINES = 1  # 레퍼런스처럼 말하는 구절 한 줄씩만 띄운다
 
 
 @dataclass

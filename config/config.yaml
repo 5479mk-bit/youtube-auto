@@ -27,12 +27,12 @@ video:
 
 subtitle:
   # 외곽선을 버리고 드롭 섀도우로 바꿨다. 글자가 얇아진 만큼 크기도 줄인다.
-  font_size: 52
-  font_color: "#F2EFE8"
-  emphasis_color: "#D9A441"   # 형광 노랑 대신 낡은 금박 톤
+  font_size: 46   # 레퍼런스처럼 작은 흰 글씨 한 줄
+  font_color: "#FFFFFF"
+  emphasis_color: "#FFFFFF"   # 레퍼런스처럼 강조색 없이 흰 글씨 하나로
   shadow_blur: 6
   bottom_ratio: 0.24          # 자막 블록 아래끝을 화면 하단 24% 지점에
-  max_chars_per_line: 16
+  max_chars_per_line: 18
 
 audio:
   # voxcpm(GPU 전용)과 supertonic(로컬 서버)이 항상 1·2순위로 시도된다
@@ -70,7 +70,7 @@ audio:
   supertonic_max_chunk_length: 400
   gemini_voice: Charon        # 차분하고 신뢰감 있는 남성 톤(다큐 내레이터에 맞음)
   gemini_model: gemini-2.5-pro-preview-tts
-  gemini_style_prompt: "친한 형이 무서운 실화를 들려주듯 자연스럽게, 반말 구어체 그대로, 속도는 빠르지 않게 긴장감이 점점 올라가도록, 과장된 연기 톤은 빼고 진짜 사람처럼"
+  gemini_style_prompt: "흥미로운 실화를 들려주는 믿음직한 해설자처럼 자연스럽게, 합니다체 대본 그대로, 문장 사이를 길게 쉬지 말고 매끄럽게 이어서, 차분하지만 긴장감이 점점 올라가도록, 과장된 연기 톤은 빼고 진짜 사람처럼"
   gemini_min_request_interval: 1.5
   edge_voice: injoon          # ko-KR-InJoonNeural (require_quality_voice=false 일 때만 쓰임)
   edge_pitch: "-5Hz"
@@ -85,6 +85,9 @@ audio:
   # -6dB는 드론·내레이션에 묻혀 "효과음이 거의 안 들린다"는 지적이 있었다 —
   # "쾅쾅 터지도록" 확실히 들리게 4dB 올렸다.
   sfx_volume_db: -4
+  # 대본이 sfx 를 안 준 컷에도 작은 전환음을 깐다(레퍼런스는 거의 모든 컷에 소리가 붙는다).
+  cut_whoosh: true
+  cut_sfx_volume_db: -12
 
 script:
   llm:
@@ -93,8 +96,9 @@ script:
     model: gemini-3.6-flash
     temperature: 0.9
   # 부별 목표 글자 수. 한국어 내레이션 기준 대략 1초당 5~6자.
-  part1_target_chars: 190
-  part2_target_chars: 200
+  # 레퍼런스(건축사전)는 초당 약 6음절로 쉼 없이 읽는다. 12문장 × 20자 안팎.
+  part1_target_chars: 240
+  part2_target_chars: 250
 
 topics:
   # sillok(조선왕조실록) | heritage(국가유산청 해설문) | disaster(해외 자연재해·인재).
@@ -180,7 +184,9 @@ cloud:
 veo:
   tier: lite            # lite | fast | standard — 단가가 8배까지 벌어진다
   resolution: 720p
-  duration_seconds: 8
+  # 레퍼런스는 컷 하나가 3~4초다. 8초 클립 하나 값으로 4초 클립 두 개를 만들어
+  # 움직이는 컷 수를 두 배로 늘린다(Veo 는 초 단위 과금).
+  duration_seconds: 4
   clips_per_part: 2     # 부당 Veo 클립 수. 0 이면 전부 무료 파랄랙스로 간다
   still_seconds: 6.0    # Veo 컷 사이에 사진을 몇 초 보여줄지
   # VEO 로 지정된 문장의 최종(무음 패딩 포함) 최소 길이. scene_planner 가 씬 길이를
@@ -189,10 +195,11 @@ veo:
   # 보인다("맨처음+중간 2번은 움직여야" 피드백의 원인). "실제로 8초를 만들었으면
   # 8초를 다 써야지 아깝게" — duration_seconds 와 같은 값으로 맞춰 생성된 영상을
   # 끝까지 쓴다(짧게 잡아 일부러 잘라내지 않는다).
-  min_scene_seconds: 8
+  min_scene_seconds: 4
   # lite 8초 기준 클립당 약 590원. 편당 4클립이면 약 2,400원, 하루 1편이면 월 약 7만원.
-  max_clips_per_episode: 4
-  max_clips_per_day: 12
+  # 부당 VEO 5~6문장(4초) × 2부.
+  max_clips_per_episode: 12
+  max_clips_per_day: 24
 
 # 무료 경로. 깊이를 추정해 카메라가 장면 안으로 들어간다.
 parallax:
