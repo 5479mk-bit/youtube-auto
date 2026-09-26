@@ -50,6 +50,12 @@ def main() -> int:
         help="1부만 렌더/전송한다 (검증 사이클용 임시 옵션, 과금·시간을 아낀다)",
     )
     run_parser.add_argument(
+        "--combine-parts",
+        action="store_true",
+        help="1부·2부로 나누지 않고 영상 하나로 합본 렌더한다 (최소 63초). "
+        "--part1-only 보다 우선한다",
+    )
+    run_parser.add_argument(
         "--preview-seconds",
         type=float,
         default=None,
@@ -140,6 +146,7 @@ def main() -> int:
             use_veo=not args.no_veo,
             reuse_topic=args.reuse_topic,
             part1_only=args.part1_only,
+            combine_parts=args.combine_parts,
             confirm_before_render=args.confirm,
             preview_seconds=args.preview_seconds,
         )

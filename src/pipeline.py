@@ -380,12 +380,29 @@ def _truncate_script_for_preview(script: Script, target_seconds: float) -> None:
     script.part2.lines = []
 
 
+def _merge_parts(script: Script) -> ScriptPart:
+    """1부·2부를 하나의 연속 영상으로 합친다.
+
+    대본 생성 자체는 그대로 둔다 — LLM 은 여전히 "1부 오프닝 훅 → 클리프행어 →
+    2부 정면 답변 → 클라이맥스"의 3중 후킹 구조로 쓴다. 이 구조가 그대로 하나의
+    영상 안에서 전반부/후반부 역할을 하므로 따로 다시 쓸 필요가 없다 — 두 부를
+    이어 붙이기만 하면 자연스러운 단일 서사가 된다. 화면 상단 타이틀은 1부의
+    hook_number 를 그대로 쓴다(영상 전체에 걸쳐 표시되는 자리라 하나만 고른다).
+    """
+    return ScriptPart(
+        part=1,
+        hook_number=script.part1.hook_number,
+        lines=[*script.part1.lines, *script.part2.lines],
+    )
+
+
 def run(
     settings: Settings,
     render: bool = True,
     use_veo: bool = True,
     reuse_topic: bool = False,
     part1_only: bool = False,
+    combine_parts: bool = False,
     confirm_before_render: bool = False,
     preview_seconds: float | None = None,
 ) -> PipelineResult | None:
@@ -437,9 +454,21 @@ def run(
 
     parts: list[RenderedPart] = []
     credits: list[PhotoCredit] = []
-    parts_to_render = (script.part1,) if part1_only else (script.part1, script.part2)
-    if part1_only:
+    duration_bounds: tuple[float, float] | None = None
+    if combine_parts:
+        # 1부·2부를 나누지 않고 하나로 이어 붙인다 — 대본 구조(3중 후킹)는 그대로,
+        # 렌더만 영상 하나로 합친다.
+        parts_to_render = (_merge_parts(script),)
+        duration_bounds = (
+            settings.get("video.combined_duration_min", 63),
+            settings.get("video.combined_duration_max", 999),
+        )
+        logger.info("합본 모드: 1·2부를 나누지 않고 영상 하나로 렌더/전송합니다 (--combine-parts)")
+    elif part1_only:
+        parts_to_render = (script.part1,)
         logger.info("검증 모드: 1부만 렌더/전송합니다 (--part1-only)")
+    else:
+        parts_to_render = (script.part1, script.part2)
     try:
         for part in parts_to_render:
             rendered, part_credits = _render_part(
@@ -453,6 +482,8 @@ def run(
                 veo_client,
                 official_video,
                 ai_client,
+                duration_bounds=duration_bounds,
+                is_combined=combine_parts,
             )
             parts.append(rendered)
             credits.extend(
@@ -521,8 +552,10 @@ def _render_part(
     veo_client,
     official_video: tuple[Path, float] | None = None,
     ai_client=None,
+    duration_bounds: tuple[float, float] | None = None,
+    is_combined: bool = False,
 ) -> tuple[RenderedPart, list[PhotoCredit]]:
-    logger.info(f"{part.part}부 내레이션 합성")
+    logger.info(f"{part.part}부 내레이션 합성" if not is_combined else "내레이션 합성(합본)")
     tts_engine.synthesize_part(
         part,
         build_tts_engines(settings),
@@ -552,6 +585,7 @@ def _render_part(
         return _finish_part(
             settings, script, part, candidate, collector, provider, work_dir,
             veo_client, ai_client, scenes, cues,
+            duration_bounds=duration_bounds, is_combined=is_combined,
         )
 
     # 공식 동영상이 있으면 그걸 도입부로 쓰고 Veo 호출 자체를 건너뛴다 — 없으면 지금까지처럼
@@ -588,6 +622,7 @@ def _render_part(
     return _finish_part(
         settings, script, part, candidate, collector, provider, work_dir,
         veo_client, ai_client, scenes, cues,
+        duration_bounds=duration_bounds, is_combined=is_combined,
     )
 
 
@@ -608,9 +643,11 @@ def _finish_part(
     ai_client,
     scenes,
     cues,
+    duration_bounds: tuple[float, float] | None = None,
+    is_combined: bool = False,
 ) -> tuple[RenderedPart, list[PhotoCredit]]:
     """씬 배정이 끝난 뒤는 두 경로가 같다 — 렌더하고 썸네일·메타데이터를 붙인다."""
-    _warn_if_off_target(settings, part)
+    _warn_if_off_target(settings, part, duration_bounds)
 
     logger.info(
         f"{part.part}부 렌더 ({part.duration:.1f}초, 컷 {len(scenes)}개 · {engine_summary(scenes)})"
@@ -638,7 +675,8 @@ def _finish_part(
     )
 
     metadata = seo_metadata.generate(
-        script, part, candidate, provider, settings.get("publish.default_tags", [])
+        script, part, candidate, provider, settings.get("publish.default_tags", []),
+        is_combined=is_combined,
     )
     photo_note = photo_credit_line(credits)
     if photo_note:
@@ -656,10 +694,19 @@ def _finish_part(
     )
 
 
-def _warn_if_off_target(settings: Settings, part: ScriptPart) -> None:
-    """쇼츠는 길이가 곧 노출이다. 목표 구간을 벗어나면 렌더 전에 알린다."""
-    low = settings.get("video.part_duration_min", 30)
-    high = settings.get("video.part_duration_max", 40)
+def _warn_if_off_target(
+    settings: Settings, part: ScriptPart, duration_bounds: tuple[float, float] | None = None
+) -> None:
+    """쇼츠는 길이가 곧 노출이다. 목표 구간을 벗어나면 렌더 전에 알린다.
+
+    합본(--combine-parts) 모드는 1·2부 각각의 30~40초 목표가 아니라 run() 이 넘겨주는
+    합본 전용 구간(기본 63초 이상)을 기준으로 삼는다.
+    """
+    if duration_bounds is not None:
+        low, high = duration_bounds
+    else:
+        low = settings.get("video.part_duration_min", 30)
+        high = settings.get("video.part_duration_max", 40)
     if part.duration < low:
         logger.warning(
             f"{part.part}부가 {part.duration:.1f}초로 목표({low}~{high}초)보다 짧습니다. "

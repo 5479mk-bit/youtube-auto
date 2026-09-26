@@ -19,7 +19,13 @@ on:
         type: boolean
         default: true
       part1_only:
-        description: "1부만 렌더/전송한다 (검증 사이클용 — 만족하면 false 로 되돌릴 것)"
+        description: "1부만 렌더/전송한다 (검증 사이클용 — 만족하면 false 로 되돌릴 것).
+          combine_parts 가 true 면 이 값은 무시된다."
+        type: boolean
+        default: true
+      combine_parts:
+        description: "1부·2부로 나누지 않고 영상 하나로 합본 렌더한다 (최소 63초,
+          사용자 지시 2026-09-26). part1_only 보다 우선한다."
         type: boolean
         default: true
       image_only:
@@ -313,7 +319,11 @@ jobs:
           ARGS=""
           if [ "${{ inputs.no_veo || 'false' }}" = "true" ]; then ARGS="$ARGS --no-veo"; fi
           if [ "${{ inputs.reuse_topic }}" != "false" ]; then ARGS="$ARGS --reuse-topic"; fi
-          if [ "${{ inputs.part1_only }}" != "false" ]; then ARGS="$ARGS --part1-only"; fi
+          if [ "${{ inputs.combine_parts }}" != "false" ]; then
+            ARGS="$ARGS --combine-parts"
+          elif [ "${{ inputs.part1_only }}" != "false" ]; then
+            ARGS="$ARGS --part1-only"
+          fi
           # 컨셉만 싸게 확인할 때: 1부를 이 초수 안쪽으로 줄여서 컷 수(=과금)를 그만큼 줄인다.
           if [ -n "${{ inputs.preview_seconds }}" ]; then
             ARGS="$ARGS --preview-seconds ${{ inputs.preview_seconds }}"

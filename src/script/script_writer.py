@@ -759,15 +759,38 @@ def _sillok_template_script(candidate: StoryCandidate) -> Script:
     )
 
 
+# candidate.facts 는 위키백과 문단을 "\n\n" 로 쪼갠 것이라 문단 하나가 수백 자를 넘기도
+# 한다. 이걸 그대로 한 줄(=TTS 한 문장)로 읽히면 컷 하나가 몇 분씩 늘어난다 — 실제로
+# 이 사고로 6분 넘는 영상이 나온 적이 있다(run #32). 문장 하나가 화면 한 컷과 맞물려야
+# 하는 이 파이프라인 구조상, 폴백 문장도 최대 길이를 지켜야 한다.
+_FALLBACK_FACT_MAX_CHARS = 120
+
+
+def _cap_fact_for_speech(fact: str, max_chars: int = _FALLBACK_FACT_MAX_CHARS) -> str:
+    """긴 위키백과 문단을 한 문장 분량으로 자른다. 문장 경계(마침표)에서 자르되,
+    그 경계가 없으면 글자 수에서 그냥 끊는다 — 사실을 지어내지 않되, 한 줄이
+    통째로 몇 분짜리 낭독이 되는 것만 막는다."""
+    if len(fact) <= max_chars:
+        return fact
+    head = fact[:max_chars]
+    boundary = head.rfind(". ")
+    if boundary == -1:
+        boundary = head.rfind("다.")
+    if boundary > max_chars * 0.4:
+        return head[: boundary + 1].strip()
+    return head.strip()
+
+
 def _disaster_template_script(candidate: StoryCandidate) -> Script:
     """LLM 없이 위키백과 본문만으로 짜는 대본.
 
     본문 문단을 그대로 나눠 쓴다 — 사실 재료를 임의로 바꾸지 않는다는 원칙은
-    실록 폴백과 같다.
+    실록 폴백과 같다. 다만 문단이 너무 길면 한 줄(한 컷)이 지나치게 길어지므로
+    `_cap_fact_for_speech` 로 상한을 둔다.
     """
     queries_ko = candidate.image_queries_ko or [candidate.subject or "재난"]
     queries_en = candidate.image_queries_en or ["disaster"]
-    facts = [fact for fact in candidate.facts if fact]
+    facts = [_cap_fact_for_speech(fact) for fact in candidate.facts if fact]
 
     def line(
         index: int,

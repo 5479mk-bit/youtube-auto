@@ -10,6 +10,11 @@ video:
   safe_bottom: 0.25
   part_duration_min: 30
   part_duration_max: 40
+  # --combine-parts(1·2부를 나누지 않고 영상 하나로 합본)일 때의 목표 구간.
+  # 사용자 지시: "최소 63초 이상". 상한은 사실상 없다 — 대본 3중 후킹 구조를
+  # 그대로 이어 붙인 자연 길이(보통 70~90초)를 그대로 쓴다.
+  combined_duration_min: 63
+  combined_duration_max: 999
   cut_duration_min: 2.5
   cut_duration_max: 3.0
   hook_duration: 3.0

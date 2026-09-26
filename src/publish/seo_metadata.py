@@ -27,6 +27,24 @@ JSON 만 출력한다:
 {{"titles": ["", "", ""], "description": "", "tags": ["", ""]}}
 """
 
+# 합본(--combine-parts) 렌더는 1·2부로 나뉘지 않은 영상 하나다 — "부"·"2부작" 언급을
+# 프롬프트에서부터 빼서 LLM 이 틀린 부 표기를 만들지 않게 한다.
+COMBINED_PROMPT = """다음 쇼츠 영상의 유튜브 제목 후보 3개와 설명을 쓴다.
+
+주제: {title_seed}
+화면 문구: {hook_number}
+대상: {subject}
+내레이션: {narration}
+
+규칙:
+- 제목은 28자 이내. 숫자를 앞쪽에 배치하고, 낚시가 아니라 실제 내용과 일치해야 한다.
+- 과장 금지. 데이터에 없는 주장 금지.
+- 설명은 3줄 이내. 마지막 줄에 출처를 적는다.
+
+JSON 만 출력한다:
+{{"titles": ["", "", ""], "description": "", "tags": ["", ""]}}
+"""
+
 
 def generate(
     script: Script,
@@ -34,12 +52,15 @@ def generate(
     candidate: StoryCandidate,
     provider: LLMProvider | None,
     default_tags: list[str],
+    is_combined: bool = False,
 ) -> VideoMetadata:
+    """`is_combined` 는 1·2부를 나누지 않고 영상 하나로 합본 렌더했을 때(--combine-parts)
+    True 다 — 제목에 "(1부)" 를 붙이거나 "전체 2부작"이라고 쓰면 틀린 설명이 된다."""
     narration = " ".join(line.text for line in part.lines)
 
     if provider is not None:
         raw = provider.complete_json(
-            PROMPT.format(
+            (COMBINED_PROMPT if is_combined else PROMPT).format(
                 title_seed=script.title_seed,
                 hook_number=part.hook_number,
                 subject=candidate.subject,
@@ -48,11 +69,11 @@ def generate(
             ),
             temperature=0.8,
         )
-        metadata = _parse(raw, script, part, candidate, default_tags)
+        metadata = _parse(raw, script, part, candidate, default_tags, is_combined)
         if metadata is not None:
             return metadata
 
-    return _template_metadata(script, part, candidate, default_tags)
+    return _template_metadata(script, part, candidate, default_tags, is_combined)
 
 
 def _parse(
@@ -61,6 +82,7 @@ def _parse(
     part: ScriptPart,
     candidate: StoryCandidate,
     default_tags: list[str],
+    is_combined: bool = False,
 ) -> VideoMetadata | None:
     if not raw:
         return None
@@ -69,7 +91,8 @@ def _parse(
     if not titles or not description:
         return None
 
-    titles = [_with_part_suffix(title, part.part) for title in titles]
+    if not is_combined:
+        titles = [_with_part_suffix(title, part.part) for title in titles]
     tags = [str(tag).strip() for tag in raw.get("tags", []) if str(tag).strip()]
 
     return VideoMetadata(
@@ -81,12 +104,19 @@ def _parse(
 
 
 def _template_metadata(
-    script: Script, part: ScriptPart, candidate: StoryCandidate, default_tags: list[str]
+    script: Script,
+    part: ScriptPart,
+    candidate: StoryCandidate,
+    default_tags: list[str],
+    is_combined: bool = False,
 ) -> VideoMetadata:
+    def suffixed(title: str) -> str:
+        return title if is_combined else _with_part_suffix(title, part.part)
+
     titles = [
-        _with_part_suffix(f"{part.hook_number}, {script.title_seed}", part.part),
-        _with_part_suffix(f"{script.title_seed} ({part.hook_number})", part.part),
-        _with_part_suffix(f"{candidate.subject}에 얽힌 이야기", part.part),
+        suffixed(f"{part.hook_number}, {script.title_seed}"),
+        suffixed(f"{script.title_seed} ({part.hook_number})"),
+        suffixed(f"{candidate.subject}에 얽힌 이야기"),
     ]
     if candidate.dataset == "sillok":
         description = (

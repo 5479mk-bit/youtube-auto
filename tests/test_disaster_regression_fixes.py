@@ -644,3 +644,111 @@ def test_sfx_none_scenes_stay_silent(monkeypatch, tmp_path):
     # 안전장치로 sub_boom 폴백까지 한 번 더 시도되지만, "none" 컷에서는 아예 호출
     # 자체가 없다).
     assert picked == ["crack", "sub_boom"]
+
+
+# --- 합본 렌더(--combine-parts): 1·2부를 나누지 않고 영상 하나로 ---------------------
+
+
+def _make_script_part(part_num: int, hook: str, texts: list[str]):
+    from src.models import ScriptLine, ScriptPart
+
+    return ScriptPart(
+        part=part_num,
+        hook_number=hook,
+        lines=[ScriptLine(text=t, visual_query_ko="a", duration=2.0) for t in texts],
+    )
+
+
+def test_merge_parts_concatenates_lines_and_keeps_part1_hook():
+    from src.models import Script
+    from src.pipeline import _merge_parts
+
+    script = Script(
+        topic_key="k",
+        title_seed="제목",
+        part1=_make_script_part(1, "훅1", ["문장1", "문장2"]),
+        part2=_make_script_part(2, "훅2", ["문장3", "문장4"]),
+    )
+    merged = _merge_parts(script)
+    assert merged.part == 1
+    assert merged.hook_number == "훅1"
+    assert [line.text for line in merged.lines] == ["문장1", "문장2", "문장3", "문장4"]
+    assert merged.duration == pytest.approx(8.0)
+
+
+def test_warn_if_off_target_uses_combined_bounds(monkeypatch):
+    from src import pipeline
+
+    part = _make_script_part(1, "훅", ["a"] * 20)  # 20 * 2.0초 = 40초
+
+    class S:
+        def get(self, key, default=None):
+            return default
+
+    warnings = []
+    monkeypatch.setattr(pipeline.logger, "warning", lambda msg: warnings.append(msg))
+
+    pipeline._warn_if_off_target(S(), part, duration_bounds=(63, 999))
+    assert any("40.0초" in msg and "63" in msg for msg in warnings)
+
+    warnings.clear()
+    pipeline._warn_if_off_target(S(), part, duration_bounds=(30, 999))
+    assert not warnings  # 40초는 (30, 999) 구간 안이라 경고 없음
+
+
+def test_seo_metadata_combined_skips_part_suffix():
+    from src.models import Script, StoryCandidate
+    from src.publish import seo_metadata
+
+    script = Script(
+        topic_key="k",
+        title_seed="제목",
+        part1=_make_script_part(1, "훅", ["문장"]),
+        part2=_make_script_part(2, "훅2", ["문장2"]),
+    )
+    candidate = StoryCandidate(
+        dataset="disaster",
+        topic_key="disaster:x",
+        headline="사건",
+        headline_number="",
+        subject="사건",
+        context="",
+        source_name="위키백과",
+    )
+    metadata = seo_metadata.generate(script, script.part1, candidate, None, [], is_combined=True)
+    assert "부)" not in metadata.title
+    metadata_split = seo_metadata.generate(script, script.part1, candidate, None, [])
+    assert "(1부)" in metadata_split.title
+
+
+def test_cap_fact_for_speech_truncates_long_paragraph():
+    from src.script.script_writer import _cap_fact_for_speech
+
+    short = "짧은 문장입니다."
+    assert _cap_fact_for_speech(short) == short
+
+    long_fact = "첫 문장입니다. " + "그 뒤로 아주 긴 설명이 계속 이어집니다. " * 20
+    capped = _cap_fact_for_speech(long_fact)
+    assert len(capped) <= 120
+    assert capped  # 빈 문자열이 되면 안 된다
+
+
+def test_disaster_template_script_caps_fact_length():
+    from src.models import StoryCandidate
+    from src.script.script_writer import _disaster_template_script
+
+    huge_fact = "설명이 이어집니다. " * 40  # 400자 넘는 하나의 "사실"
+    candidate = StoryCandidate(
+        dataset="disaster",
+        topic_key="disaster:y",
+        headline="침몰 사고",
+        headline_number="",
+        subject="침몰 사고",
+        context="",
+        source_name="위키백과",
+        facts=[huge_fact] * 3,
+    )
+    script = _disaster_template_script(candidate)
+    for part in (script.part1, script.part2):
+        for line in part.lines:
+            assert len(line.text) <= 130  # 120자 상한 + 약간의 여유
