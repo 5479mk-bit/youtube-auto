@@ -37,22 +37,30 @@ subtitle:
 audio:
   # voxcpm(GPU 전용)과 supertonic(로컬 서버 전용)이 항상 1·2순위로 시도된다
   # (build_tts_engines 참고) — GitHub Actions 러너에는 GPU도 로컬 서버도 없어
-  # 둘 다 조용히 폴백된다. 이 engine 값은 그다음(진짜 쓰이는) 엔진을 고른다.
-  # "edge"는 완전 무료지만 기계음에 가깝다 — Vertex 인증이 붙어 있으면(cloud-check
-  # 통과) "gemini"가 훨씬 자연스러운 목소리를 낸다. 비용을 각오하고 무조건 무료로만
-  # 가려는 게 아니면 edge 로 내리지 않는다.
-  engine: gemini
+  # 둘 다 조용히 폴백된다. 이 engine 값은 그다음(진짜 쓰이는) 엔진 순서를 고른다.
+  # "cloud_tts"(Google Cloud TTS, Neural2)가 기본이다 — Gemini 의 멀티모달 오디오
+  # 출력은 "다큐 성우" 톤을 내기엔 부족하다고 확인됐다(사용자 청취). Cloud TTS 는
+  # SSML 로 피치를 직접 지시할 수 있는 전용 합성 엔진이라 더 깊고 무게감 있는
+  # 톤을 낼 수 있다.
+  engine: cloud_tts
+  # 품질 엔진(voxcpm/supertonic/gemini/cloud_tts)이 전부 실패했을 때 edge-tts
+  # (기계음)로 조용히 떨어지는 대신 렌더를 멈춘다(tts_engine.TTSFailure) — "저품질
+  # 목소리로 끝까지 만들어놓고 나서야 실패를 안다"를 없애기 위함. 비용이 최우선이라
+  # edge 라도 상관없을 때만 false 로 내린다.
+  require_quality_voice: true
   supertonic_url: "http://127.0.0.1:5000/api/synthesize"
   supertonic_voice: default
   gemini_voice: Charon        # 차분하고 신뢰감 있는 남성 톤(다큐 내레이터에 맞음)
   gemini_model: gemini-2.5-flash-preview-tts
   gemini_style_prompt: "차분한 다큐멘터리 내레이터처럼, 진짜 사람이 말하듯 자연스러운 속도로"
   gemini_min_request_interval: 1.5
-  edge_voice: injoon          # ko-KR-InJoonNeural (supertonic 실패 시 최종 폴백)
+  edge_voice: injoon          # ko-KR-InJoonNeural (require_quality_voice=false 일 때만 쓰임)
   edge_pitch: "-5Hz"
-  # cloud_tts 는 기본 경로가 아니다 — 설정 한 줄(engine)로 되돌릴 수 있게 남겨둔다.
-  cloud_tts_voice: ko-KR-Neural2-C
-  cloud_tts_pitch: -1.5
+  cloud_tts_voice: ko-KR-Neural2-C   # 공식 문서 기준 남성 음성. 실제 톤은 직접 들어보고
+                                     # 마음에 안 들면 이 이름만 바꾸면 된다(B/D 등).
+  cloud_tts_pitch: -4.0   # 세미톤. -1.5는 거의 안 들려서 '신비한 건축사전' 급으로
+                           # 더 낮췄다 — 너무 낮추면(-10 이하) 음성이 깨지므로 이 값이
+                           # 안전 상한에 가깝다.
   # 다크 앰비언트 드론을 전체에 깔고, 사건이 터지는 문장에 초저음 타격음을 얹는다.
   bgm_volume_db: -16
   bgm_hook_volume_db: -12
@@ -109,19 +117,14 @@ visuals:
     - cc-by
     - cc-by-sa
     - public domain
-  # 생성 정지화(AI_IMAGE)에 거는 색 보정·안개·줌. 기본값은 "그레이딩 없음"이다 —
-  # 3D 엔지니어링 단면도(밝은 스튜디오 배경, 붉은 기술선) 콘셉트에 조선시대/CCTV
-  # 시절의 어두운 밤안개 톤을 계속 덮어씌우고 있던 게 "화면이 여전히 정적이고
-  # 칙칙하다"는 지적의 실제 원인이었다(scene_renderers.render_ai_image_motion 참고).
-  # sillok(실록) 콘셉트로 되돌릴 때만 아래 주석의 원래 값으로 올린다.
+  # 생성 정지화(AI_IMAGE)도 사진 컷과 똑같이 깊이 기반 파랄랙스(motion.parallax)로
+  # 움직인다 — 색 보정을 아무리 만져도 "화면이 정지 사진처럼 보인다"는 문제는
+  # 안 풀렸다. 평평한 줌(크롭+리사이즈)과 달리 픽셀마다 깊이가 달라 원근이 실제로
+  # 어긋나며 지나간다. 재난 소재는 사진 기본값(parallax.shift 0.06/parallax.dolly
+  # 0.12)보다 더 세게 민다.
   ai_image_motion:
-    saturation: 1.0     # sillok 콘셉트였을 때는 0.70(채도 30% 감소)
-    contrast: 1.0        # sillok 콘셉트였을 때는 1.20
-    brightness: 0.0       # sillok 콘셉트였을 때는 -0.05(더 어둡게)
-    vignette: 0.0          # sillok 콘셉트였을 때는 0.42
-    fog_opacity: 0.0        # sillok 콘셉트였을 때는 0.35(밤안개 오버레이)
-    zoom_amount: 0.15        # 컷 전체에 걸친 확대 비율. 기존 0.06 은 거의 안 보일
-                              # 정도로 미미해 "정적으로 보인다"는 지적에 같이 걸렸다.
+    parallax_amount: 0.10   # 팬/시프트 시 최대 시차(화면 폭 대비)
+    dolly_amount: 0.30       # 푸시인/풀아웃 시 깊이별 배율 차이
 
 publish:
   privacy_status: private

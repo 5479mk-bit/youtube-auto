@@ -3,8 +3,12 @@
 엔진은 갈아끼울 수 있지만 파이프라인이 기대하는 건 하나다. 문장마다 음원 파일과
 실제 길이가 채워지는 것. 자막 타임코드와 컷 길이가 전부 이 길이에서 나온다.
 
-Gemini 가 한도에 걸리거나 실패하면 edge-tts 로 내려가고, 그것마저 안 되면 예상 길이만큼
-무음을 넣어 파이프라인이 멈추지 않게 한다. 다만 무음으로 떨어진 건 로그에 남긴다.
+품질 좋은 엔진(voxcpm/supertonic/gemini/cloud_tts)이 전부 실패했을 때 어떻게
+할지는 `require_quality` 로 정한다. `False`(레거시 동작)면 무음으로 채워서라도
+파이프라인을 계속 돌린다. `True`(기본값)면 "무음/기계음으로라도 계속"이 아니라
+`TTSFailure` 를 던져 그 회차를 통째로 중단시킨다 — 저품질 목소리로 끝까지
+렌더해놓고 나서야 사람이 듣고 실패를 아는 것보다, 렌더 초반에 명확히 실패하는
+쪽이 시간·비용을 덜 버린다.
 """
 
 from __future__ import annotations
@@ -42,7 +46,16 @@ class TTSEngine(Protocol):
     ) -> list[Path] | None: ...
 
 
-def synthesize_part(part: ScriptPart, engines: list[TTSEngine], out_dir: Path) -> ScriptPart:
+class TTSFailure(RuntimeError):
+    """품질 엔진이 전부 실패했고, 무음/저품질로라도 계속하지 않기로 한 경우."""
+
+
+def synthesize_part(
+    part: ScriptPart,
+    engines: list[TTSEngine],
+    out_dir: Path,
+    require_quality: bool = True,
+) -> ScriptPart:
     """부 하나를 한 엔진으로 끝까지 읽힌다.
 
     엔진을 문장마다 갈아타면 한 편 안에서 목소리가 바뀐다. 그래서 폴백은 문장이 아니라
@@ -61,6 +74,14 @@ def synthesize_part(part: ScriptPart, engines: list[TTSEngine], out_dir: Path) -
             logger.info(f"{part.part}부 내레이션: {engine.name}")
             return part
         logger.warning(f"{engine.name} 로는 {part.part}부를 끝까지 읽지 못했습니다 — 다음 엔진")
+
+    if require_quality:
+        raise TTSFailure(
+            f"{part.part}부를 읽을 고품질 TTS 엔진이 전부 실패했습니다 "
+            "(audio.require_quality_voice=true) — 무음이나 기계음으로 채우는 대신 "
+            "여기서 멈춥니다. Vertex/AI Studio 키·한도, 로컬 서버(voxcpm/supertonic) "
+            "상태를 확인하세요."
+        )
 
     logger.warning(f"{part.part}부를 읽을 엔진이 없어 무음으로 채웁니다")
     paths = []

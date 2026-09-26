@@ -229,19 +229,30 @@ def build_tts_engines(settings: Settings) -> list:
     )
 
     # voxcpm(GPU 전용)과 supertonic(로컬 서버 전용)은 GitHub Actions 러너에서는
-    # 구조적으로 절대 못 뜬다 — 폴백 자체는 정상 동작이다. 문제는 그다음이었다:
-    # Vertex 인증이 이미 붙어 있는데도(cloud-check 통과) Gemini TTS(자연스러운
-    # 목소리, 스타일 지시 가능)를 건너뛰고 edge-tts(기계음)로 바로 떨어지고
-    # 있었다 — `audio.engine` 기본값이 "edge"였기 때문이다. 이제 edge 를 명시적으로
-    # 고르지 않는 한 Gemini 를 항상 먼저 시도한다.
-    engine = settings.get("audio.engine", "gemini")
-    if engine == "cloud_tts":
-        rest = [cloud_tts, gemini, edge]
-    elif engine == "edge":
-        rest = [edge]
+    # 구조적으로 절대 못 뜬다 — 폴백 자체는 정상 동작이다.
+    #
+    # cloud_tts(Google Cloud Text-to-Speech, Neural2 음성)를 gemini 보다 앞에 둔다 —
+    # Gemini 의 멀티모달 오디오 출력(generateContent 의 AUDIO 응답)은 이 채널이
+    # 원하는 "다큐 성우" 톤을 내기엔 부족했다(사용자 청취 확인). Cloud TTS 는 이
+    # 목적으로 만들어진 전용 합성 엔진이고, SSML 로 피치를 직접 지시할 수 있어
+    # `audio.cloud_tts_pitch` 로 더 낮고 무게감 있는 톤을 낼 수 있다.
+    engine = settings.get("audio.engine", "cloud_tts")
+    if engine == "edge":
+        quality_chain = [edge]
+    elif engine == "gemini":
+        quality_chain = [gemini, cloud_tts]
     else:
-        rest = [gemini, edge]
-    return [voxcpm, supertonic, *rest]
+        quality_chain = [cloud_tts, gemini]
+
+    # audio.require_quality_voice(기본 true): 품질 엔진이 전부 실패했을 때 edge-tts
+    # (기계음)로 조용히 떨어지는 대신, 아예 edge 를 체인에서 빼서 synthesize_part 가
+    # TTSFailure 를 던지고 렌더를 멈추게 한다 — "저품질 목소리로 끝까지 만들어놓고
+    # 나서야 실패를 안다"를 없애기 위함. edge 를 의도적으로 쓰려면(비용 0원이 최우선일
+    # 때) 이 값을 false 로 내리거나 audio.engine 을 "edge" 로 지정한다.
+    if engine != "edge" and not settings.get("audio.require_quality_voice", True):
+        quality_chain = [*quality_chain, edge]
+
+    return [voxcpm, supertonic, *quality_chain]
 
 
 def build_spend_guard(settings: Settings) -> SpendGuard:
@@ -502,7 +513,12 @@ def _render_part(
     ai_client=None,
 ) -> tuple[RenderedPart, list[PhotoCredit]]:
     logger.info(f"{part.part}부 내레이션 합성")
-    tts_engine.synthesize_part(part, build_tts_engines(settings), work_dir / "audio")
+    tts_engine.synthesize_part(
+        part,
+        build_tts_engines(settings),
+        work_dir / "audio",
+        require_quality=settings.get("audio.require_quality_voice", True),
+    )
 
     cues = subtitle_builder.build_cues(
         part,

@@ -121,21 +121,21 @@ def _build_generated_clip(scene: Scene, veo_client, ai_client, size: tuple[int, 
         logger.warning("Veo 클립을 만들지 못해 이 컷은 생성 이미지로 대체합니다")
 
     if image_path is not None:
+        # 정지화를 평평한 줌으로 흉내만 내지 않는다 — 사진 컷에 이미 쓰고 있는
+        # 깊이 기반 파랄랙스(make_parallax_clip)를 생성 이미지에도 그대로 태운다.
+        # 픽셀마다 깊이가 다르게 움직이므로 원근이 실제로 어긋나며 지나가고, 이게
+        # "화면이 정지된 사진처럼 보인다"는 지적의 실제 해법이다 — 색 보정으로는
+        # 못 고치는 문제였다. 재난 소재는 사진 콘셉트보다 더 세게 민다.
         s = settings.get if settings is not None else (lambda key, default: default)
-        return (
-            scene_renderers.render_ai_image_motion(
-                image_path,
-                scene.duration,
-                size,
-                saturation=s("visuals.ai_image_motion.saturation", 1.0),
-                contrast=s("visuals.ai_image_motion.contrast", 1.0),
-                brightness=s("visuals.ai_image_motion.brightness", 0.0),
-                vignette=s("visuals.ai_image_motion.vignette", 0.0),
-                fog_opacity=s("visuals.ai_image_motion.fog_opacity", 0.0),
-                zoom_amount=s("visuals.ai_image_motion.zoom_amount", 0.15),
-            ),
-            credit,
+        clip = make_parallax_clip(
+            image_path,
+            scene.duration,
+            scene.camera,
+            size,
+            parallax=s("visuals.ai_image_motion.parallax_amount", 0.10),
+            dolly=s("visuals.ai_image_motion.dolly_amount", 0.30),
         )
+        return clip, credit
 
     logger.warning(f"생성이 막혀 대체 화면을 씁니다 ({scene.scene_type})")
     seed = scene.prompt or scene.image_query_ko or scene.scene_type

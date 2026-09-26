@@ -284,9 +284,14 @@ GLOBAL_DISASTER_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어
 두 갈래 중 하나를 네가 직접 정한다(`scene_type` — 이 소재에는 `HISTORICAL_DOC`,
 `MAP_MOTION` 을 쓰지 않는다).
 
-- "VEO": 영상 전체를 통틀어 **딱 한 문장**에만 준다. 가장 센 장면(훅)이다. 보통
-  1부 첫 문장.
-- "AI_IMAGE": 사건·구조 설명. 나머지 전부.
+- "VEO": **부마다 정확히 2문장.** 실제로 카메라와 피사체가 움직이는 유일한 컷이라
+  가장 센 순간에만 쓴다 — **1부는 오프닝 훅 문장(보통 첫 문장)과 중반 반전 훅
+  문장**, **2부는 원인이 밝혀지는 문장과 클라이맥스 문장**에 배정한다. 정지화
+  (AI_IMAGE)만으로는 절대 표현할 수 없는 "무너지고, 쏟아지고, 갈라지는" 순간을
+  이 두 컷에 몰아준다.
+- "AI_IMAGE": 나머지 전부(사건·구조 설명). 렌더 단계에서 깊이 기반 카메라 이동이
+  자동으로 걸리니, 프롬프트 자체는 정적인 도해가 아니라 "지금 막 무너지고 있는
+  순간의 단면"처럼 이미 동세가 담긴 장면으로 써라.
 
 `prompt` 는 VEO/AI_IMAGE 일 때만 채우는 영문 프롬프트다.
 **[경고: 피사체 실종 방지]** 프롬프트 맨 앞에는 반드시 **'사건의 주된 구조물·장면
@@ -296,16 +301,22 @@ GLOBAL_DISASTER_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어
 그 뒤에 아래 스타일 문구를 프롬프트 맨 끝에 쉼표와 함께 무조건 그대로 덧붙인다:
   ", Semi-stylized 3D engineering diagram, isometric cutaway view, neutral gray
    studio background, clean clay-render texture, glowing red technical lines
-   pointing to key parts, 8k resolution, smooth camera movement, violent water
-   rushing inside, structural walls cracking violently, massive collapse,
-   chaotic smoke and debris, intense cinematic motion, no text, no watermark"
+   pointing to key parts, 8k resolution, dynamic motion blur, debris and water
+   frozen mid-air, violent water rushing inside, structural walls cracking
+   violently, massive collapse, chaotic smoke and debris, intense cinematic
+   motion, no text, no watermark"
 
-**[VEO 무브먼트 지시]**
-VEO 로 가는 문장은 아래와 같은 차분한 인포그래픽 무브먼트를 반드시 지시한다.
-- "slow smooth orbit revealing the internal structure" (내부 구조가 드러나도록
-  천천히 도는 궤도 회전)
-- "camera glides through the cutaway cross-section" (단면을 가로질러 미끄러지듯
-  이동)
+**[VEO 무브먼트 지시 — 반드시 격렬해야 한다]**
+VEO 로 가는 두 문장은 "차분한 인포그래픽"이 아니라 **재난이 실제로 벌어지는
+순간의 폭력적인 카메라 워크**를 지시한다. 아래 중 장면에 맞는 걸 골라 쓴다.
+- "violent camera shake as the hull ruptures and water bursts through"
+  (선체가 파열되며 물이 터져 들어올 때 카메라가 격렬하게 흔들린다)
+- "rapid whip-pan following collapsing debris as structure crumbles"
+  (구조물이 무너지며 떨어지는 잔해를 따라 카메라가 빠르게 휙 돈다)
+- "fast dramatic push-in as cracks spread violently across the wall"
+  (벽에 균열이 격렬하게 번지는 순간 빠르게 밀고 들어간다)
+"slow smooth orbit" 같은 차분한 무브먼트는 이 소재에 절대 쓰지 않는다 — 재난의
+공포감을 죽인다.
 
 **사실 기반 원칙은 그대로다.** 바뀌는 건 "어떻게 보여줄까"(3D 단면도 스타일)이지
 "무슨 일이 있었나"가 아니다. 본문에 없는 장면을 지어내 그리지 않는다.
