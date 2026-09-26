@@ -206,6 +206,7 @@ def build_tts_engines(settings: Settings) -> list:
         voice=settings.get("audio.supertonic_voice", "M1"),
         lang=settings.get("audio.supertonic_lang", "ko"),
         steps=settings.get("audio.supertonic_steps", 64),
+        max_chunk_length=settings.get("audio.supertonic_max_chunk_length", 400),
     )
     gemini = GeminiTTS(
         api_keys=settings.secrets.gemini_api_keys,

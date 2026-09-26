@@ -23,6 +23,9 @@ TEXTURE_HANJI = ASSETS_DIR / "textures" / "hanji.jpg"
 MAP_DAEDONG = ASSETS_DIR / "maps" / "daedong_map.png"
 OVERLAY_FOG = ASSETS_DIR / "overlays" / "fog.mp4"
 AUDIO_DRONE = ASSETS_DIR / "audio" / "dark_ambient_drone.mp3"
+# "배경음이 초저음 드론뿐이라 웅장함이 없다"는 지적에 맞춰 추가한 화음 패드(합성,
+# 특정 곡 아님) — video_builder._load_bgm 이 드론보다 우선해서 쓴다.
+AUDIO_EPIC_PAD = ASSETS_DIR / "audio" / "epic_pad.mp3"
 AUDIO_SUB_BOOM = ASSETS_DIR / "audio" / "sub_boom.wav"
 AUDIO_PAPER_RUSTLE = ASSETS_DIR / "audio" / "paper_rustle.wav"
 AUDIO_BRAAM = ASSETS_DIR / "audio" / "braam.wav"

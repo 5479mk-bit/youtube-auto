@@ -399,12 +399,15 @@ def _sfx_layers(scenes: list[Scene], settings, total: float):
 
 
 def _load_bgm(settings, duration: float):
-    """배경 베드. 다크 드론이 있으면 그걸 쓰고, 없으면 예전 BGM 폴더로 내려간다.
+    """배경 베드. 화음 패드 > 다크 드론 > 예전 BGM 폴더 순으로 고른다.
 
-    드론은 45Hz 룸블링이라 멜로디가 없다 — 말과 부딪히지 않으면서 긴장만 남는다.
-    예전에 쓰던 잔잔한 BGM 은 이 톤과 안 맞아 우선순위를 뒤로 뺐다.
+    드론(45Hz 룸블링, 멜로디 없음)만으로는 "웅장함이 없다"는 지적이 있었다 —
+    단조 화음을 느리게 스웰하는 패드(epic_pad)를 새로 만들어 우선순위를 앞에
+    둔다. 여전히 작게 깔리므로(bgm_volume_db) 내레이션과 부딪히지 않는다.
     """
-    if assets.AUDIO_DRONE.exists():
+    if assets.AUDIO_EPIC_PAD.exists():
+        track = assets.AUDIO_EPIC_PAD
+    elif assets.AUDIO_DRONE.exists():
         track = assets.AUDIO_DRONE
     else:
         bgm_dir = RESOURCE_DIR / "bgm"

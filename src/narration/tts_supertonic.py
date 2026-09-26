@@ -36,6 +36,7 @@ class SupertonicEngine:
         lang: str = "ko",
         timeout: int = DEFAULT_TIMEOUT,
         steps: int | None = None,
+        max_chunk_length: int | None = 400,
     ):
         self.base_url = base_url
         self.voice = voice
@@ -45,6 +46,12 @@ class SupertonicEngine:
         # 거리가 있어 로보틱하게 들린다 — 64로 올리면 자연스러워지고, 문장 하나에
         # 약 14초 걸린다(10이면 2.4초). 목소리 청취 검증(M1, steps=64)으로 확정됐다.
         self.steps = steps
+        # 서버가 긴 문장을 내부적으로 여러 조각으로 쪼개 합성한 뒤 이어붙이면, 그
+        # 이음매에서 말이 순간적으로 끊기거나 어색하게 겹치는 소리가 난다("대사
+        # 중간에 끊긴다"는 지적의 유력한 원인) — VEO 문장이 8초를 채우려고 40~55
+        # 음절(최대 약 100자)까지 길어졌으니, 이보다 넉넉히 큰 값을 줘서 한 문장이
+        # 무조건 한 번에 합성되게 한다.
+        self.max_chunk_length = max_chunk_length
         self.session = requests.Session()
 
     @property
@@ -63,6 +70,8 @@ class SupertonicEngine:
         }
         if self.steps is not None:
             payload["steps"] = self.steps
+        if self.max_chunk_length is not None:
+            payload["max_chunk_length"] = self.max_chunk_length
         try:
             response = self.session.post(
                 self.base_url,

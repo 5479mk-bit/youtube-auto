@@ -67,9 +67,15 @@ fi
 if have assets/audio/sub_boom.wav; then
   echo "    건너뜀 (이미 있음): assets/audio/sub_boom.wav"
 else
-  # 충격적 사실·전환에 때리는 묵직한 타격음.
-  "$FFMPEG" -y -f lavfi -i "sine=frequency=80:duration=1.5" \
-    -af "afade=t=out:st=0.1:d=1.4,lowpass=f=110,volume=1.5" \
+  # 충격적 사실·전환에 때리는 묵직한 타격음. 저음(80Hz) 몸통에 아주 짧은 고역
+  # 클릭(타격 순간의 "딱")을 얹어야 진짜 임팩트처럼 들린다 — 저음 하나만 있으면
+  # 뭉툭하고 "짜치게" 들린다는 지적이 있었다.
+  "$FFMPEG" -y \
+    -f lavfi -i "sine=frequency=80:duration=1.5" \
+    -f lavfi -i "anoisesrc=d=0.05:c=white:a=1.0" \
+    -filter_complex "[0]afade=t=out:st=0.1:d=1.4,lowpass=f=110,volume=1.5[boom];\
+[1]highpass=f=2500,afade=t=out:st=0.015:d=0.04,volume=0.9[click];\
+[boom][click]amix=inputs=2:duration=first:dropout_transition=0" \
     assets/audio/sub_boom.wav -loglevel error
   echo "    만듦: assets/audio/sub_boom.wav"
 fi
@@ -98,9 +104,14 @@ fi
 if have assets/audio/crack.wav; then
   echo "    건너뜀 (이미 있음): assets/audio/crack.wav"
 else
-  # 구조물이 갈라지는 순간 — 짧고 날카로운 노이즈 버스트.
-  "$FFMPEG" -y -f lavfi -i "anoisesrc=d=0.35:c=white:a=0.9" \
-    -af "highpass=f=800,afade=t=in:st=0:d=0.01,afade=t=out:st=0.1:d=0.25,volume=1.3" \
+  # 구조물이 갈라지는 순간 — 날카로운 노이즈 버스트(고역 "딱") 밑에 짧은 저음
+  # "퍽"을 깔아 몸집을 준다. 노이즈 하나만 쓰면 라디오 잡음처럼 얇게 들린다.
+  "$FFMPEG" -y \
+    -f lavfi -i "anoisesrc=d=0.35:c=white:a=0.9" \
+    -f lavfi -i "sine=frequency=180:duration=0.3" \
+    -filter_complex "[0]highpass=f=1200,afade=t=in:st=0:d=0.005,afade=t=out:st=0.06:d=0.2,volume=1.3[snap];\
+[1]lowpass=f=300,afade=t=out:st=0.02:d=0.25,volume=0.5[thud];\
+[snap][thud]amix=inputs=2:duration=first:dropout_transition=0" \
     assets/audio/crack.wav -loglevel error
   echo "    만듦: assets/audio/crack.wav"
 fi
@@ -108,20 +119,43 @@ if have assets/audio/whoosh.wav; then
   echo "    건너뜀 (이미 있음): assets/audio/whoosh.wav"
 else
   # 물·잔해가 쏟아지거나 카메라가 빠르게 휩쓸고 지나가는 순간 — 저역에서 고역으로
-  # 쓸려 올라가는 노이즈.
-  "$FFMPEG" -y -f lavfi -i "anoisesrc=d=0.8:c=pink:a=0.8" \
-    -af "asetrate=44100*1.0,bandpass=f=400:width_type=o:w=2,afade=t=in:st=0:d=0.3,afade=t=out:st=0.5:d=0.3,volume=1.2" \
+  # 실제로 올라가는 주파수 스윕(aevalsrc)에 핑크노이즈 질감을 살짝 얹는다.
+  # 예전엔 고정 대역폭 밴드패스라 스윕감이 없어 그냥 뭉개진 노이즈로 들렸다.
+  "$FFMPEG" -y \
+    -f lavfi -i "aevalsrc=0.6*sin(2*PI*(250+900*t)*t):d=0.9" \
+    -f lavfi -i "anoisesrc=d=0.9:c=pink:a=0.5" \
+    -filter_complex "[0]afade=t=in:st=0:d=0.15,afade=t=out:st=0.55:d=0.35[sweep];\
+[1]bandpass=f=1200:width_type=o:w=2,afade=t=in:st=0:d=0.2,afade=t=out:st=0.55:d=0.35[noise];\
+[sweep][noise]amix=inputs=2:duration=longest,volume=1.2" \
     assets/audio/whoosh.wav -loglevel error
   echo "    만듦: assets/audio/whoosh.wav"
 fi
 if have assets/audio/alarm.wav; then
   echo "    건너뜀 (이미 있음): assets/audio/alarm.wav"
 else
-  # 경보·위험 신호 — 고음이 두 번 펄스로 울린다.
-  "$FFMPEG" -y -f lavfi -i "sine=frequency=1100:duration=1.0" \
-    -af "tremolo=f=5:d=0.9,afade=t=out:st=0.8:d=0.2,volume=0.9" \
+  # 경보·위험 신호 — 주파수가 위아래로 흔들리는 사이렌형 진동(진짜 경보기에 가깝다).
+  # 예전엔 고정음 트레몰로라 장난감 삐삐 소리 같았다.
+  "$FFMPEG" -y -f lavfi -i "aevalsrc=0.5*sin(2*PI*(900+300*sin(2*PI*2.2*t))*t):d=1.2" \
+    -af "afade=t=in:st=0:d=0.05,afade=t=out:st=1.0:d=0.2,volume=1.0" \
     assets/audio/alarm.wav -loglevel error
   echo "    만듦: assets/audio/alarm.wav"
+fi
+if have assets/audio/epic_pad.mp3; then
+  echo "    건너뜀 (이미 있음): assets/audio/epic_pad.mp3"
+else
+  # "배경음이 초저음 드론뿐이라 웅장함이 없다"는 지적에 맞춰 추가했다. 단순 사인파
+  # 3개로 단조 화음(라-도-미)을 쌓고 아주 느리게 스웰을 준다 — 멜로디가 없어
+  # 반복 루프 티가 안 나면서도 드론보다 훨씬 "웅장한 배경"에 가깝다. 특정 곡을
+  # 흉내 낸 게 아니라 화음 자체를 새로 합성한 것이라 저작권 문제가 없다.
+  "$FFMPEG" -y \
+    -f lavfi -i "sine=frequency=110:duration=20" \
+    -f lavfi -i "sine=frequency=130.81:duration=20" \
+    -f lavfi -i "sine=frequency=164.81:duration=20" \
+    -filter_complex "[0]volume=0.5[a];[1]volume=0.35[b];[2]volume=0.3[c];\
+[a][b][c]amix=inputs=3:duration=longest,tremolo=f=0.1:d=0.25,\
+afade=t=in:st=0:d=3,afade=t=out:st=17:d=3,lowpass=f=2200" \
+    assets/audio/epic_pad.mp3 -loglevel error
+  echo "    만듦: assets/audio/epic_pad.mp3"
 fi
 
 echo ">>> [5/5] 밤안개 오버레이 (합성 시 확대해 쓰므로 절반 해상도로 만든다)"

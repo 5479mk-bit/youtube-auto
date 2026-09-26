@@ -62,6 +62,9 @@ audio:
   # steps=10/32/64/100 을 청취 비교해 64로 확정했다(사람 목소리에 가깝고, 문장당
   # 약 14초로 100(약 22초)보다 빠르다). 값을 낮추면 더 로보틱해지는 대신 빨라진다.
   supertonic_steps: 64
+  # 서버가 긴 문장을 내부적으로 쪼개 합성하면 이음매에서 말이 끊기는 소리가 난다 —
+  # VEO 문장(최대 약 100자)이 한 번에 통째로 합성되도록 넉넉히 잡는다.
+  supertonic_max_chunk_length: 400
   gemini_voice: Charon        # 차분하고 신뢰감 있는 남성 톤(다큐 내레이터에 맞음)
   gemini_model: gemini-2.5-flash-preview-tts
   gemini_style_prompt: "차분한 다큐멘터리 내레이터처럼, 진짜 사람이 말하듯 자연스러운 속도로"
