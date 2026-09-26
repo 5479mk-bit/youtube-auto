@@ -259,7 +259,9 @@ def build_tts_engines(settings: Settings) -> list:
     # 들려주듯" 톤)를 골랐다. 그 경우엔 supertonic 이 CI 에서 먼저 성공해버리지 않게
     # 로컬 엔진(voxcpm/supertonic)을 체인 앞에 두지 않는다.
     if engine == "gemini":
-        return quality_chain
+        # 2번 목소리 말고는 어떤 TTS 도 쓰지 않는다(사용자 지시) — 실패하면 다른
+        # 목소리로 때우지 않고 TTSFailure 로 렌더를 멈춘다.
+        return [gemini]
     return [voxcpm, supertonic, *quality_chain]
 
 

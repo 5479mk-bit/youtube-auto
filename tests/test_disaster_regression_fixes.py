@@ -107,8 +107,7 @@ def test_build_tts_engines_excludes_edge_by_default():
     assert "edge" not in names, f"기본 체인에 edge 가 없어야 합니다 (실제: {names})"
     # 사용자가 청취 비교로 Gemini 2.5 Pro TTS 를 골랐다 — gemini 가 맨 앞이고,
     # CI 에서 먼저 성공해버릴 수 있는 supertonic 은 체인에 없어야 한다.
-    assert names[0] == "gemini", f"gemini 가 1순위여야 합니다 (실제 순서: {names})"
-    assert "supertonic" not in names
+    assert names == ["gemini"], f"gemini(2번 목소리) 하나만 써야 합니다 (실제: {names})"
 
 
 def test_build_tts_engines_includes_edge_when_quality_not_required():
