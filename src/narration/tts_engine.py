@@ -194,13 +194,26 @@ def _split_for_tts(text: str, max_chars: int) -> list[str]:
     return chunks
 
 
+_CHUNK_BREATH_SECONDS = 0.12  # 절 사이 자연스러운 숨쉬기 틈
+
+
 def _concat_audio(paths: list[Path], out_path: Path) -> None:
+    """절 오디오를 이어붙인다. 절 사이에 아주 짧은 숨 틈을 넣어 이어 말하듯
+    자연스럽게 들리게 한다 — 무음 없이 그냥 붙이면 사람이 숨도 안 쉬고 말하는
+    것처럼 로봇 같게 들린다."""
     import imageio_ffmpeg
 
+    silence_path = out_path.with_name(f"{out_path.stem}_silence.wav")
+    _write_breath_silence(silence_path, _CHUNK_BREATH_SECONDS)
+
+    entries = []
+    for index, path in enumerate(paths):
+        entries.append(f"file '{path.resolve()}'")
+        if index < len(paths) - 1:
+            entries.append(f"file '{silence_path.resolve()}'")
+
     list_file = out_path.with_suffix(".txt")
-    list_file.write_text(
-        "\n".join(f"file '{p.resolve()}'" for p in paths), encoding="utf-8"
-    )
+    list_file.write_text("\n".join(entries), encoding="utf-8")
     subprocess.run(
         [
             imageio_ffmpeg.get_ffmpeg_exe(),
@@ -217,6 +230,27 @@ def _concat_audio(paths: list[Path], out_path: Path) -> None:
         capture_output=True,
     )
     list_file.unlink(missing_ok=True)
+    silence_path.unlink(missing_ok=True)
+
+
+def _write_breath_silence(out_path: Path, duration: float) -> None:
+    import imageio_ffmpeg
+
+    subprocess.run(
+        [
+            imageio_ffmpeg.get_ffmpeg_exe(),
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=channel_layout=mono:sample_rate=24000",
+            "-t",
+            f"{duration:.3f}",
+            str(out_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
 
 
 def _finish(part: ScriptPart, paths: list[Path], min_veo_line_duration: float = 0.0) -> None:
