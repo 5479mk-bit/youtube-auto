@@ -116,11 +116,26 @@ def test_build_tts_engines_includes_edge_when_quality_not_required():
 
     base = load_settings()
     raw = dict(base.raw)
-    raw["audio"] = {**raw["audio"], "require_quality_voice": False}
+    # edge 폴백은 gemini 고정(2번 목소리)이 아닌 엔진 설정에서만 의미가 있다.
+    raw["audio"] = {**raw["audio"], "engine": "cloud_tts", "require_quality_voice": False}
     settings = Settings(raw, base.secrets)
     with patch.object(pipeline, "build_vertex", return_value=(None, None)):
         engines = pipeline.build_tts_engines(settings)
     assert "edge" in [engine.name for engine in engines]
+
+
+def test_gemini_engine_never_falls_back_even_if_quality_not_required():
+    # "2번 tts 외에는 아무것도 tts 하지마" — gemini 로 고정했으면 edge 도 끼면 안 된다.
+    from src import pipeline
+    from src.settings import Settings, load_settings
+
+    base = load_settings()
+    raw = dict(base.raw)
+    raw["audio"] = {**raw["audio"], "engine": "gemini", "require_quality_voice": False}
+    settings = Settings(raw, base.secrets)
+    with patch.object(pipeline, "build_vertex", return_value=(None, None)):
+        engines = pipeline.build_tts_engines(settings)
+    assert [engine.name for engine in engines] == ["gemini"]
 
 
 def test_synthesize_part_raises_when_all_quality_engines_fail(tmp_path):
