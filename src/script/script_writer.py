@@ -291,6 +291,14 @@ GLOBAL_DISASTER_PROMPT = """당신은 스크롤을 멈추게 만드는 한국어
   문장**, **2부는 원인이 밝혀지는 문장과 클라이맥스 문장**에 배정한다. 정지화
   (AI_IMAGE)만으로는 절대 표현할 수 없는 "무너지고, 쏟아지고, 갈라지는" 순간을
   이 두 컷에 몰아준다.
+  **이 두 문장은 [말투]의 "10~15음절" 제한을 받지 않는다.** 이 컷은 실제 영상이
+  8초짜리로 통째로 생성되는데, 문장이 짧으면 대사가 2~3초 만에 끝나고 나머지
+  5~6초는 아무 말 없이 화면만 흘러가 버린다("영상은 긴데 대사가 비어 있다"는
+  느낌을 준다). **40~55음절 정도로 길게 써서, 말이 8초 내내 쉬지 않고 이어지게
+  한다.** 한 문장을 억지로 늘리지 말고, 쉼표로 이어지는 2~3개의 짧은 절을 한
+  호흡으로 붙여 쓴다(예: "야, 타이타닉호 알아? 진짜 미쳤던 게, 1,514명이나
+  죽었는데 그 배가 절대 안 가라앉는다고 불렸던 배였다는 거야"). 말줄임표로 끊어
+  숨 돌리지 말고 끝까지 밀어붙이듯 이어 말한다.
 - "AI_IMAGE": 나머지 전부(사건·구조 설명). 렌더 단계에서 깊이 기반 카메라 이동이
   자동으로 걸리니, 프롬프트 자체는 정적인 도해가 아니라 "지금 막 무너지고 있는
   순간의 단면"처럼 이미 동세가 담긴 장면으로 써라.
@@ -412,6 +420,12 @@ def _prompt(candidate: StoryCandidate, part1_chars: int, part2_chars: int) -> st
 # 없다), 파싱은 성공해도 여기서 걸러 템플릿 폴백으로 넘긴다 — "검증 없이 통과되던
 # 얇은 대본"이 실제 원인이었다.
 _DISASTER_MIN_LINES_PER_PART = 8
+# VEO 컷은 실제로 8초짜리 영상이 통째로 생성되는데, 문장이 짧으면 대사가 몇 초 만에
+# 끝나고 나머지는 대사 없이 화면만 흘러간다("8초 동안 대사가 너무 짧다"는 지적의
+# 원인). 프롬프트에도 "40~55음절"을 못박아뒀지만, LLM 이 그래도 짧게 줄 수 있어
+# 여기서 한 번 더 막는다 — 28자 미만이면 8초를 채우기엔 너무 짧다고 보고 템플릿
+# 폴백으로 넘긴다.
+_VEO_MIN_CHARS = 28
 
 
 def _parse(raw: dict | None, candidate: StoryCandidate) -> Script | None:
@@ -436,6 +450,20 @@ def _parse(raw: dict | None, candidate: StoryCandidate) -> Script | None:
             f"최소 {_DISASTER_MIN_LINES_PER_PART}문장 필요) — 템플릿 폴백으로 넘깁니다"
         )
         return None
+
+    if candidate.dataset == "disaster":
+        short_veo = [
+            line.text
+            for part in (part1, part2)
+            for line in part.lines
+            if line.scene_type == "VEO" and len(line.text) < _VEO_MIN_CHARS
+        ]
+        if short_veo:
+            logger.warning(
+                f"[script] VEO 문장이 너무 짧아 8초를 채우지 못합니다 "
+                f"(최소 {_VEO_MIN_CHARS}자 필요): {short_veo} — 템플릿 폴백으로 넘깁니다"
+            )
+            return None
 
     return Script(
         topic_key=candidate.topic_key,
@@ -759,7 +787,12 @@ def _disaster_template_script(candidate: StoryCandidate) -> Script:
         )
 
     part1_lines = [
-        line(0, f"{candidate.headline}, 실제로 있었던 일이야.", emphasis=[candidate.headline], scene_type="VEO")
+        line(
+            0,
+            f"{candidate.headline}, 실제로 있었던 일인데, 진짜 상상도 못 할 방식으로 벌어졌어.",
+            emphasis=[candidate.headline],
+            scene_type="VEO",
+        )
     ]
     part1_lines += [line(i, fact) for i, fact in enumerate(facts[:6], start=1)]
     part1_lines.append(line(7, "그래서 원인이 뭐였을까?", emphasis=["원인"], sfx="braam"))

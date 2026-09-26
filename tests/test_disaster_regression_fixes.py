@@ -412,3 +412,54 @@ def test_new_sfx_variety_registered_in_video_builder():
 
     for name in ("crack", "whoosh", "alarm"):
         assert name in video_builder._SFX_FILES
+
+
+def test_short_veo_line_is_rejected_to_force_template_fallback():
+    # VEO 컷은 실제로 8초짜리 영상이 통째로 생성되는데, 문장이 짧으면 대사가 몇 초
+    # 만에 끝나고 나머지는 빈 화면만 흘러간다("8초 동안 대사가 너무 짧다"는 지적의
+    # 원인) — 너무 짧은 VEO 문장은 통과시키지 않는다.
+    def line(i: int, scene_type: str = "AI_IMAGE", text: str | None = None) -> dict:
+        return {
+            "text": text or f"문장 {i}가 여기 들어간다 충분히 길게",
+            "scene_type": scene_type,
+            "prompt": "p",
+        }
+
+    raw = {
+        "title_seed": "제목",
+        "part1": {
+            "hook_number": "훅1",
+            "lines": [
+                line(0, "VEO", text="야, 짧아"),
+                *[line(i) for i in range(1, 9)],
+            ],
+        },
+        "part2": {"hook_number": "훅2", "lines": [line(i) for i in range(9)]},
+    }
+    assert _parse(raw, _disaster_candidate()) is None
+
+
+def test_long_enough_veo_line_is_accepted():
+    def line(i: int, scene_type: str = "AI_IMAGE", text: str | None = None) -> dict:
+        return {
+            "text": text or f"문장 {i}가 여기 들어간다 충분히 길게",
+            "scene_type": scene_type,
+            "prompt": "p",
+        }
+
+    raw = {
+        "title_seed": "제목",
+        "part1": {
+            "hook_number": "훅1",
+            "lines": [
+                line(
+                    0,
+                    "VEO",
+                    text="야, 이거 진짜 미쳤던 게, 아무도 그렇게 될 줄 몰랐던 일이었어",
+                ),
+                *[line(i) for i in range(1, 9)],
+            ],
+        },
+        "part2": {"hook_number": "훅2", "lines": [line(i) for i in range(9)]},
+    }
+    assert _parse(raw, _disaster_candidate()) is not None
