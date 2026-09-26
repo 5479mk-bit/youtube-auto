@@ -357,18 +357,23 @@ def _build_audio(part: ScriptPart, settings, duration: float, scenes: list[Scene
 _SFX_FILES = {"paper_rustle": assets.AUDIO_PAPER_RUSTLE}
 
 
-def _pick_sfx_path(tag: str) -> Path | None:
+def _pick_sfx_path(tag: str, used_index: dict[str, int]) -> Path | None:
     """태그에 맞는 실제 효과음 파일을 하나 고른다.
 
     `assets.SFX_POOLS` 는 태그당 실제 효과음(Mixkit, 무료 라이선스) 2개씩을 묶어
-    둔다 — 같은 태그가 여러 번 나와도 매번 다른 소리가 나게 무작위로 고른다.
+    둔다. 무작위로 고르면 같은 파일이 연달아 뽑히거나, 한 편에서 10개 중 절반은
+    한 번도 안 나올 수 있다("10개 다 쓰라고 적절하게" 요청) — `used_index`에
+    태그별로 몇 번째까지 썼는지 기록해두고 그 다음 것을 순서대로 돌려써서, 같은
+    태그가 두 번 이상 나오면 반드시 두 파일 다 한 번씩은 쓰이게 한다.
     `paper_rustle` 처럼 풀이 없는 태그는 `_SFX_FILES` 단일 경로를 그대로 쓴다.
     """
     pool = assets.SFX_POOLS.get(tag)
     if pool:
         existing = [path for path in pool if path.exists()]
         if existing:
-            return random.choice(existing)
+            index = used_index.get(tag, 0) % len(existing)
+            used_index[tag] = index + 1
+            return existing[index]
     return _SFX_FILES.get(tag)
 
 
@@ -376,17 +381,17 @@ def _sfx_layers(scenes: list[Scene], settings, total: float):
     """`sfx` 태그가 붙은 컷이 시작될 때 그 태그에 맞는 소리를 얹는다."""
     gain = _db_to_gain(settings.get("audio.sfx_volume_db", -4))
     layers = []
+    used_index: dict[str, int] = {}
     for scene in scenes:
         if scene.sfx == "none" or scene.start >= total:
             continue
-        path = _pick_sfx_path(scene.sfx)
+        path = _pick_sfx_path(scene.sfx, used_index)
         if path is None or not path.exists():
             # 매핑된 파일이 없거나 실제로 없으면(에셋 다운로드 누락 등) 완전히
             # 조용해지는 대신 기본 임팩트음 풀에서 대체한다 — 안전 장치.
-            fallback_pool = [p for p in assets.SFX_POOLS.get("sub_boom", []) if p.exists()]
-            if not fallback_pool:
+            path = _pick_sfx_path("sub_boom", used_index)
+            if path is None or not path.exists():
                 continue
-            path = random.choice(fallback_pool)
         try:
             hit = AudioFileClip(str(path))
         except Exception as exc:

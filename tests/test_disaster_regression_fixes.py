@@ -414,17 +414,20 @@ def test_sfx_pools_registered_for_all_tags():
         assert len(assets.SFX_POOLS[tag]) == 2
 
 
-def test_pick_sfx_path_randomly_covers_both_pool_entries():
+def test_pick_sfx_path_cycles_through_pool_before_repeating():
+    # "10개 다 쓰라고 적절하게" — 같은 태그가 여러 번 나오면 무작위가 아니라
+    # 순서대로 돌려써서 풀에 있는 파일이 전부 최소 한 번씩은 쓰이게 한다.
+    from src import assets
     from src.render.video_builder import _pick_sfx_path
 
-    # 실제 에셋 파일 존재 여부와 무관하게(다운로드 전 개발 환경일 수 있음),
-    # 풀에 있는 두 경로 중 하나를 리턴해야 한다.
-    from src import assets
-
-    if not any(path.exists() for path in assets.SFX_POOLS["sub_boom"]):
+    if not all(path.exists() for path in assets.SFX_POOLS["sub_boom"]):
         pytest.skip("SFX 에셋이 아직 다운로드되지 않았습니다 (./download_assets.sh)")
-    seen = {str(_pick_sfx_path("sub_boom")) for _ in range(20)}
-    assert len(seen) >= 1
+    used_index: dict[str, int] = {}
+    picks = [_pick_sfx_path("sub_boom", used_index) for _ in range(4)]
+    assert set(picks) == set(assets.SFX_POOLS["sub_boom"])
+    # 짝수 번째 호출은 첫 번째 파일로 돌아와야 한다(순환).
+    assert picks[0] == picks[2]
+    assert picks[1] == picks[3]
 
 
 def test_short_veo_line_is_rejected_to_force_template_fallback():
