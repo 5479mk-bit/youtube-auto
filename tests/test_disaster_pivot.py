@@ -37,7 +37,8 @@ def test_rate_to_speed_converts_percent_strings():
 
 
 def test_rate_to_speed_clamps_range():
-    assert _rate_to_speed("-90%") == 0.5
+    # Supertonic 문서가 밝힌 안전 배율 범위는 0.7~2.0 이다.
+    assert _rate_to_speed("-90%") == 0.7
     assert _rate_to_speed("+500%") == 2.0
 
 

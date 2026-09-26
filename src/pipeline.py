@@ -202,8 +202,9 @@ def build_tts_engines(settings: Settings) -> list:
     vertex, auth = build_vertex(settings)
     voxcpm = VoxCPMEngine()
     supertonic = SupertonicEngine(
-        base_url=settings.get("audio.supertonic_url", "http://127.0.0.1:5000/api/synthesize"),
-        voice=settings.get("audio.supertonic_voice", "default"),
+        base_url=settings.get("audio.supertonic_url", "http://127.0.0.1:7788/v1/tts"),
+        voice=settings.get("audio.supertonic_voice", "M1"),
+        lang=settings.get("audio.supertonic_lang", "ko"),
     )
     gemini = GeminiTTS(
         api_keys=settings.secrets.gemini_api_keys,

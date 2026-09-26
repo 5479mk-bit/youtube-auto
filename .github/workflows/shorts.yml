@@ -268,6 +268,33 @@ jobs:
               print(f"[{name}] JSON 파싱 성공, {p.stat().st_size}바이트, 필요한 키 있음={ok}")
           PY
 
+      # Supertonic 은 로컬 HTTP 서버로 뜨는 CPU 전용 TTS 다(GPU 불필요, voxcpm 과
+      # 다름) — 패키지가 제공하는 CLI 로 이 러너 위에서 직접 띄운다. 첫 실행은 모델을
+      # 받아오느라(약 400MB) 느릴 수 있어 넉넉히 기다린다. 서버가 안 뜨거나 시간 안에
+      # 준비되지 않으면 경고만 남기고 넘어간다 — 파이프라인은 다음 엔진(cloud_tts)으로
+      # 자연스럽게 폴백된다(TTSEngine 계약).
+      - name: Supertonic 서버 준비
+        if: inputs.image_only != true
+        run: |
+          pip install 'supertonic[serve]'
+          nohup supertonic serve --host 127.0.0.1 --port 7788 \
+            > supertonic-server.log 2>&1 &
+          echo "Supertonic 서버 기동 대기 중…"
+          ready=false
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:7788/v1/styles > /dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ready" = true ]; then
+            echo "Supertonic 서버 준비 완료"
+          else
+            echo "::warning::Supertonic 서버가 5분 안에 준비되지 않았습니다 — cloud_tts 로 폴백됩니다"
+            tail -n 50 supertonic-server.log || true
+          fi
+
       - name: 한 회차 생성
         if: inputs.image_only != true
         env:

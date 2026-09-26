@@ -35,9 +35,12 @@ subtitle:
   max_chars_per_line: 16
 
 audio:
-  # voxcpm(GPU 전용)과 supertonic(로컬 서버 전용)이 항상 1·2순위로 시도된다
-  # (build_tts_engines 참고) — GitHub Actions 러너에는 GPU도 로컬 서버도 없어
-  # 둘 다 조용히 폴백된다. 이 engine 값은 그다음(진짜 쓰이는) 엔진 순서를 고른다.
+  # voxcpm(GPU 전용)과 supertonic(로컬 서버)이 항상 1·2순위로 시도된다
+  # (build_tts_engines 참고). voxcpm 은 GitHub Actions 러너에 GPU가 없어 항상
+  # 조용히 폴백된다. supertonic 은 CPU 로도 돌아가는 모델이라, shorts.yml 의
+  # "Supertonic 서버 준비" 스텝이 `supertonic serve` 를 백그라운드로 띄워두면
+  # 여기서 실제로 성공한다(무료라 cloud_tts 보다 비용이 안 든다).
+  # 이 engine 값은 voxcpm/supertonic 이 둘 다 실패했을 때 그다음 엔진 순서를 고른다.
   # "cloud_tts"(Google Cloud TTS, Neural2)가 기본이다 — Gemini 의 멀티모달 오디오
   # 출력은 "다큐 성우" 톤을 내기엔 부족하다고 확인됐다(사용자 청취). Cloud TTS 는
   # SSML 로 피치를 직접 지시할 수 있는 전용 합성 엔진이라 더 깊고 무게감 있는
@@ -48,8 +51,13 @@ audio:
   # 목소리로 끝까지 만들어놓고 나서야 실패를 안다"를 없애기 위함. 비용이 최우선이라
   # edge 라도 상관없을 때만 false 로 내린다.
   require_quality_voice: true
-  supertonic_url: "http://127.0.0.1:5000/api/synthesize"
-  supertonic_voice: default
+  # 실제 supertonic-py 서버 스펙(github.com/supertone-inc/supertonic-py) 기준.
+  # 예전 값(127.0.0.1:5000/api/synthesize)은 실존하지 않는 엔드포인트였다 — 그래서
+  # 항상 연결 거부로 폴백됐다.
+  supertonic_url: "http://127.0.0.1:7788/v1/tts"
+  supertonic_voice: M1   # 내장 보이스: M1~M5(남성)/F1~F5(여성). 들어보고 마음에
+                          # 안 들면 이 이름만 바꾸면 된다.
+  supertonic_lang: ko
   gemini_voice: Charon        # 차분하고 신뢰감 있는 남성 톤(다큐 내레이터에 맞음)
   gemini_model: gemini-2.5-flash-preview-tts
   gemini_style_prompt: "차분한 다큐멘터리 내레이터처럼, 진짜 사람이 말하듯 자연스러운 속도로"

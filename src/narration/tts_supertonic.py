@@ -1,9 +1,18 @@
 """로컬 Supertonic 서버 TTS.
 
-사용자가 직접 띄워둔 로컬 Supertonic 서버(HTTP)를 호출한다 — 모델을 파이썬
-라이브러리로 직접 불러오지 않는다. 서버가 꺼져 있거나 타임아웃·오류가 나면 그냥
-`False` 를 돌려줘 다음 엔진(edge-tts)으로 자연스럽게 폴백시킨다(`tts_engine.py`의
+`supertonic serve`(패키지 자체가 제공하는 CLI)로 띄운 로컬 HTTP 서버를 호출한다 —
+모델을 파이썬 라이브러리로 직접 불러오지 않는다. 서버가 꺼져 있거나 타임아웃·오류가
+나면 그냥 `False` 를 돌려줘 다음 엔진으로 자연스럽게 폴백시킨다(`tts_engine.py`의
 부 단위 폴백 로직에 그대로 올라탄다 — 새 안전장치 불필요).
+
+엔드포인트·페이로드는 실제 `supertonic-py` 패키지 문서(github.com/supertone-inc/
+supertonic-py) 기준이다 — 예전 버전은 `/api/synthesize`(포트 5000)라는, 실제로는
+존재하지 않는 엔드포인트를 가정하고 있었다(그래서 항상 연결 거부로 폴백됐다).
+진짜 서버는:
+    pip install 'supertonic[serve]'
+    supertonic serve --host 127.0.0.1 --port 7788
+로 띄우면 POST http://127.0.0.1:7788/v1/tts 가 열린다(.github/workflows/shorts.yml
+의 "Supertonic 서버 준비" 스텝이 CI 에서 이 과정을 자동으로 한다).
 """
 
 from __future__ import annotations
@@ -13,16 +22,23 @@ from pathlib import Path
 import requests
 from loguru import logger
 
-DEFAULT_URL = "http://127.0.0.1:5000/api/synthesize"
-DEFAULT_TIMEOUT = 30
+DEFAULT_URL = "http://127.0.0.1:7788/v1/tts"
+DEFAULT_TIMEOUT = 60
 
 
 class SupertonicEngine:
     name = "supertonic"
 
-    def __init__(self, base_url: str = DEFAULT_URL, voice: str = "default", timeout: int = DEFAULT_TIMEOUT):
+    def __init__(
+        self,
+        base_url: str = DEFAULT_URL,
+        voice: str = "M1",
+        lang: str = "ko",
+        timeout: int = DEFAULT_TIMEOUT,
+    ):
         self.base_url = base_url
         self.voice = voice
+        self.lang = lang
         self.timeout = timeout
         self.session = requests.Session()
 
@@ -36,7 +52,13 @@ class SupertonicEngine:
         try:
             response = self.session.post(
                 self.base_url,
-                json={"text": text, "voice": self.voice, "speed": _rate_to_speed(rate)},
+                json={
+                    "text": text,
+                    "voice": self.voice,
+                    "lang": self.lang,
+                    "speed": _rate_to_speed(rate),
+                    "response_format": "wav",
+                },
                 timeout=self.timeout,
             )
             response.raise_for_status()
@@ -48,6 +70,10 @@ class SupertonicEngine:
             logger.warning("[supertonic] 응답이 비어 있습니다 — 다음 엔진으로 폴백합니다")
             return False
 
+        # 서버는 wav 원본 바이트를 돌려준다. out_path 는 오케스트레이션이 정한
+        # ".mp3" 확장자지만, 뒤이어 tts_engine._trim_and_pad() 가 ffmpeg 로 무음을
+        # 자르며 다시 인코딩하므로(입력 코덱은 확장자가 아니라 내용으로 판별된다)
+        # 여기서 별도 변환 없이 그대로 써도 안전하다.
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_bytes(response.content)
         return out_path.stat().st_size > 0
@@ -55,7 +81,7 @@ class SupertonicEngine:
 
 def _rate_to_speed(rate: str) -> float:
     """edge-tts 식 "-10%"/"+2%" 문자열을 배율로 바꾼다. cloud_tts._rate_to_multiplier
-    와 같은 패턴이다."""
+    와 같은 패턴이다. Supertonic 문서가 밝힌 안전 범위(0.7~2.0)로 clamp 한다."""
     rate = (rate or "").strip()
     if not rate or rate in ("+0%", "-0%", "0%"):
         return 1.0
@@ -63,4 +89,4 @@ def _rate_to_speed(rate: str) -> float:
         percent = float(rate.rstrip("%"))
     except ValueError:
         return 1.0
-    return max(0.5, min(2.0, 1.0 + percent / 100.0))
+    return max(0.7, min(2.0, 1.0 + percent / 100.0))
