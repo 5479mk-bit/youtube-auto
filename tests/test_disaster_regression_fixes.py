@@ -105,9 +105,10 @@ def test_build_tts_engines_excludes_edge_by_default():
         engines = pipeline.build_tts_engines(settings)
     names = [engine.name for engine in engines]
     assert "edge" not in names, f"기본 체인에 edge 가 없어야 합니다 (실제: {names})"
-    assert names.index("cloud_tts") < names.index("gemini"), (
-        f"cloud_tts 가 gemini 보다 먼저 시도돼야 합니다 (실제 순서: {names})"
-    )
+    # 사용자가 청취 비교로 Gemini 2.5 Pro TTS 를 골랐다 — gemini 가 맨 앞이고,
+    # CI 에서 먼저 성공해버릴 수 있는 supertonic 은 체인에 없어야 한다.
+    assert names[0] == "gemini", f"gemini 가 1순위여야 합니다 (실제 순서: {names})"
+    assert "supertonic" not in names
 
 
 def test_build_tts_engines_includes_edge_when_quality_not_required():

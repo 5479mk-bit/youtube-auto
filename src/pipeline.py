@@ -255,6 +255,11 @@ def build_tts_engines(settings: Settings) -> list:
     if engine != "edge" and not settings.get("audio.require_quality_voice", True):
         quality_chain = [*quality_chain, edge]
 
+    # 사용자가 샘플 12개를 직접 들어보고 Gemini 2.5 Pro TTS(Charon, "친한 형이 실화
+    # 들려주듯" 톤)를 골랐다. 그 경우엔 supertonic 이 CI 에서 먼저 성공해버리지 않게
+    # 로컬 엔진(voxcpm/supertonic)을 체인 앞에 두지 않는다.
+    if engine == "gemini":
+        return quality_chain
     return [voxcpm, supertonic, *quality_chain]
 
 

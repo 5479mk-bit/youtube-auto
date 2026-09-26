@@ -45,7 +45,10 @@ audio:
   # 출력은 "다큐 성우" 톤을 내기엔 부족하다고 확인됐다(사용자 청취). Cloud TTS 는
   # SSML 로 피치를 직접 지시할 수 있는 전용 합성 엔진이라 더 깊고 무게감 있는
   # 톤을 낼 수 있다.
-  engine: cloud_tts
+  # 샘플 12개(Gemini Pro/Flash, Chirp 3 HD) 청취 비교 끝에 Gemini 2.5 Pro TTS +
+  # Charon + "친한 형이 실화 들려주듯" 톤으로 확정(사용자 선택). 이 값이 gemini 면
+  # voxcpm/supertonic 은 체인에서 빠진다.
+  engine: gemini
   # 품질 엔진(voxcpm/supertonic/gemini/cloud_tts)이 전부 실패했을 때 edge-tts
   # (기계음)로 조용히 떨어지는 대신 렌더를 멈춘다(tts_engine.TTSFailure) — "저품질
   # 목소리로 끝까지 만들어놓고 나서야 실패를 안다"를 없애기 위함. 비용이 최우선이라
@@ -66,8 +69,8 @@ audio:
   # VEO 문장(최대 약 100자)이 한 번에 통째로 합성되도록 넉넉히 잡는다.
   supertonic_max_chunk_length: 400
   gemini_voice: Charon        # 차분하고 신뢰감 있는 남성 톤(다큐 내레이터에 맞음)
-  gemini_model: gemini-2.5-flash-preview-tts
-  gemini_style_prompt: "차분한 다큐멘터리 내레이터처럼, 진짜 사람이 말하듯 자연스러운 속도로"
+  gemini_model: gemini-2.5-pro-preview-tts
+  gemini_style_prompt: "친한 형이 무서운 실화를 들려주듯 자연스럽게, 반말 구어체 그대로, 속도는 빠르지 않게 긴장감이 점점 올라가도록, 과장된 연기 톤은 빼고 진짜 사람처럼"
   gemini_min_request_interval: 1.5
   edge_voice: injoon          # ko-KR-InJoonNeural (require_quality_voice=false 일 때만 쓰임)
   edge_pitch: "-5Hz"

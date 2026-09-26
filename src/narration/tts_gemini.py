@@ -176,16 +176,21 @@ class GeminiTTS:
                 },
             },
         }
-        try:
-            response = self.session.post(
-                self.vertex.model_url(self.model, "generateContent"),
-                headers=self.auth.headers(),
-                json=payload,
-                timeout=180,
-            )
-        except Exception as exc:
-            logger.warning(f"Vertex TTS 호출 실패: {exc}")
-            return None
+        # 일부 새 모델은 리전 엔드포인트에 없고 global 에만 있다 — 404 면 한 번 더 시도한다.
+        response = None
+        for location in (None, "global"):
+            try:
+                response = self.session.post(
+                    self.vertex.model_url(self.model, "generateContent", location),
+                    headers=self.auth.headers(),
+                    json=payload,
+                    timeout=300,
+                )
+            except Exception as exc:
+                logger.warning(f"Vertex TTS 호출 실패: {exc}")
+                return None
+            if response.status_code != 404:
+                break
 
         if not response.ok:
             # 404 면 이 프로젝트에 TTS 모델이 안 열린 것이다. edge-tts 로 내려간다.
