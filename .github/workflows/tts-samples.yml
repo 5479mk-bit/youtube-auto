@@ -1,0 +1,64 @@
+name: TTS 샘플 뽑기
+
+# 영상 렌더 없이 고품질 TTS 후보(Gemini TTS / Chirp 3 HD)만 여러 개 뽑아 비교한다.
+# Vertex 인증이 이 러너에만 있어서 로컬에서는 못 뽑는다. 몇십 원 수준.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  samples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 의존성 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: DOTENV 시크릿 풀기
+        env:
+          DOTENV: ${{ secrets.DOTENV }}
+        run: |
+          if [ -z "$DOTENV" ]; then
+            echo "DOTENV 시크릿이 없습니다 — 개별 시크릿을 씁니다"
+            exit 0
+          fi
+          printf '%s\n' "$DOTENV" > .env
+          while IFS= read -r line; do
+            case "$line" in ''|'#'*) continue ;; esac
+            name="${line%%=*}"
+            value="${line#*=}"
+            [ -z "$value" ] && continue
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          done < .env
+
+      - name: GCP 인증 (Workload Identity)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || vars.GCP_WORKLOAD_IDENTITY_PROVIDER || env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT || env.GCP_SERVICE_ACCOUNT }}
+
+      - name: 샘플 생성
+        env:
+          VERTEX_PROJECT_ID: ${{ secrets.VERTEX_PROJECT_ID || vars.VERTEX_PROJECT_ID || env.VERTEX_PROJECT_ID }}
+        run: python tools/tts_samples.py output/tts_samples
+
+      - name: 샘플 올리기
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tts-samples
+          path: output/tts_samples
+          if-no-files-found: warn
