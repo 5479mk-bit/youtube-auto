@@ -466,6 +466,13 @@ def _parse_line(raw: dict, candidate: StoryCandidate) -> ScriptLine:
     if scene_type not in SCENE_TYPES:
         scene_type = "AI_IMAGE"
 
+    sfx = _sfx(raw.get("sfx"))
+    # VEO 컷은 편당 4개뿐인 가장 센 장면인데, LLM 이 sfx 를 깜빡 "none"으로 두는 일이
+    # 있다 — 가장 임팩트가 커야 할 컷이 조용히 넘어가면 효과음 시스템이 죽어 보인다.
+    # 가장 범용적인 타격음으로 강제해 항상 무언가는 터지게 한다.
+    if scene_type == "VEO" and sfx == "none":
+        sfx = "sub_boom"
+
     return ScriptLine(
         text=text,
         visual_query_ko=str(raw.get("visual_query_ko") or _first(candidate.image_queries_ko)),
@@ -481,13 +488,36 @@ def _parse_line(raw: dict, candidate: StoryCandidate) -> ScriptLine:
         doc_highlight=str(doc.get("highlight_text") or "").strip(),
         map_region=str(map_data.get("region") or "").strip().upper(),
         map_spots=[str(spot).strip() for spot in map_data.get("spots", []) if str(spot).strip()],
-        sfx=_sfx(raw.get("sfx")),
+        sfx=sfx,
     )
+
+
+# LLM 이 프롬프트에 없는 이름(impact/explosion/water_rushing 등)을 쓰더라도, 실제
+# 에셋(assets/audio/*.wav) 3개 중 가장 가까운 걸로 매핑한다 — 예전엔 허용 목록에
+# 없는 이름이 오면 그냥 "none"으로 떨어뜨려 효과음이 조용히 사라졌다("SFX 가 죽어
+# 있다"는 지적의 실제 원인 중 하나). sub_boom(초저역 타격)이 가장 범용적인 폴백이라
+# 인식 못한 태그는 전부 여기로 보낸다 — 완전한 무음보다 낫다.
+_SFX_ALIASES = {
+    "sub_boom": "sub_boom",
+    "boom": "sub_boom",
+    "impact": "sub_boom",
+    "explosion": "sub_boom",
+    "collapse": "sub_boom",
+    "hit": "sub_boom",
+    "braam": "braam",
+    "water_rushing": "braam",
+    "rumble": "braam",
+    "drone_hit": "braam",
+    "paper_rustle": "paper_rustle",
+    "rustle": "paper_rustle",
+}
 
 
 def _sfx(raw: object) -> str:
     name = str(raw or "none").strip().lower()
-    return name if name in ("sub_boom", "braam", "paper_rustle") else "none"
+    if name in ("", "none", "null"):
+        return "none"
+    return _SFX_ALIASES.get(name, "sub_boom")
 
 
 def _hook_number(raw: object, candidate: StoryCandidate) -> str:

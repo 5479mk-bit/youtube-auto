@@ -369,12 +369,18 @@ def _sfx_layers(scenes: list[Scene], settings, total: float):
     길이만 다르게 재활용해서 사료 컷에도 타격음이 울렸다. 타격음은 초저역이라
     내레이션과 주파수가 겹치지 않는다.
     """
-    gain = _db_to_gain(settings.get("audio.sfx_volume_db", -6))
+    gain = _db_to_gain(settings.get("audio.sfx_volume_db", -4))
     layers = []
     for scene in scenes:
-        path = _SFX_FILES.get(scene.sfx)
-        if path is None or scene.start >= total or not path.exists():
+        if scene.sfx == "none" or scene.start >= total:
             continue
+        path = _SFX_FILES.get(scene.sfx)
+        if path is None or not path.exists():
+            # 매핑된 파일 경로가 없거나 실제로 없으면(에셋 다운로드 누락 등) 완전히
+            # 조용해지는 대신 기본 임팩트음으로 대체한다 — 사용자가 요청한 안전 장치.
+            path = assets.AUDIO_SUB_BOOM
+            if not path.exists():
+                continue
         try:
             hit = AudioFileClip(str(path))
         except Exception as exc:

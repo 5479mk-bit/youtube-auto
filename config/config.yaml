@@ -76,7 +76,9 @@ audio:
   # 다크 앰비언트 드론을 전체에 깔고, 사건이 터지는 문장에 초저음 타격음을 얹는다.
   bgm_volume_db: -16
   bgm_hook_volume_db: -12
-  sfx_volume_db: -6
+  # -6dB는 드론·내레이션에 묻혀 "효과음이 거의 안 들린다"는 지적이 있었다 —
+  # "쾅쾅 터지도록" 확실히 들리게 4dB 올렸다.
+  sfx_volume_db: -4
 
 script:
   llm:

@@ -343,3 +343,63 @@ def test_ai_image_scene_uses_depth_parallax_not_flat_zoom():
     args, kwargs = mock_parallax.call_args
     assert args[0] == "/tmp/fake.png"
     assert args[1] == scene.duration
+
+
+def test_unrecognized_sfx_tag_falls_back_to_sub_boom_not_silence():
+    # LLM 이 프롬프트에 없는 이름(impact/explosion 등)을 쓰면 예전엔 "none"으로
+    # 떨어져 효과음이 조용히 사라졌다 — 이제는 가장 범용적인 타격음으로 대체한다.
+    from src.script.script_writer import _sfx
+
+    assert _sfx("impact") == "sub_boom"
+    assert _sfx("explosion") == "sub_boom"
+    assert _sfx("water_rushing") == "braam"
+    assert _sfx("완전히-모르는-태그") == "sub_boom"
+    assert _sfx("none") == "none"
+    assert _sfx(None) == "none"
+    assert _sfx("sub_boom") == "sub_boom"
+
+
+def test_veo_line_defaults_to_sub_boom_when_llm_omits_sfx():
+    # VEO 컷은 편당 4개뿐인 가장 센 장면이다 — LLM 이 sfx 를 깜빡 비워도 가장 중요한
+    # 컷은 항상 뭔가 터지게 한다.
+    from src.script.script_writer import _parse_line
+
+    candidate = _disaster_candidate()
+    raw = {"text": "문장", "scene_type": "VEO", "prompt": "p", "sfx": "none"}
+    line = _parse_line(raw, candidate)
+    assert line.sfx == "sub_boom"
+
+
+def test_ai_image_line_keeps_none_sfx_when_llm_omits_it():
+    from src.script.script_writer import _parse_line
+
+    candidate = _disaster_candidate()
+    raw = {"text": "문장", "scene_type": "AI_IMAGE", "prompt": "p", "sfx": "none"}
+    line = _parse_line(raw, candidate)
+    assert line.sfx == "none"
+
+
+def test_sfx_layer_falls_back_to_sub_boom_when_mapped_file_missing(tmp_path, monkeypatch):
+    # 매핑된 효과음 파일 경로가 실제로 없으면(에셋 다운로드 누락 등) 조용히 스킵하는
+    # 대신 기본 임팩트음으로 대체한다.
+    from src.render import video_builder
+
+    missing = tmp_path / "does_not_exist.wav"
+    monkeypatch.setitem(video_builder._SFX_FILES, "sub_boom", missing)
+
+    scene = Scene(
+        start=0.0,
+        duration=2.0,
+        image_query_ko="",
+        image_query_en="",
+        camera="push_in",
+        engine="veo",
+        sfx="sub_boom",
+    )
+    settings = MagicMock()
+    settings.get.return_value = -4
+
+    layers = video_builder._sfx_layers([scene], settings, total=5.0)
+    # 실제 sub_boom 에셋(assets/audio/sub_boom.wav)이 폴백으로 쓰였는지 확인한다 —
+    # 완전히 비어 있지 않아야 한다(에셋이 리포에 실제로 존재하므로 폴백도 성공해야 함).
+    assert len(layers) == 1
