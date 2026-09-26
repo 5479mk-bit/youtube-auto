@@ -147,13 +147,18 @@ else
   # 3개로 단조 화음(라-도-미)을 쌓고 아주 느리게 스웰을 준다 — 멜로디가 없어
   # 반복 루프 티가 안 나면서도 드론보다 훨씬 "웅장한 배경"에 가깝다. 특정 곡을
   # 흉내 낸 게 아니라 화음 자체를 새로 합성한 것이라 저작권 문제가 없다.
+  # amix 는 기본값(normalize=1)이 입력 개수만큼 나눠 볼륨을 죽인다 — 처음 버전이
+  # 그 기본값을 그대로 둬서 만들어진 파일이 평균 -36.7dB(드론보다 14dB 더 조용함)
+  # 였다. bgm_volume_db(-16dB)까지 겹치면 사실상 안 들리는 수준이라 "배경음악이
+  # 왜 없냐"는 지적으로 이어졌다. normalize=0 으로 감쇄를 끄고 volume 로 직접
+  # 게인을 줘서 평균 -19dB 대(드론과 비슷한 존재감)로 맞춘다.
   "$FFMPEG" -y \
     -f lavfi -i "sine=frequency=110:duration=20" \
     -f lavfi -i "sine=frequency=130.81:duration=20" \
     -f lavfi -i "sine=frequency=164.81:duration=20" \
     -filter_complex "[0]volume=0.5[a];[1]volume=0.35[b];[2]volume=0.3[c];\
-[a][b][c]amix=inputs=3:duration=longest,tremolo=f=0.1:d=0.25,\
-afade=t=in:st=0:d=3,afade=t=out:st=17:d=3,lowpass=f=2200" \
+[a][b][c]amix=inputs=3:duration=longest:normalize=0,tremolo=f=0.1:d=0.25,\
+afade=t=in:st=0:d=3,afade=t=out:st=17:d=3,lowpass=f=2200,volume=2.5" \
     assets/audio/epic_pad.mp3 -loglevel error
   echo "    만듦: assets/audio/epic_pad.mp3"
 fi
