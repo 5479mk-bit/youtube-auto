@@ -150,14 +150,33 @@ def _synthesize_chunked(engine: TTSEngine, text: str, rate: str, out_path: Path)
     return out_path.exists() and out_path.stat().st_size > 0
 
 
+_MIN_CHUNK_CHARS = 8  # 이보다 짧은 절은 혼자 합성하면 억양이 어색해져 옆 절에 붙인다
+
+
 def _split_for_tts(text: str, max_chars: int) -> list[str]:
-    """쉼표 기준으로 절을 나누고, 그래도 긴 절은 어절 경계에서 더 쪼갠다."""
+    """쉼표 기준으로 절을 나누고, 그래도 긴 절은 어절 경계에서 더 쪼갠다.
+
+    "야," 처럼 한두 글자짜리 절이 혼자 떨어지면 TTS 가 맥락 없이 그 짧은 말만
+    합성하다 억양이 뜬금없이 늘어지거나 이상하게 들린다("애~" 처럼 들린다는
+    지적) — 너무 짧은 절은 옆 절에 붙여서 항상 어느 정도 맥락 안에서 읽히게 한다.
+    """
     clauses = [c.strip() for c in text.split(",") if c.strip()]
     if not clauses:
         return [text]
 
-    chunks: list[str] = []
+    merged: list[str] = []
     for clause in clauses:
+        if merged and len(merged[-1]) < _MIN_CHUNK_CHARS:
+            merged[-1] = f"{merged[-1]} {clause}".strip()
+        else:
+            merged.append(clause)
+    # 마지막 절이 짧게 남았으면 그 앞 절에 붙인다.
+    if len(merged) > 1 and len(merged[-1]) < _MIN_CHUNK_CHARS:
+        last = merged.pop()
+        merged[-1] = f"{merged[-1]} {last}".strip()
+
+    chunks: list[str] = []
+    for clause in merged:
         if len(clause) <= max_chars:
             chunks.append(clause)
             continue

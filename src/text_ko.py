@@ -13,6 +13,23 @@ DIGITS = "영일이삼사오육칠팔구"
 SMALL_UNITS = ["", "십", "백", "천"]
 BIG_UNITS = ["", "만", "억", "조"]
 NUMBER_PATTERN = re.compile(r"([-+]?)(\d[\d,]*)(\.\d+)?\s*(%|퍼센트)?")
+# "2시"는 "이시"가 아니라 "두시"라고 읽는다 — 시각의 시(時)만 예외적으로 순우리말
+# 수를 쓴다(나머지 단위는 전부 한자어 수). 이 표를 안 넣으면 숫자가 죄다 한자어로
+# 읽혀 "새벽 이시 이십분"처럼 시각만 부자연스럽게 들린다.
+NATIVE_HOUR = {
+    1: "한",
+    2: "두",
+    3: "세",
+    4: "네",
+    5: "다섯",
+    6: "여섯",
+    7: "일곱",
+    8: "여덟",
+    9: "아홉",
+    10: "열",
+    11: "열한",
+    12: "열두",
+}
 
 
 def has_final_consonant(word: str) -> bool:
@@ -63,8 +80,13 @@ def read_aloud(text: str) -> str:
 
 def _replace_number(match: re.Match[str]) -> str:
     sign, integer_part, decimal_part, percent = match.groups()
+    value = int(integer_part.replace(",", ""))
+    tail = match.string[match.end() :]
 
-    spoken = sino_korean(int(integer_part.replace(",", "")))
+    if not sign and not decimal_part and not percent and value in NATIVE_HOUR and tail.startswith("시"):
+        return NATIVE_HOUR[value]
+
+    spoken = sino_korean(value)
     if sign == "-":
         spoken = f"마이너스 {spoken}"
 
@@ -79,7 +101,6 @@ def _replace_number(match: re.Match[str]) -> str:
 
     # 긴 숫자는 단위를 띄어 읽어야 알아듣는다 ('이 점 구 년'). 반대로 짧은 숫자는
     # 붙여 읽는 게 자연스럽다 ('일부', '삼십칠건').
-    tail = match.string[match.end() :]
     if " " in spoken and tail and "가" <= tail[0] <= "힣":
         spoken = f"{spoken} "
     return spoken

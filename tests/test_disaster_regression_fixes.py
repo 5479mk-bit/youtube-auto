@@ -522,3 +522,32 @@ def test_synthesize_chunked_concatenates_pieces(tmp_path):
     from src.narration.tts_engine import _measure_duration
 
     assert _measure_duration(out_path) > 0.6
+
+
+def test_short_interjection_clause_is_merged_not_isolated():
+    # "야," 처럼 한두 글자짜리 절이 혼자 떨어지면 TTS 가 맥락 없이 그 짧은 말만
+    # 합성하다 "애~" 처럼 부자연스럽게 늘어진다는 지적이 있었다 — 짧은 절은
+    # 옆 절에 붙어야 한다.
+    from src.narration.tts_engine import _split_for_tts
+
+    chunks = _split_for_tts("야, 타이타닉호 알아? 진짜 미쳤던 일이었어.", max_chars=35)
+    assert all(len(chunk) >= 8 for chunk in chunks)
+    assert chunks[0].startswith("야")
+
+
+def test_hour_reads_as_native_korean_not_sino_korean():
+    # "2시"는 "이시"가 아니라 "두시"라고 읽어야 자연스럽다 — 시각의 시(時)는
+    # 순우리말 수를 쓴다.
+    from src.text_ko import read_aloud
+
+    assert read_aloud("새벽 2시 20분") == "새벽 두시 이십분"
+    assert read_aloud("오후 3시에") == "오후 세시에"
+    assert read_aloud("12시 정각") == "열두시 정각"
+
+
+def test_minute_and_headcount_still_use_sino_korean():
+    # 시(時)만 예외고, 분·명 같은 다른 단위는 그대로 한자어 수를 써야 한다.
+    from src.text_ko import read_aloud
+
+    assert read_aloud("20분") == "이십분"
+    assert read_aloud("1,514명") == "천오백십사명"
