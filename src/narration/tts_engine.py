@@ -126,19 +126,25 @@ def _finish(part: ScriptPart, paths: list[Path], min_veo_line_duration: float = 
     VEO 문장은 화면(생성 영상) 길이가 이 최종 길이를 그대로 물려받으므로, 목표 하한
     (`min_veo_line_duration`)에 못 미치면 부족한 만큼 무음을 더 붙인다 — 말은 그대로,
     화면이 꺼지지 않고 더 오래 보이는 셈이다.
+
+    부족분은 트림·패딩이 끝난 **뒤** 실제 길이를 재서 계산한다 — 트림 전 원본 길이로
+    미리 계산하면, `_trim_and_pad`의 무음 트림이 문장 경계에서 얼마나 깎일지 미리 알
+    수 없어(엔진마다 앞뒤에 붙이는 무음 길이가 제각각이다) 목표보다 짧게 끝나는 경우가
+    있었다.
     """
     for line, path in zip(part.lines, paths):
-        pause = line.pause_after
+        new_path = _trim_and_pad(path, line.pause_after)
+        duration = _measure_duration(new_path) or _estimate_duration(line.narration)
+
         if line.scene_type == "VEO" and min_veo_line_duration > 0:
-            spoken = _measure_duration(path) or _estimate_duration(line.narration)
-            shortfall = min_veo_line_duration - (spoken + pause)
+            shortfall = min_veo_line_duration - duration
             if shortfall > 0:
-                # 무음 트림(_trim_and_pad)이 문장 경계에서 몇 ms 를 더 깎아낼 수 있어
-                # 여유를 조금 더 얹는다 — 하한을 살짝 밑도는 것보다 조금 넘치는 쪽이 낫다.
-                pause += shortfall + _VEO_PAD_SAFETY_MARGIN
-        new_path = _trim_and_pad(path, pause)
+                extra = shortfall + _VEO_PAD_SAFETY_MARGIN
+                new_path = _pad_tail(new_path, extra)
+                duration = _measure_duration(new_path) or (duration + extra)
+
         line.audio_path = str(new_path)
-        line.duration = _measure_duration(new_path) or _estimate_duration(line.narration)
+        line.duration = duration
 
 
 def _estimate_duration(text: str) -> float:
@@ -188,6 +194,34 @@ def _trim_and_pad(audio_path: Path, pause: float) -> Path:
     if audio_path != final_path and audio_path.exists():
         audio_path.unlink()
     return final_path
+
+
+def _pad_tail(audio_path: Path, extra_seconds: float) -> Path:
+    """이미 트림·패딩이 끝난 음원 뒤에 무음을 더 붙인다(다시 트림하지 않는다).
+
+    VEO 문장의 부족분을 채울 때 쓴다 — `_trim_and_pad`를 다시 부르면 방금 붙인
+    무음까지 silenceremove 가 다시 걷어내 버린다.
+    """
+    import imageio_ffmpeg
+
+    processed = audio_path.with_name(f"{audio_path.stem}_extra.wav")
+    subprocess.run(
+        [
+            imageio_ffmpeg.get_ffmpeg_exe(),
+            "-y",
+            "-i",
+            str(audio_path),
+            "-af",
+            f"apad=pad_dur={extra_seconds:.3f}",
+            "-c:a",
+            "pcm_s16le",
+            str(processed),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    processed.replace(audio_path)
+    return audio_path
 
 
 def _write_silence(out_path: Path, duration: float) -> None:
