@@ -936,3 +936,56 @@ class TestTelegramPollingResilience:
 
         assert seen_timeouts  # 최소 한 번은 불렸다
         assert all(t <= 5 for t in seen_timeouts)
+
+
+class TestTelegramVideoSizeFallback:
+    def test_small_file_sent_as_is_without_compression(self, tmp_path):
+        video = tmp_path / "part1.mp4"
+        video.write_bytes(b"x" * 1024)  # 48MB 훨씬 아래
+        reviewer = TelegramReviewer("token", "chat")
+
+        with patch.object(reviewer.session, "post") as mock_post, patch(
+            "src.review.telegram_bot._compress_for_telegram"
+        ) as mock_compress:
+            mock_post.return_value = MagicMock(ok=True)
+            reviewer._send_video(video, caption="1부")
+
+        mock_compress.assert_not_called()
+        assert mock_post.call_args.kwargs["data"]["caption"] == "1부"
+
+    def test_oversized_file_is_compressed_before_sending_and_cleaned_up(self, tmp_path):
+        # 실제로 있었던 사고: 합본 영상이 길어져 50MB 를 넘으면 텔레그램이
+        # 413(Request Entity Too Large)으로 거부해 검수 자체가 불가능해졌다
+        # ("텔레그램 왔는데 영상은 안 옴" — 버튼 메시지만 가고 영상은 안 갔다).
+        # 크기 제한을 넘으면 압축본을 대신 보내고, 원본은 그대로 손대지 않는다.
+        video = tmp_path / "part1.mp4"
+        video.write_bytes(b"x" * (49 * 1024 * 1024))  # 48MB 상한 초과
+        compressed = tmp_path / "part1_tg.mp4"
+        compressed.write_bytes(b"y" * 1024)
+        reviewer = TelegramReviewer("token", "chat")
+
+        with patch.object(reviewer.session, "post") as mock_post, patch(
+            "src.review.telegram_bot._compress_for_telegram", return_value=compressed
+        ) as mock_compress:
+            mock_post.return_value = MagicMock(ok=True)
+            reviewer._send_video(video, caption="1부")
+
+        mock_compress.assert_called_once_with(video)
+        assert "저화질" in mock_post.call_args.kwargs["data"]["caption"]
+        assert video.exists()  # 원본은 그대로
+        assert not compressed.exists()  # 전송 후 압축본은 정리된다
+
+    def test_falls_back_to_original_when_compression_fails(self, tmp_path):
+        video = tmp_path / "part1.mp4"
+        video.write_bytes(b"x" * (49 * 1024 * 1024))
+        reviewer = TelegramReviewer("token", "chat")
+
+        with patch.object(reviewer.session, "post") as mock_post, patch(
+            "src.review.telegram_bot._compress_for_telegram", return_value=None
+        ):
+            mock_post.return_value = MagicMock(ok=True)
+            reviewer._send_video(video, caption="1부")
+
+        # 압축이 실패해도 원본으로라도 전송을 시도한다.
+        assert mock_post.called
+        assert video.exists()

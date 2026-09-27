@@ -8,6 +8,7 @@ python-telegram-bot 대신 Bot HTTP API 를 직접 쓴다. 필요한 건 "영상
 
 from __future__ import annotations
 
+import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +18,10 @@ from loguru import logger
 
 API_BASE = "https://api.telegram.org/bot"
 POLL_TIMEOUT = 50
+# 텔레그램 봇 API 의 sendVideo 크기 상한은 50MB 다(413 Request Entity Too Large 로
+# 거부된다). 합본 영상이 목표 길이(63~90초)를 넘겨 커지면 검수 자체가 불가능해지므로
+# 여유를 두고 이 값을 넘으면 화질을 낮춘 사본을 대신 보낸다.
+TELEGRAM_MAX_VIDEO_BYTES = 48 * 1024 * 1024
 
 
 @dataclass
@@ -152,17 +157,35 @@ class TelegramReviewer:
         self._call("sendMessage", {"chat_id": self.chat_id, "text": text})
 
     def _send_video(self, path: Path, caption: str) -> None:
-        with path.open("rb") as handle:
-            response = self.session.post(
-                f"{API_BASE}{self.bot_token}/sendVideo",
-                data={"chat_id": self.chat_id, "caption": caption},
-                files={"video": handle},
-                timeout=300,
-            )
-        if not response.ok:
+        send_path = path
+        compressed: Path | None = None
+        if path.stat().st_size > TELEGRAM_MAX_VIDEO_BYTES:
             logger.warning(
-                f"영상 전송 실패({path.name}) {response.status_code}: {_describe(response)}"
+                f"{path.name} 이(가) 텔레그램 크기 제한(48MB)을 넘어 검수용 압축본을 만듭니다"
+                f" ({path.stat().st_size / 1_048_576:.1f}MB) — 실제 업로드는 원본을 그대로 씁니다"
             )
+            compressed = _compress_for_telegram(path)
+            if compressed:
+                send_path = compressed
+                caption = f"{caption} (검수용 저화질 — 실제 업로드는 원본)"
+            else:
+                logger.warning(f"{path.name} 압축본 생성 실패 — 원본으로 그대로 시도합니다")
+
+        try:
+            with send_path.open("rb") as handle:
+                response = self.session.post(
+                    f"{API_BASE}{self.bot_token}/sendVideo",
+                    data={"chat_id": self.chat_id, "caption": caption},
+                    files={"video": handle},
+                    timeout=300,
+                )
+            if not response.ok:
+                logger.warning(
+                    f"영상 전송 실패({path.name}) {response.status_code}: {_describe(response)}"
+                )
+        finally:
+            if compressed is not None and compressed.exists():
+                compressed.unlink()
 
     def _call(self, method: str, payload: dict, timeout: int = 30) -> dict:
         response = self.session.post(
@@ -177,6 +200,44 @@ class TelegramReviewer:
             )
         response.raise_for_status()
         return response.json()
+
+
+def _compress_for_telegram(path: Path) -> Path | None:
+    """텔레그램 검수용으로만 화질을 낮춘 사본을 만든다. 유튜브 업로드는 원본을 쓴다.
+
+    720p·800kbps 로 인코딩하면 90초짜리도 10MB 안팎이라 48MB 상한에 넉넉히 들어온다.
+    """
+    import imageio_ffmpeg
+
+    out_path = path.with_name(f"{path.stem}_tg{path.suffix}")
+    try:
+        subprocess.run(
+            [
+                imageio_ffmpeg.get_ffmpeg_exe(),
+                "-y",
+                "-i",
+                str(path),
+                "-vf",
+                "scale=720:-2",
+                "-b:v",
+                "800k",
+                "-maxrate",
+                "900k",
+                "-bufsize",
+                "1200k",
+                "-b:a",
+                "96k",
+                "-preset",
+                "veryfast",
+                str(out_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    except Exception as exc:
+        logger.warning(f"텔레그램용 압축 실패({path.name}): {exc}")
+        return None
+    return out_path if out_path.exists() else None
 
 
 def _describe(response) -> str:
