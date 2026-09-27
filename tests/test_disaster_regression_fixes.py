@@ -721,6 +721,89 @@ def test_seo_metadata_combined_skips_part_suffix():
     assert "(1부)" in metadata_split.title
 
 
+def test_seo_metadata_disaster_uses_fixed_hashtags_not_llm_tags():
+    """사용자 지시(2026-09-27): 해시태그는 LLM 이 고르지 않고 이 5개로 고정한다."""
+    from src.models import Script, StoryCandidate
+    from src.publish import seo_metadata
+
+    script = Script(
+        topic_key="k",
+        title_seed="제목",
+        part1=_make_script_part(1, "훅", ["문장"]),
+        part2=_make_script_part(2, "훅2", ["문장2"]),
+    )
+    candidate = StoryCandidate(
+        dataset="disaster",
+        topic_key="disaster:x",
+        headline="사건",
+        headline_number="",
+        subject="사건",
+        context="",
+        source_name="위키백과",
+    )
+
+    class FakeProvider:
+        def complete_json(self, prompt, temperature=0.8):
+            return {
+                "titles": ["LLM 제목1", "LLM 제목2"],
+                "description": "후킹 설명",
+                "tags": ["엉뚱한태그1", "엉뚱한태그2"],  # 무시되고 고정 5개로 대체돼야 한다
+            }
+
+    metadata = seo_metadata.generate(
+        script, script.part1, candidate, FakeProvider(), ["기본태그"], is_combined=True
+    )
+    assert metadata.tags == seo_metadata.DISASTER_HASHTAGS
+    assert "엉뚱한태그1" not in metadata.tags
+    assert "기본태그" not in metadata.tags
+    # 설명 하단에 해시태그 줄로도 노출돼야 한다(유튜브 화면에 보이는 자리).
+    assert " ".join(seo_metadata.DISASTER_HASHTAGS) in metadata.description
+
+
+def test_seo_metadata_disaster_template_also_uses_fixed_hashtags():
+    """LLM 이 없을 때(템플릿 폴백)도 해시태그는 그대로 고정 5개다."""
+    from src.models import Script, StoryCandidate
+    from src.publish import seo_metadata
+
+    script = Script(
+        topic_key="k",
+        title_seed="제목",
+        part1=_make_script_part(1, "훅", ["문장"]),
+        part2=_make_script_part(2, "훅2", ["문장2"]),
+    )
+    candidate = StoryCandidate(
+        dataset="disaster",
+        topic_key="disaster:y",
+        headline="사건2",
+        headline_number="",
+        subject="사건2",
+        context="",
+        source_name="위키백과",
+    )
+    metadata = seo_metadata.generate(script, script.part1, candidate, None, ["기본태그"])
+    assert metadata.tags == seo_metadata.DISASTER_HASHTAGS
+
+
+def test_seo_metadata_prompt_forbids_channel_branding():
+    from src.publish import seo_metadata
+
+    assert "신비한 건축사전" in seo_metadata.PROMPT  # 금지 예시로만 언급돼야 한다
+    assert "쓰지 않는다" in seo_metadata.PROMPT
+    assert "신비한 건축사전" in seo_metadata.COMBINED_PROMPT
+
+
+def test_disaster_script_prompt_has_no_channel_branding_leak():
+    """title_seed 필드가 더는 '채널 제목'이라는 모호한 표현으로 브랜드명을
+    유도하지 않는지, 프롬프트 도입부에서 브랜드명 자체가 사라졌는지 확인한다."""
+    from src.script.script_writer import GLOBAL_DISASTER_PROMPT
+
+    # 도입부의 채널 브랜드 지칭("신비한 건축사전"류 채널)은 사라져야 한다 — 남아있는
+    # 유일한 언급은 title_seed 필드의 "쓰지 마라" 금지 예시뿐이어야 한다.
+    assert '"신비한 건축사전"류' not in GLOBAL_DISASTER_PROMPT
+    assert "브랜드명" in GLOBAL_DISASTER_PROMPT
+    assert GLOBAL_DISASTER_PROMPT.count("신비한 건축사전") <= 1
+
+
 def test_cap_fact_for_speech_truncates_long_paragraph():
     from src.script.script_writer import _cap_fact_for_speech
 
@@ -752,3 +835,125 @@ def test_disaster_template_script_caps_fact_length():
     for part in (script.part1, script.part2):
         for line in part.lines:
             assert len(line.text) <= 130  # 120자 상한 + 약간의 여유
+
+
+# --- 유튜브 업로드 부가 기능: AI 표시·재생목록·관련 영상 (사용자 지시 2026-09-27) ---
+
+
+def _fake_youtube_service(existing_playlists=None, existing_videos=None):
+    """videos/channels/playlists/playlistItems 를 흉내 내는 MagicMock 서비스."""
+    from unittest.mock import MagicMock
+
+    service = MagicMock()
+
+    # videos().insert(...).next_chunk() -> (status, response)
+    request = MagicMock()
+    request.next_chunk.return_value = (None, {"id": "vid_new"})
+    service.videos.return_value.insert.return_value = request
+
+    # channels().list(...).execute() -> uploads 재생목록 id
+    service.channels.return_value.list.return_value.execute.return_value = {
+        "items": [{"contentDetails": {"relatedPlaylists": {"uploads": "UUxxxx"}}}]
+    }
+
+    # playlistItems().list(...).execute() -> 기존 영상 목록(관련 영상 후보)
+    videos = existing_videos if existing_videos is not None else ["old_vid_1", "old_vid_2"]
+    service.playlistItems.return_value.list.return_value.execute.return_value = {
+        "items": [{"contentDetails": {"videoId": v}} for v in videos]
+    }
+
+    # playlists().list(...).execute() -> 기존 재생목록 목록
+    playlists = existing_playlists if existing_playlists is not None else []
+    service.playlists.return_value.list.return_value.execute.return_value = {
+        "items": [{"id": pid, "snippet": {"title": title}} for pid, title in playlists]
+    }
+    service.playlists.return_value.insert.return_value.execute.return_value = {"id": "pl_new"}
+
+    return service
+
+
+def test_upload_sets_synthetic_media_flag(tmp_path):
+    from src.models import VideoMetadata
+    from src.publish import youtube_uploader
+
+    video_path = tmp_path / "part1.mp4"
+    video_path.write_bytes(b"fake video bytes")
+    metadata = VideoMetadata(title="제목", title_alternatives=[], description="설명", tags=[])
+    service = _fake_youtube_service()
+
+    youtube_uploader.upload(service, video_path, metadata, "private", "25")
+
+    body = service.videos.return_value.insert.call_args.kwargs["body"]
+    assert body["status"]["containsSyntheticMedia"] is True
+
+
+def test_upload_creates_playlist_when_missing_and_adds_video(tmp_path):
+    from src.models import VideoMetadata
+    from src.publish import youtube_uploader
+
+    video_path = tmp_path / "part1.mp4"
+    video_path.write_bytes(b"fake video bytes")
+    metadata = VideoMetadata(title="제목", title_alternatives=[], description="설명", tags=[])
+    service = _fake_youtube_service(existing_playlists=[])  # 아직 없음
+
+    youtube_uploader.upload(
+        service, video_path, metadata, "private", "25", playlist_title="재난아카이브"
+    )
+
+    service.playlists.return_value.insert.assert_called_once()
+    created_body = service.playlists.return_value.insert.call_args.kwargs["body"]
+    assert created_body["snippet"]["title"] == "재난아카이브"
+
+    add_body = service.playlistItems.return_value.insert.call_args.kwargs["body"]
+    assert add_body["snippet"]["playlistId"] == "pl_new"
+    assert add_body["snippet"]["resourceId"]["videoId"] == "vid_new"
+
+
+def test_upload_reuses_existing_playlist_without_creating_new_one(tmp_path):
+    from src.models import VideoMetadata
+    from src.publish import youtube_uploader
+
+    video_path = tmp_path / "part1.mp4"
+    video_path.write_bytes(b"fake video bytes")
+    metadata = VideoMetadata(title="제목", title_alternatives=[], description="설명", tags=[])
+    service = _fake_youtube_service(existing_playlists=[("pl_existing", "재난아카이브")])
+
+    youtube_uploader.upload(
+        service, video_path, metadata, "private", "25", playlist_title="재난아카이브"
+    )
+
+    service.playlists.return_value.insert.assert_not_called()
+    add_body = service.playlistItems.return_value.insert.call_args.kwargs["body"]
+    assert add_body["snippet"]["playlistId"] == "pl_existing"
+
+
+def test_upload_links_an_existing_video_as_related(tmp_path):
+    from src.models import VideoMetadata
+    from src.publish import youtube_uploader
+
+    video_path = tmp_path / "part1.mp4"
+    video_path.write_bytes(b"fake video bytes")
+    metadata = VideoMetadata(title="제목", title_alternatives=[], description="원래 설명", tags=[])
+    service = _fake_youtube_service(existing_videos=["old_vid_1"])
+
+    youtube_uploader.upload(service, video_path, metadata, "private", "25")
+
+    body = service.videos.return_value.insert.call_args.kwargs["body"]
+    assert "old_vid_1" in body["snippet"]["description"]
+    assert "원래 설명" in body["snippet"]["description"]
+
+
+def test_upload_survives_playlist_and_related_video_failures(tmp_path):
+    """재생목록·관련 영상 권한이 없는(구 스코프) 토큰이어도 업로드 자체는 끝나야 한다."""
+    from src.models import VideoMetadata
+    from src.publish import youtube_uploader
+
+    video_path = tmp_path / "part1.mp4"
+    video_path.write_bytes(b"fake video bytes")
+    metadata = VideoMetadata(title="제목", title_alternatives=[], description="설명", tags=[])
+    service = _fake_youtube_service()
+    service.channels.return_value.list.return_value.execute.side_effect = Exception("403")
+    service.playlists.return_value.list.return_value.execute.side_effect = Exception("403")
+
+    video_id = youtube_uploader.upload(service, video_path, metadata, "private", "25")
+    assert video_id == "vid_new"

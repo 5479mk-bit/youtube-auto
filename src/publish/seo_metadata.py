@@ -2,6 +2,9 @@
 
 제목은 세 개를 만든다. 텔레그램 검수에서 사람이 고를 수 있어야 하기 때문이다.
 설명에는 반드시 출처를 적는다. 데이터 채널의 신뢰는 거기서 나온다.
+
+제목·설명 어디에도 채널명/브랜드명("신비한 건축사전" 등)을 쓰지 않는다 — 영상 자체가
+소재마다 독립적으로 소비되는 쇼츠라 브랜드 워딩은 군더더기다(사용자 지시, 2026-09-27).
 """
 
 from __future__ import annotations
@@ -9,6 +12,18 @@ from __future__ import annotations
 from ..models import Script, ScriptPart, StoryCandidate, VideoMetadata
 from ..script.llm_client import LLMProvider
 from ..text_ko import particle
+
+# 재난(disaster) 콘텐츠에 고정으로 붙이는 해시태그 5개. LLM 이 고르게 두지 않고
+# 항상 이 다섯 개만 쓴다(사용자 지시) — 설명 하단 해시태그 줄과 API tags 필드 양쪽에 쓴다.
+DISASTER_HASHTAGS = ["#3d", "#재난", "#자연재해", "#인재", "#미스터리"]
+
+_COMMON_RULES = """규칙:
+- 제목은 후킹용 한 줄이다. 28자 이내, 숫자를 앞쪽에 배치하고, 낚시가 아니라 실제
+  내용과 일치해야 한다. 과장 금지, 데이터에 없는 주장 금지.
+- 채널명·브랜드명(예: '신비한 건축사전')을 제목·설명 어디에도 쓰지 않는다.
+- description 필드는 후킹용 1~2줄만 쓴다("이 사고, 아직도 원인이 다 안 밝혀졌다" 같은
+  궁금증을 남기는 문장). 출처·해시태그는 이 함수가 뒤에 자동으로 붙이므로 description
+  에는 넣지 않는다."""
 
 PROMPT = """다음 쇼츠 영상의 유튜브 제목 후보 3개와 설명을 쓴다.
 
@@ -18,10 +33,7 @@ PROMPT = """다음 쇼츠 영상의 유튜브 제목 후보 3개와 설명을 �
 부: {part}부 (전체 2부작)
 내레이션: {narration}
 
-규칙:
-- 제목은 28자 이내. 숫자를 앞쪽에 배치하고, 낚시가 아니라 실제 내용과 일치해야 한다.
-- 과장 금지. 데이터에 없는 주장 금지.
-- 설명은 3줄 이내. 마지막 줄에 출처를 적는다.
+""" + _COMMON_RULES + """
 
 JSON 만 출력한다:
 {{"titles": ["", "", ""], "description": "", "tags": ["", ""]}}
@@ -36,10 +48,7 @@ COMBINED_PROMPT = """다음 쇼츠 영상의 유튜브 제목 후보 3개와 설
 대상: {subject}
 내레이션: {narration}
 
-규칙:
-- 제목은 28자 이내. 숫자를 앞쪽에 배치하고, 낚시가 아니라 실제 내용과 일치해야 한다.
-- 과장 금지. 데이터에 없는 주장 금지.
-- 설명은 3줄 이내. 마지막 줄에 출처를 적는다.
+""" + _COMMON_RULES + """
 
 JSON 만 출력한다:
 {{"titles": ["", "", ""], "description": "", "tags": ["", ""]}}
@@ -93,13 +102,19 @@ def _parse(
 
     if not is_combined:
         titles = [_with_part_suffix(title, part.part) for title in titles]
-    tags = [str(tag).strip() for tag in raw.get("tags", []) if str(tag).strip()]
+
+    if candidate.dataset == "disaster":
+        # 사용자 지시: LLM 이 고르지 않는다 — 이 다섯 개로 고정한다.
+        tags = list(DISASTER_HASHTAGS)
+    else:
+        tags = [str(tag).strip() for tag in raw.get("tags", []) if str(tag).strip()]
+        tags = list(dict.fromkeys(tags + default_tags))[:15]
 
     return VideoMetadata(
         title=titles[0],
         title_alternatives=titles[1:],
         description=_with_source(description, script, candidate),
-        tags=list(dict.fromkeys(tags + default_tags))[:15],
+        tags=tags,
     )
 
 
@@ -123,16 +138,22 @@ def _template_metadata(
             f"{candidate.headline_number} 실록에 적힌 기록. "
             "조선왕조실록 국역(국사편찬위원회)을 그대로 따라 정리했습니다."
         )
+    elif candidate.dataset == "disaster":
+        description = f"{particle(candidate.subject, '을', '를')} 위키백과 기록으로 들여다봤습니다."
     else:
         description = (
             f"{particle(candidate.subject, '을', '를')} 국가유산청 해설과 위키백과로 들여다봤습니다."
         )
 
+    tags = list(DISASTER_HASHTAGS) if candidate.dataset == "disaster" else list(
+        dict.fromkeys(default_tags)
+    )[:15]
+
     return VideoMetadata(
         title=titles[0],
         title_alternatives=titles[1:],
         description=_with_source(description, script, candidate),
-        tags=list(dict.fromkeys(default_tags))[:15],
+        tags=tags,
     )
 
 
@@ -146,6 +167,11 @@ def _with_source(description: str, script: Script, candidate: StoryCandidate) ->
     lines = [description, "", script.source_note or f"출처: {candidate.source_name}"]
     if candidate.source_url:
         lines.append(candidate.source_url)
+    if candidate.dataset == "disaster":
+        # 화면에 보이는 해시태그 줄(유튜브가 설명 상단 최대 3개를 클릭 가능한
+        # 태그로 띄워준다) — DISASTER_HASHTAGS 와 순서·내용을 그대로 맞춘다.
+        lines.append("")
+        lines.append(" ".join(DISASTER_HASHTAGS))
     if script.is_sample:
         lines.insert(0, "[샘플 데이터로 만든 테스트 영상입니다. 실제 해설문이 아닙니다.]")
     return "\n".join(lines)
