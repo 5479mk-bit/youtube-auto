@@ -13,8 +13,9 @@ video:
   # --combine-parts(1·2부를 나누지 않고 영상 하나로 합본)일 때의 목표 구간.
   # 사용자 지시: "최소 63초 이상". 상한은 사실상 없다 — 대본 3중 후킹 구조를
   # 그대로 이어 붙인 자연 길이(보통 70~90초)를 그대로 쓴다.
+  # 사용자 지시(2026-09-27): 최소 63초, 90초를 넘기지 않는다.
   combined_duration_min: 63
-  combined_duration_max: 999
+  combined_duration_max: 90
   cut_duration_min: 2.5
   cut_duration_max: 3.0
   hook_duration: 3.0
@@ -100,8 +101,10 @@ script:
     temperature: 0.9
   # 부별 목표 글자 수. 한국어 내레이션 기준 대략 1초당 5~6자.
   # 레퍼런스(건축사전)는 초당 약 6음절로 쉼 없이 읽는다. 12문장 × 20자 안팎.
-  part1_target_chars: 240
-  part2_target_chars: 250
+  # run #34 실측(490자 목표 → 실제 124.1초, 초당 약 0.253초/자)으로 역산해
+  # 90초 상한 안에 들어오도록 낮췄다(사용자 지시: 90초 이내).
+  part1_target_chars: 165
+  part2_target_chars: 170
 
 topics:
   # sillok(조선왕조실록) | heritage(국가유산청 해설문) | disaster(해외 자연재해·인재).
