@@ -750,24 +750,33 @@ def review_and_publish(
     )
 
     decision = reviewer.wait_for_decision(result.task_id, wait_seconds)
+    if decision is not None:
+        # 업로드를 시도하기 전에 판정부터 남긴다 — 업로드가 실패해도(유튜브 API
+        # 가 꺼져 있거나 네트워크 문제) 방금 받은 승인/거절 자체는 잃지 않는다.
+        history.record_decision(STATE_DB, result.task_id, decision.approved, decision.title_index)
     return _finish_review(
         settings, reviewer, result.task_id, result.script.is_sample, result.parts, titles, decision
     )
 
 
 def resume_pending_reviews(settings: Settings, wait_seconds: int) -> dict[str, list[str]]:
-    """PC 가 꺼지는 등으로 검수 대기가 끊긴 회차들을 다시 확인한다.
+    """PC 가 꺼지는 등으로 검수 대기가 끊기거나, 승인은 받았는데 업로드가 실패한
+    회차들을 다시 확인한다.
 
     렌더된 영상과 텔레그램 메시지는 이미 나가 있는 상태이므로(review_and_publish 가
     `history.save_pending` 으로 남겨둠), 여기서는 다시 렌더하지 않고 그때 저장해둔
     output/<task_id>/result.json 을 읽어 업로드에 필요한 정보만 재구성한다. 사용자가
     PC를 끄기 전에 이미 승인 버튼을 눌렀어도, 텔레그램은 getUpdates 로 가져가기 전까지
     그 콜백을 들고 있으므로 다음에 실행했을 때 그대로 받아진다.
+
+    'decided' 상태(텔레그램 응답은 받았지만 업로드가 실패해 끝나지 못한 회차)는
+    텔레그램을 다시 기다리지 않는다 — 콜백은 한 번 받으면 두 번 다시 오지 않으므로,
+    이미 저장해둔 판정 그대로 업로드만 재시도한다.
     """
     import json
 
     from .models import RenderedPart, VideoMetadata
-    from .review.telegram_bot import TelegramReviewer
+    from .review.telegram_bot import ReviewDecision, TelegramReviewer
 
     reviewer = TelegramReviewer(
         settings.secrets.telegram_bot_token, settings.secrets.telegram_chat_id
@@ -776,13 +785,14 @@ def resume_pending_reviews(settings: Settings, wait_seconds: int) -> dict[str, l
         logger.warning("텔레그램 설정이 없어 대기 중인 승인을 확인할 수 없습니다")
         return {}
 
-    pending = history.list_pending_reviews(STATE_DB)
-    if not pending:
+    actionable = history.list_actionable_reviews(STATE_DB)
+    if not actionable:
         logger.info("대기 중인 승인이 없습니다")
         return {}
 
     tasks: dict[str, dict] = {}
-    for row in pending:
+    already_decided: dict[str, ReviewDecision] = {}
+    for row in actionable:
         task_id = row["task_id"]
         result_path = OUTPUT_DIR / task_id / "result.json"
         if not result_path.exists():
@@ -792,12 +802,30 @@ def resume_pending_reviews(settings: Settings, wait_seconds: int) -> dict[str, l
         data = json.loads(result_path.read_text(encoding="utf-8"))
         data["titles"] = row["payload"].get("titles") or [data["parts"][0]["title"]]
         tasks[task_id] = data
+        if row["status"] == "decided":
+            stored = row["payload"]["decision"]
+            already_decided[task_id] = ReviewDecision(
+                approved=stored["approved"], title_index=stored["title_index"]
+            )
 
     if not tasks:
         return {}
 
-    logger.info(f"대기 중인 승인 {len(tasks)}건을 확인합니다: {', '.join(tasks)}")
-    decisions = reviewer.wait_for_decisions(list(tasks), wait_seconds)
+    needs_wait = [task_id for task_id in tasks if task_id not in already_decided]
+    decisions: dict[str, ReviewDecision] = dict(already_decided)
+    if needs_wait:
+        logger.info(f"대기 중인 승인 {len(needs_wait)}건을 확인합니다: {', '.join(needs_wait)}")
+        fresh = reviewer.wait_for_decisions(needs_wait, wait_seconds)
+        for task_id, decision in fresh.items():
+            # 업로드를 시도하기 전에 판정부터 남긴다 — 업로드가 실패해도 방금 받은
+            # 승인/거절은 다음 실행에서 재사용된다.
+            history.record_decision(STATE_DB, task_id, decision.approved, decision.title_index)
+        decisions.update(fresh)
+    if already_decided:
+        logger.info(
+            f"이미 응답받은 {len(already_decided)}건의 업로드를 재시도합니다: "
+            f"{', '.join(already_decided)}"
+        )
 
     results: dict[str, list[str]] = {}
     for task_id, data in tasks.items():

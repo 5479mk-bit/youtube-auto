@@ -736,6 +736,88 @@ class TestResumePendingReviews:
         assert results == {task_id: ["vid1", "vid2"]}
         assert history.list_pending_reviews(fake_db) == []
 
+    def test_upload_failure_persists_decision_and_retries_without_asking_telegram_again(
+        self, tmp_path
+    ):
+        # 실제로 있었던 사고: 승인은 받았는데(텔레그램 콜백 매칭까지 성공) 업로드가
+        # 유튜브 API 오류로 실패하면서, 그 판정 자체가 다음 실행에서 사라져 있었다
+        # (텔레그램 콜백은 한 번 받으면 다시 오지 않는다). 업로드가 실패해도 판정은
+        # 'decided' 로 남아 있어야 하고, 다음 resume_pending_reviews 호출은 텔레그램에
+        # 다시 묻지 않고 그 판정 그대로 업로드만 재시도해야 한다.
+        task_id = "test-task-2"
+        part_dir = tmp_path / "output" / task_id
+        part_dir.mkdir(parents=True)
+        (part_dir / "part1.mp4").write_bytes(b"fake")
+        (part_dir / "part1_thumb.jpg").write_bytes(b"fake")
+        result_json = {
+            "task_id": task_id,
+            "topic_key": "disaster:테스트",
+            "is_sample": False,
+            "parts": [
+                {
+                    "part": 1,
+                    "video": str(part_dir / "part1.mp4"),
+                    "thumbnail": str(part_dir / "part1_thumb.jpg"),
+                    "duration": 60.0,
+                    "title": "테스트 제목",
+                    "title_alternatives": [],
+                    "description": "설명",
+                    "tags": [],
+                },
+            ],
+        }
+        (part_dir / "result.json").write_text(
+            json.dumps(result_json, ensure_ascii=False), encoding="utf-8"
+        )
+
+        fake_db = tmp_path / "state.sqlite3"
+        history.save_pending(fake_db, task_id, {"topic_key": "disaster:테스트", "titles": ["테스트 제목"]})
+
+        settings = MagicMock()
+        settings.secrets.telegram_bot_token = "x"
+        settings.secrets.telegram_chat_id = "y"
+        settings.get.side_effect = lambda key, default=None: default
+
+        # 1회차: 승인은 받았지만 업로드가 API 오류로 실패한다.
+        with patch.object(pipeline, "STATE_DB", fake_db), patch.object(
+            pipeline, "OUTPUT_DIR", tmp_path / "output"
+        ), patch("src.review.telegram_bot.TelegramReviewer") as MockReviewer, patch(
+            "src.publish.youtube_uploader.get_service", return_value=object()
+        ), patch(
+            "src.publish.youtube_uploader.upload_series",
+            side_effect=RuntimeError("YouTube Data API v3 has not been used"),
+        ):
+            reviewer = MockReviewer.return_value
+            reviewer.enabled = True
+            reviewer.wait_for_decisions.return_value = {
+                task_id: ReviewDecision(approved=True, title_index=0)
+            }
+            with pytest.raises(RuntimeError):
+                pipeline.resume_pending_reviews(settings, 5)
+
+        # 판정은 'decided' 로 남아야 하고, 다음 실행이 볼 수 있어야 한다.
+        actionable = history.list_actionable_reviews(fake_db)
+        assert len(actionable) == 1
+        assert actionable[0]["status"] == "decided"
+        assert actionable[0]["payload"]["decision"] == {"approved": True, "title_index": 0}
+
+        # 2회차: 업로드가 이번엔 성공한다 — 텔레그램에 다시 묻지 않고도 끝나야 한다.
+        with patch.object(pipeline, "STATE_DB", fake_db), patch.object(
+            pipeline, "OUTPUT_DIR", tmp_path / "output"
+        ), patch("src.review.telegram_bot.TelegramReviewer") as MockReviewer, patch(
+            "src.publish.youtube_uploader.get_service", return_value=object()
+        ), patch(
+            "src.publish.youtube_uploader.upload_series", return_value=["vid1"]
+        ):
+            reviewer = MockReviewer.return_value
+            reviewer.enabled = True
+            results = pipeline.resume_pending_reviews(settings, 5)
+
+        assert results == {task_id: ["vid1"]}
+        # 텔레그램에 다시 묻지 않았다는 게 핵심이다.
+        reviewer.wait_for_decisions.assert_not_called()
+        assert history.list_actionable_reviews(fake_db) == []
+
 
 class TestSillokArticle:
     """실록 기사 페이지 파싱. 실제 응답을 잘라 픽스처로 넣어뒀다."""
