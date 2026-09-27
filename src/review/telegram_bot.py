@@ -94,6 +94,14 @@ class TelegramReviewer:
                 data = str(query.get("data", ""))
                 matched = next((t for t in remaining if data.startswith(f"{t}:")), None)
                 if matched is None:
+                    # 대기 중인 회차 중 어느 것과도 안 맞는 콜백이다 — 오래된 카드를
+                    # 눌렀거나, task_id 가 안 맞는 경우다. "버튼을 눌렀는데 반응이
+                    # 없다"는 문의가 왔을 때 원인을 바로 보려고 남긴다(응답 자체는
+                    # 확인만 하고 승인 처리는 하지 않는다 — 어느 회차인지 모른다).
+                    logger.warning(
+                        f"대기 중인 회차({', '.join(sorted(remaining))})와 안 맞는 "
+                        f"콜백을 받았습니다: {data!r}"
+                    )
                     continue
 
                 action = data.split(":", 1)[1]
