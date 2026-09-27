@@ -105,13 +105,23 @@ class TelegramReviewer:
                     continue
 
                 action = data.split(":", 1)[1]
-                self._call(
-                    "answerCallbackQuery",
-                    {
-                        "callback_query_id": query["id"],
-                        "text": "승인했습니다" if action.startswith("a") else "거절했습니다",
-                    },
-                )
+                try:
+                    self._call(
+                        "answerCallbackQuery",
+                        {
+                            "callback_query_id": query["id"],
+                            "text": "승인했습니다" if action.startswith("a") else "거절했습니다",
+                        },
+                    )
+                except Exception as exc:
+                    # answerCallbackQuery 는 사용자 폰의 로딩 스피너를 꺼주는 것뿐인
+                    # UI 피드백이다 — 콜백이 폴링 지연으로 늦게 도착하면 텔레그램이
+                    # "query is too old"로 거부하는 일이 실제로 있었다("승인을
+                    # 눌렀는데 업로드가 안 됐다"는 문의의 원인이었다: 이 호출이
+                    # raise_for_status()로 예외를 던지면 아래 승인 기록 자체가
+                    # 실행되지 못하고 프로세스가 죽었다). 이 알림 자체가 실패해도
+                    # 실제 승인/거절 판정과 업로드는 그대로 진행돼야 한다.
+                    logger.warning(f"answerCallbackQuery 실패(무시하고 계속 진행): {exc}")
                 resolved[matched] = (
                     ReviewDecision(approved=True, title_index=int(action[1:] or 0))
                     if action.startswith("a")

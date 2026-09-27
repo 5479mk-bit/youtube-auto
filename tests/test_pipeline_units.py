@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -639,6 +640,32 @@ class TestTelegramReviewerMultiWait:
         assert "task1" not in decisions
         # answerCallbackQuery 가 실제로 불렸는지도 확인한다.
         assert any(call.args[0] == "answerCallbackQuery" for call in mock_call.call_args_list)
+
+    def test_approval_still_records_when_answer_callback_query_fails(self):
+        # 실제로 있었던 사고: 버튼을 눌렀는데 그 콜백을 폴링이 한참 뒤에야 집어서
+        # 텔레그램이 "query is too old"로 answerCallbackQuery 를 거부했다. 그
+        # 예외가 그대로 올라가면 뒤에 오는 resolved[matched] = ... 가 실행조차
+        # 안 돼 승인 자체가 통째로 사라진다("승인을 눌렀는데 업로드가 안 됐다").
+        # answerCallbackQuery 는 로딩 스피너를 꺼주는 UI 피드백일 뿐이라, 이게
+        # 실패해도 승인 판정은 그대로 기록돼야 한다.
+        reviewer = TelegramReviewer("token", "chat")
+        updates = {
+            "result": [
+                {"update_id": 1, "callback_query": {"id": "q1", "data": "task1:a2"}},
+            ]
+        }
+
+        def fake_call(method, payload, timeout=30):
+            if method == "answerCallbackQuery":
+                raise requests.exceptions.HTTPError("400 query is too old")
+            return updates
+
+        with patch.object(reviewer, "_call", side_effect=fake_call):
+            decisions = reviewer.wait_for_decisions(["task1"], timeout_seconds=1)
+
+        assert "task1" in decisions
+        assert decisions["task1"].approved is True
+        assert decisions["task1"].title_index == 2
 
 
 class TestResumePendingReviews:
