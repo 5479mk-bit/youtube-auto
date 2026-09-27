@@ -957,3 +957,41 @@ def test_upload_survives_playlist_and_related_video_failures(tmp_path):
 
     video_id = youtube_uploader.upload(service, video_path, metadata, "private", "25")
     assert video_id == "vid_new"
+
+
+def test_get_service_falls_back_to_upload_only_scope_on_invalid_scope(tmp_path):
+    """실제로 있었던 사고: 넓은 스코프(youtube) 요청이 기존 좁은 스코프
+    (youtube.upload) 토큰으로 invalid_scope 거부됐다. 그 예외로 전체 업로드가
+    죽으면 안 되고, 좁은 스코프로 자동으로 내려가 업로드는 계속돼야 한다."""
+    from unittest.mock import MagicMock, patch
+
+    from google.auth.exceptions import RefreshError
+    from src.publish import youtube_uploader
+
+    calls = []
+
+    def fake_get_service(client_secret_file, token_file, scopes):
+        calls.append(list(scopes))
+        if scopes == youtube_uploader.SCOPES:
+            raise RefreshError("invalid_scope: Bad Request")
+        return MagicMock()
+
+    with patch.object(youtube_uploader, "_get_service", side_effect=fake_get_service):
+        service = youtube_uploader.get_service("secret.json", "token.json")
+
+    assert service is not None
+    assert calls == [youtube_uploader.SCOPES, youtube_uploader.SCOPES_UPLOAD_ONLY]
+
+
+def test_get_service_reraises_non_scope_refresh_errors(tmp_path):
+    from unittest.mock import patch
+
+    from google.auth.exceptions import RefreshError
+    from src.publish import youtube_uploader
+
+    def fake_get_service(client_secret_file, token_file, scopes):
+        raise RefreshError("invalid_grant: token expired")
+
+    with patch.object(youtube_uploader, "_get_service", side_effect=fake_get_service):
+        with pytest.raises(RefreshError):
+            youtube_uploader.get_service("secret.json", "token.json")

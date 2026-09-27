@@ -12,10 +12,14 @@
 
 이 세 가지는 업로드(`youtube.upload`) 권한만으로는 안 된다 — 재생목록 조회/생성과
 채널의 업로드 목록 조회는 더 넓은 `youtube` 스코프가 필요하다. 기존에 `youtube.upload`
-스코프로만 발급된 YOUTUBE_TOKEN_JSON 이 있다면, 그 토큰으로는 이 세 기능이 403 으로
-실패한다 — 사람이 다시 로그인해서(`get_service` 를 로컬에서 한 번 더 돌려서) 토큰을
-새로 발급받아 시크릿을 갱신해야 한다. 실패해도 영상 업로드 자체는 그대로 끝나게
-만들어 뒀다(각자 실패해도 업로드를 막지 않는다).
+스코프로만 발급된 YOUTUBE_TOKEN_JSON 이 있으면, 넓은 스코프로 토큰을 갱신하려는
+시도 자체가 `invalid_scope` 로 거부된다(구글이 원래 동의받지 않은 스코프로의 확장
+요청을 막는다 — 실제로 이 사고를 겪었다: 승인은 정상적으로 받았는데 이 단계에서
+막혀 업로드 자체가 안 됐다). 그래서 넓은 스코프가 실패하면 원래 스코프(업로드 전용)
+로 자동으로 내려가 최소한 영상 업로드(+AI 표시)는 그대로 끝나게 한다 — 재생목록·
+관련 영상 두 가지만 이번엔 건너뛴다. 그 둘을 쓰려면 사람이 다시 로그인해서
+(`get_service` 를 로컬에서 한 번 더 돌려서) 넓은 스코프로 토큰을 새로 발급받아
+시크릿을 갱신해야 한다.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from pathlib import Path
 
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -34,6 +39,9 @@ from ..models import VideoMetadata
 
 # playlists.list/insert, search 등은 upload 스코프만으론 안 된다.
 SCOPES = ["https://www.googleapis.com/auth/youtube"]
+# 기존 토큰이 이 좁은 스코프로만 발급돼 있을 수 있다 — 넓은 스코프 갱신이
+# invalid_scope 로 거부되면 여기로 내려가 최소한 업로드는 계속한다.
+SCOPES_UPLOAD_ONLY = ["https://www.googleapis.com/auth/youtube.upload"]
 WATCH_URL = "https://www.youtube.com/watch?v="
 
 DEFAULT_PLAYLIST_TITLE = "재난아카이브"
@@ -44,20 +52,38 @@ class SampleDataUploadBlocked(RuntimeError):
 
 
 def get_service(client_secret_file: str, token_file: str):
+    try:
+        return _get_service(client_secret_file, token_file, SCOPES)
+    except RefreshError as exc:
+        if "invalid_scope" not in str(exc):
+            raise
+        logger.warning(
+            "YOUTUBE_TOKEN_JSON 이 좁은 스코프(youtube.upload)로만 발급돼 있어 "
+            "재생목록·관련 영상 기능은 이번엔 건너뜁니다. 그 기능을 쓰려면 사람이 "
+            "다시 로그인해 넓은 스코프로 토큰을 새로 발급받아야 합니다."
+        )
+        return _get_service(client_secret_file, token_file, SCOPES_UPLOAD_ONLY)
+
+
+def _get_service(client_secret_file: str, token_file: str, scopes: list[str]):
     token_path = Path(token_file)
     credentials = None
 
     if token_path.exists():
-        credentials = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+        credentials = Credentials.from_authorized_user_file(str(token_path), scopes)
 
     if not credentials or not credentials.valid:
         if credentials and credentials.expired and credentials.refresh_token:
             credentials.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(client_secret_file, SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(client_secret_file, scopes)
             credentials = flow.run_local_server(port=0)
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-        token_path.write_text(credentials.to_json(), encoding="utf-8")
+        # 좁은 스코프로 받은 자격증명을 파일에 다시 쓰면 애초에 없던 스코프
+        # 확장이 다음에도 또 실패할 뿐이니, 원래 요청한 스코프(넓은 쪽)로 정상
+        # 갱신됐을 때만 저장한다.
+        if scopes == SCOPES:
+            token_path.parent.mkdir(parents=True, exist_ok=True)
+            token_path.write_text(credentials.to_json(), encoding="utf-8")
 
     return build("youtube", "v3", credentials=credentials)
 
