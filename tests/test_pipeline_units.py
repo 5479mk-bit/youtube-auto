@@ -895,3 +895,44 @@ class TestSpendGuard:
     def test_상한을_끄면_막지_않는다(self, tmp_path):
         guard = SpendGuard(tmp_path / "ledger.json", credit_krw=0, enabled=False)
         guard.ensure_can_spend(999_999)
+
+class TestTelegramPollingResilience:
+    def test_get_updates_transient_failure_is_retried_not_raised(self):
+        # 실제로 있었던 사고: 텔레그램 롱폴 timeout(50초)이 caller 의 wait_seconds
+        # (예: review-pending 의 --wait 30)보다 길어서 요청 하나가 deadline 을
+        # 넘겨 끝나고, 그 경계에서 ReadTimeout 이 나며 프로세스 전체가 죽었다.
+        # getUpdates 하나가 실패해도 루프는 계속 돌아야 한다.
+        reviewer = TelegramReviewer("token", "chat")
+        get_updates_calls = {"n": 0}
+
+        def fake_call(method, payload, timeout=30):
+            if method != "getUpdates":
+                return {}  # answerCallbackQuery 등은 그냥 성공 처리
+            get_updates_calls["n"] += 1
+            if get_updates_calls["n"] == 1:
+                raise requests.exceptions.ReadTimeout("read timed out")
+            return {"result": [{"update_id": 1, "callback_query": {"id": "q1", "data": "task1:a0"}}]}
+
+        with patch.object(reviewer, "_call", side_effect=fake_call):
+            decisions = reviewer.wait_for_decisions(["task1"], timeout_seconds=5)
+
+        assert get_updates_calls["n"] == 2  # 첫 실패 후 다시 시도해 성공했다
+        assert decisions["task1"].approved is True
+
+    def test_get_updates_poll_timeout_capped_to_remaining_deadline(self):
+        # 남은 시간이 POLL_TIMEOUT(50초)보다 짧으면, 텔레그램에 요청하는
+        # "timeout" 값도 그 남은 시간 안으로 잘려야 한다 — 안 그러면 요청 하나가
+        # 전체 wait_seconds 를 그대로 넘겨버린다.
+        reviewer = TelegramReviewer("token", "chat")
+        seen_timeouts = []
+
+        def fake_call(method, payload, timeout=30):
+            if method == "getUpdates":
+                seen_timeouts.append(payload["timeout"])
+            return {"result": []}
+
+        with patch.object(reviewer, "_call", side_effect=fake_call):
+            reviewer.wait_for_decisions(["task1"], timeout_seconds=5)
+
+        assert seen_timeouts  # 최소 한 번은 불렸다
+        assert all(t <= 5 for t in seen_timeouts)

@@ -76,15 +76,30 @@ class TelegramReviewer:
         deadline = time.time() + timeout_seconds
 
         while remaining and time.time() < deadline:
-            updates = self._call(
-                "getUpdates",
-                {
-                    "timeout": POLL_TIMEOUT,
-                    "offset": self._offset,
-                    "allowed_updates": ["callback_query"],
-                },
-                timeout=POLL_TIMEOUT + 10,
-            )
+            # 텔레그램 롱폴 자체가 caller 가 정한 timeout_seconds 보다 길면(예:
+            # review-pending 은 --wait 30 인데 POLL_TIMEOUT 은 50) 요청 하나가
+            # 남은 시간을 넘겨서 끝나고, 클라이언트 타임아웃(구 코드는 +10초 여유만
+            # 뒀다)과 거의 같은 시점에 걸려 ReadTimeout 이 나며 프로세스 전체가
+            # 죽었다("승인을 눌러도 반응 없음"의 실제 원인 중 하나였다). 서버
+            # 롱폴 시간을 남은 시간 안으로 잘라 요청 하나가 deadline 을 넘기지
+            # 않게 하고, 클라이언트 타임아웃 여유도 넉넉히(30초) 둔다.
+            remaining_seconds = max(deadline - time.time(), 1.0)
+            poll_timeout = max(1, min(POLL_TIMEOUT, int(remaining_seconds)))
+            try:
+                updates = self._call(
+                    "getUpdates",
+                    {
+                        "timeout": poll_timeout,
+                        "offset": self._offset,
+                        "allowed_updates": ["callback_query"],
+                    },
+                    timeout=poll_timeout + 30,
+                )
+            except Exception as exc:
+                # 네트워크가 일시적으로 흔들린 것뿐일 수 있다 — 루프를 죽이지 않고
+                # deadline 안에서 다시 시도한다.
+                logger.warning(f"getUpdates 일시 실패(재시도): {exc}")
+                continue
             for update in updates.get("result", []):
                 self._offset = update["update_id"] + 1
                 query = update.get("callback_query")
