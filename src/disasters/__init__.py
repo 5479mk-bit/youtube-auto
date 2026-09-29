@@ -46,16 +46,24 @@ def collect_candidates(titles: list[str]) -> list[StoryCandidate]:
             continue
 
         facts = [paragraph.strip() for paragraph in text.split("\n\n") if paragraph.strip()]
-        candidates.append(
-            StoryCandidate(
-                dataset="disaster",
-                topic_key=f"disaster:{title}",
-                headline=title,
-                headline_number="",
-                subject=title,
-                context=text[:MAX_CONTEXT_CHARS],
-                facts=facts[:MAX_FACTS],
-                source_name=SOURCE_NAME,
-            )
+        candidate = StoryCandidate(
+            dataset="disaster",
+            topic_key=f"disaster:{title}",
+            headline=title,
+            headline_number="",
+            subject=title,
+            context=text[:MAX_CONTEXT_CHARS],
+            facts=facts[:MAX_FACTS],
+            source_name=SOURCE_NAME,
         )
+        # topics.disaster.weights(story_density/freshness)가 실제로 뭔가를 보게
+        # 채운다 — 안 채우면 모든 후보가 0점으로 묶여 topic_key 순서(=config.yaml
+        # 에 적은 순서)로만 뽑힌다("맨 위 항목만 계속 나온다"의 원인 중 하나였다).
+        # freshness 는 여기서 계산할 이력 정보가 없어 중립값으로 둔다 — 실제 중복
+        # 방지는 select_topic()의 topic_key exclude_keys 가 맡는다.
+        candidate.features = {
+            "story_density": min(len(text) / 3000, 1.0),
+            "freshness": 1.0,
+        }
+        candidates.append(candidate)
     return candidates

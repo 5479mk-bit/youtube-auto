@@ -4,6 +4,7 @@ from unittest.mock import patch
 from src.disasters import collect_candidates
 from src.narration.tts_supertonic import SupertonicEngine, _rate_to_speed
 from src.narration.tts_voxcpm import VOICE_DESIGN_TAG, VoxCPMEngine
+from src.topics import topic_scorer
 
 
 def test_collect_candidates_blocks_korean_disasters():
@@ -28,6 +29,32 @@ def test_collect_candidates_builds_disaster_candidate():
     assert candidate.dataset == "disaster"
     assert candidate.headline == "타이타닉호"
     assert candidate.facts == ["문단 하나.", "문단 둘."]
+
+
+def test_collect_candidates_fills_features_so_weights_are_not_a_no_op():
+    # 실제로 있었던 사고: candidate.features 가 항상 비어 있어서 topic_scorer 가
+    # 모든 후보를 0.000점으로 묶었고, 그 결과 안정 정렬 때문에 config.yaml 목록의
+    # 첫 번째 제목(타이타닉호)만 매번 뽑혔다(reuse_topic 기본값 버그와 겹쳐 3일
+    # 내내 같은 주제만 나온 원인이었다). weights 축이 실제로 뭔가를 보게 한다.
+    with patch(
+        "src.disasters.wikipedia_enrich.fetch_full_text",
+        return_value="문단 하나.\n\n문단 둘.",
+    ):
+        candidates = collect_candidates(["타이타닉호"])
+    assert candidates[0].features["story_density"] > 0
+    assert candidates[0].features["freshness"] > 0
+
+
+def test_disaster_candidates_no_longer_tie_at_zero_score():
+    weights = {"story_density": 0.5, "freshness": 0.5}
+    with patch(
+        "src.disasters.wikipedia_enrich.fetch_full_text",
+        side_effect=["짧다.", "더 긴 위키백과 문단이 여기 여러 번 반복됩니다. " * 20],
+    ):
+        candidates = collect_candidates(["짧은문서", "긴문서"])
+    ranked = topic_scorer.rank(candidates, weights, exclude_keys=set())
+    assert ranked[0].score > 0
+    assert ranked[0].headline == "긴문서"  # 더 두꺼운 본문이 앞선다
 
 
 def test_rate_to_speed_converts_percent_strings():

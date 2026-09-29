@@ -11,9 +11,11 @@ on:
         type: boolean
         default: false
       reuse_topic:
-        description: "이미 다룬 주제도 다시 고른다"
+        description: "이미 다룬 주제도 다시 고른다 (검증 사이클용 — 같은 주제로 반복
+          테스트할 때만 켠다). 기본은 꺼짐 — 켜두면 매일 자동 실행에서 중복 방지 이력을
+          무시해 같은 주제만 계속 나온다(2026-09-29 실제로 겪은 사고)."
         type: boolean
-        default: true
+        default: false
       review:
         description: "렌더 후 텔레그램으로 검수 요청을 보낸다"
         type: boolean
@@ -312,7 +314,11 @@ jobs:
           # 아무 값도 안 남아 argparse 가 즉시 실패하므로 명시적 기본값이 꼭 필요하다.
           ARGS=""
           if [ "${{ inputs.no_veo || 'false' }}" = "true" ]; then ARGS="$ARGS --no-veo"; fi
-          if [ "${{ inputs.reuse_topic }}" != "false" ]; then ARGS="$ARGS --reuse-topic"; fi
+          # 기본은 꺼짐(opt-in) — 켜두면 이미 다룬 주제도 다시 고른다. 스케줄 실행처럼
+          # inputs 가 비어도 안전한 쪽(=재사용 안 함, 중복 방지 이력을 그대로 존중)으로
+          # 떨어지게 "true" 일 때만 켠다(예전엔 "false" 가 아니면 켜는 방향이라 매일
+          # 자동 실행에서 계속 같은 주제만 나오는 사고가 있었다).
+          if [ "${{ inputs.reuse_topic }}" = "true" ]; then ARGS="$ARGS --reuse-topic"; fi
           if [ "${{ inputs.combine_parts }}" != "false" ]; then
             ARGS="$ARGS --combine-parts"
           elif [ "${{ inputs.part1_only }}" != "false" ]; then
