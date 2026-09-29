@@ -207,6 +207,11 @@ class VideoMetadata:
     title_alternatives: list[str]
     description: str
     tags: list[str]
+    # 텔레그램 검수 카드에는 이 순수 후킹 문구만 보여준다(출처·사진 출처·해시태그가
+    # 안 섞인 상태) — 실제 유튜브 업로드용 description 에는 그것들이 그대로 붙는다.
+    # 사용자 지시: 출처/사진/비용은 검수 카드 본문이 아니라 별도 텔레그램 메시지로.
+    hook_description: str = ""
+    source_line: str = ""
 
 
 @dataclass

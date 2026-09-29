@@ -21,9 +21,12 @@ _COMMON_RULES = """규칙:
 - 제목은 후킹용 한 줄이다. 28자 이내, 숫자를 앞쪽에 배치하고, 낚시가 아니라 실제
   내용과 일치해야 한다. 과장 금지, 데이터에 없는 주장 금지.
 - 채널명·브랜드명(예: '신비한 건축사전')을 제목·설명 어디에도 쓰지 않는다.
-- description 필드는 후킹용 1~2줄만 쓴다("이 사고, 아직도 원인이 다 안 밝혀졌다" 같은
-  궁금증을 남기는 문장). 출처·해시태그는 이 함수가 뒤에 자동으로 붙이므로 description
-  에는 넣지 않는다."""
+- description 필드는 2~3줄로 쓴다. 첫 줄은 궁금증을 남기는 후킹 문장("이 사고, 아직도
+  원인이 다 안 밝혀졌다" 같은), 나머지 줄에는 미스터리·의문점·아직 안 풀린 부분처럼
+  시청자의 흥미를 끄는 요소를 한두 개 더 구체적으로 덧붙인다(예: "전문가들도 그날
+  왜 그렇게 됐는지 의견이 갈린다", "생존자 증언과 공식 기록이 서로 다르다"). 본문에
+  없는 사실을 지어내지 않는다 — 있는 사실을 궁금하게 포장하는 것까지만 한다. 출처·
+  해시태그는 이 함수가 뒤에 자동으로 붙이므로 description 에는 넣지 않는다."""
 
 PROMPT = """다음 쇼츠 영상의 유튜브 제목 후보 3개와 설명을 쓴다.
 
@@ -115,6 +118,8 @@ def _parse(
         title_alternatives=titles[1:],
         description=_with_source(description, script, candidate),
         tags=tags,
+        hook_description=description,
+        source_line=_source_line(script, candidate),
     )
 
 
@@ -154,6 +159,8 @@ def _template_metadata(
         title_alternatives=titles[1:],
         description=_with_source(description, script, candidate),
         tags=tags,
+        hook_description=description,
+        source_line=_source_line(script, candidate),
     )
 
 
@@ -163,8 +170,12 @@ def _with_part_suffix(title: str, part: int) -> str:
     return f"{trimmed}{suffix}"
 
 
+def _source_line(script: Script, candidate: StoryCandidate) -> str:
+    return script.source_note or f"출처: {candidate.source_name}"
+
+
 def _with_source(description: str, script: Script, candidate: StoryCandidate) -> str:
-    lines = [description, "", script.source_note or f"출처: {candidate.source_name}"]
+    lines = [description, "", _source_line(script, candidate)]
     if candidate.source_url:
         lines.append(candidate.source_url)
     if candidate.dataset == "disaster":

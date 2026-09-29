@@ -721,6 +721,30 @@ def test_seo_metadata_combined_skips_part_suffix():
     assert "(1부)" in metadata_split.title
 
 
+def test_seo_metadata_hook_description_excludes_source_and_hashtags():
+    # 사용자 지시: 텔레그램 검수 카드에는 출처·해시태그가 안 섞인 순수 후킹 설명만
+    # 보여준다 — description(유튜브 업로드용)에는 그대로 붙어 있어야 한다.
+    from src.models import Script, StoryCandidate
+    from src.publish import seo_metadata
+
+    script = Script(
+        topic_key="k", title_seed="제목",
+        part1=_make_script_part(1, "훅", ["문장"]),
+        part2=_make_script_part(2, "훅2", ["문장2"]),
+    )
+    candidate = StoryCandidate(
+        dataset="disaster", topic_key="disaster:x", headline="사건",
+        headline_number="", subject="사건", context="", source_name="위키백과",
+    )
+    metadata = seo_metadata.generate(script, script.part1, candidate, None, [], is_combined=True)
+    assert metadata.hook_description
+    assert "출처" not in metadata.hook_description
+    assert "#" not in metadata.hook_description
+    assert metadata.source_line == "출처: 위키백과"
+    assert metadata.hook_description in metadata.description
+    assert "출처: 위키백과" in metadata.description
+
+
 def test_seo_metadata_disaster_uses_fixed_hashtags_not_llm_tags():
     """사용자 지시(2026-09-27): 해시태그는 LLM 이 고르지 않고 이 5개로 고정한다."""
     from src.models import Script, StoryCandidate

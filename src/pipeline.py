@@ -732,12 +732,13 @@ def review_and_publish(
 
     first = result.parts[0].metadata
     titles = [first.title, *first.title_alternatives]
+    # 출처/사진 출처/비용은 검수 카드 본문에 섞지 않고 각각 별도 메시지로 보낸다
+    # (사용자 지시) — 카드 자체는 순수 후킹 설명(hook_description)만 보여준다.
     summary = build_summary(
         result.script.title_seed,
         titles,
-        first.description,
+        first.hook_description or first.description,
         result.script.is_sample,
-        result.cost_note,
     )
 
     history.save_pending(
@@ -748,6 +749,13 @@ def review_and_publish(
     reviewer.send_review(
         result.task_id, summary, titles, [Path(part.video_path) for part in result.parts]
     )
+    if first.source_line:
+        reviewer.notify(first.source_line)
+    photo_note = photo_credit_line(result.credits)
+    if photo_note:
+        reviewer.notify(photo_note)
+    if result.cost_note:
+        reviewer.notify(f"비용 {result.cost_note}")
 
     decision = reviewer.wait_for_decision(result.task_id, wait_seconds)
     if decision is not None:
@@ -892,11 +900,14 @@ def _finish_review(
     )
 
     history.set_review_status(STATE_DB, task_id, "uploaded")
-    reviewer.notify(
-        "업로드 완료\n"
-        + "\n".join(
+    # 합본(--combine-parts) 모드는 영상이 하나라 "1부:" 라벨을 붙이면 없는 2부가
+    # 있는 것처럼 보인다 — 영상이 하나면 라벨 없이 링크만 보낸다.
+    if len(video_ids) == 1:
+        body = f"https://www.youtube.com/watch?v={video_ids[0]}"
+    else:
+        body = "\n".join(
             f"{index + 1}부: https://www.youtube.com/watch?v={video_id}"
             for index, video_id in enumerate(video_ids)
         )
-    )
+    reviewer.notify(f"업로드 완료\n{body}")
     return video_ids

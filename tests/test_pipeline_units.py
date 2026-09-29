@@ -989,3 +989,145 @@ class TestTelegramVideoSizeFallback:
         # 압축이 실패해도 원본으로라도 전송을 시도한다.
         assert mock_post.called
         assert video.exists()
+
+
+def _make_script_part(part_num: int, hook: str, texts: list[str]):
+    return ScriptPart(
+        part=part_num,
+        hook_number=hook,
+        lines=[ScriptLine(text=t, visual_query_ko="a", duration=2.0) for t in texts],
+    )
+
+
+class TestReviewSummarySplitsInfoLines:
+    def _make_result(self, tmp_path, credits):
+        from src.models import (
+            PhotoCredit,
+            RenderedPart,
+            Script,
+            ScriptPart,
+            StoryCandidate,
+            VideoMetadata,
+        )
+
+        video = tmp_path / "part1.mp4"
+        video.write_bytes(b"fake")
+        thumb = tmp_path / "part1_thumb.jpg"
+        thumb.write_bytes(b"fake")
+
+        metadata = VideoMetadata(
+            title="제목",
+            title_alternatives=["대안"],
+            description="후킹 설명\n\n출처: 위키백과",
+            tags=["#3d"],
+            hook_description="후킹 설명",
+            source_line="출처: 위키백과",
+        )
+        part = RenderedPart(
+            part=1, video_path=str(video), thumbnail_path=str(thumb), duration=80.0,
+            metadata=metadata,
+        )
+        script = Script(
+            topic_key="k", title_seed="제목",
+            part1=_make_script_part(1, "훅", ["문장"]),
+            part2=_make_script_part(2, "훅2", []),
+        )
+        candidate = StoryCandidate(
+            dataset="disaster", topic_key="disaster:x", headline="사건",
+            headline_number="", subject="사건", context="", source_name="위키백과",
+        )
+        return pipeline.PipelineResult(
+            task_id="task-x", candidate=candidate, script=script, parts=[part],
+            work_dir=tmp_path, credits=credits, veo_clips=7,
+            cost_note="Veo lite 7클립 · 약 2,058원",
+        )
+
+    def test_source_photo_cost_sent_as_separate_messages_not_in_summary(self, tmp_path):
+        # 사용자 지시: 출처/사진/비용은 검수 카드 본문에 섞지 말고 각각 따로 보낸다.
+        from src.models import PhotoCredit
+
+        credits = [PhotoCredit(query="q", source_name="AI 생성 영상"),
+                   PhotoCredit(query="q2", source_name="AI 생성 이미지")]
+        result = self._make_result(tmp_path, credits)
+
+        settings = MagicMock()
+        settings.secrets.telegram_bot_token = "x"
+        settings.secrets.telegram_chat_id = "y"
+
+        with patch.object(pipeline, "STATE_DB", tmp_path / "state.sqlite3"), patch(
+            "src.review.telegram_bot.TelegramReviewer"
+        ) as MockReviewer, patch(
+            "src.review.telegram_bot.build_summary"
+        ) as mock_build_summary:
+            reviewer = MockReviewer.return_value
+            reviewer.enabled = True
+            reviewer.wait_for_decision.return_value = None
+            mock_build_summary.return_value = "카드 본문"
+
+            pipeline.review_and_publish(settings, result, wait_seconds=1)
+
+        # 카드 본문(build_summary)에는 순수 후킹 설명만 들어가고 출처/비용은 안 섞인다.
+        summary_call = mock_build_summary.call_args
+        assert summary_call.args[2] == "후킹 설명"
+
+        notified = [call.args[0] for call in reviewer.notify.call_args_list]
+        assert "출처: 위키백과" in notified
+        assert any("AI 생성 영상" in n and "AI 생성 이미지" in n for n in notified)
+        assert any("Veo lite 7클립" in n for n in notified)
+
+    def test_single_video_upload_completion_has_no_part_label(self, tmp_path):
+        # 사용자 지시: 통합본은 하나의 영상으로 종결이다. 업로드 완료 메시지가
+        # "1부: <url>" 이라고 쓰면 없는 2부가 있는 것처럼 보인다.
+        task_id = "task-single"
+        part_dir = tmp_path / "output" / task_id
+        part_dir.mkdir(parents=True)
+        (part_dir / "part1.mp4").write_bytes(b"fake")
+        (part_dir / "part1_thumb.jpg").write_bytes(b"fake")
+        result_json = {
+            "task_id": task_id,
+            "topic_key": "disaster:테스트",
+            "is_sample": False,
+            "parts": [
+                {
+                    "part": 1,
+                    "video": str(part_dir / "part1.mp4"),
+                    "thumbnail": str(part_dir / "part1_thumb.jpg"),
+                    "duration": 80.0,
+                    "title": "테스트 제목",
+                    "title_alternatives": [],
+                    "description": "설명",
+                    "tags": [],
+                },
+            ],
+        }
+        (part_dir / "result.json").write_text(
+            json.dumps(result_json, ensure_ascii=False), encoding="utf-8"
+        )
+
+        fake_db = tmp_path / "state.sqlite3"
+        history.save_pending(fake_db, task_id, {"topic_key": "disaster:테스트", "titles": ["테스트 제목"]})
+
+        settings = MagicMock()
+        settings.secrets.telegram_bot_token = "x"
+        settings.secrets.telegram_chat_id = "y"
+        settings.get.side_effect = lambda key, default=None: default
+
+        with patch.object(pipeline, "STATE_DB", fake_db), patch.object(
+            pipeline, "OUTPUT_DIR", tmp_path / "output"
+        ), patch("src.review.telegram_bot.TelegramReviewer") as MockReviewer, patch(
+            "src.publish.youtube_uploader.get_service", return_value=object()
+        ), patch(
+            "src.publish.youtube_uploader.upload_series", return_value=["vid1"]
+        ):
+            reviewer = MockReviewer.return_value
+            reviewer.enabled = True
+            reviewer.wait_for_decisions.return_value = {
+                task_id: ReviewDecision(approved=True, title_index=0)
+            }
+            pipeline.resume_pending_reviews(settings, 5)
+
+        completion = [
+            call.args[0] for call in reviewer.notify.call_args_list if "업로드 완료" in call.args[0]
+        ][0]
+        assert "1부:" not in completion
+        assert "https://www.youtube.com/watch?v=vid1" in completion
