@@ -131,7 +131,7 @@ class GeminiTTS:
                     f"{BASE_URL}/models/{self.model}:generateContent",
                     headers={"x-goog-api-key": key},
                     json=payload,
-                    timeout=180,
+                    timeout=300,
                 )
             except Exception as exc:
                 logger.warning(f"Gemini TTS 호출 실패: {exc}")
@@ -177,6 +177,10 @@ class GeminiTTS:
             },
         }
         # 일부 새 모델은 리전 엔드포인트에 없고 global 에만 있다 — 404 면 한 번 더 시도한다.
+        # 이 프로젝트는 합본(--combine-parts) 한 편 전체를 한 번의 배치 요청으로 합성한다
+        # (supports_batch=True) — 채널 언어를 스페인어로 전환(2026-09-30)하면서 글자 수
+        # 목표가 185자에서 880자로 늘자, 기존 300초 타임아웃 안에 합성이 안 끝나
+        # "Read timed out"으로 실패하는 사고가 실제로 있었다. 600초로 여유를 둔다.
         response = None
         for location in (None, "global"):
             try:
@@ -184,7 +188,7 @@ class GeminiTTS:
                     self.vertex.model_url(self.model, "generateContent", location),
                     headers=self.auth.headers(),
                     json=payload,
-                    timeout=300,
+                    timeout=600,
                 )
             except Exception as exc:
                 logger.warning(f"Vertex TTS 호출 실패: {exc}")
