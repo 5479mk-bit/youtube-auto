@@ -874,9 +874,22 @@ def _finish_review(
 ) -> list[str]:
     from .publish.youtube_uploader import SampleDataUploadBlocked, get_service, upload_series
 
-    if decision is None or not decision.approved:
+    if decision is None:
+        # 실제로 있었던 사고: 렌더 직후 대기 시간(review_wait_seconds) 안에 응답이
+        # 없으면 "타임아웃"과 "거절 버튼을 눌렀다"를 똑같이 취급해 status 를
+        # 'rejected'(종결 상태)로 박아버렸다. 그러면 review-pending.yml 이
+        # list_actionable_reviews() 로 'pending'/'decided' 만 다시 보므로, 사람이
+        # 나중에라도 승인 버튼을 누르면 텔레그램은 콜백을 받아주지만 그걸 읽어서
+        # 업로드로 이어줄 프로세스가 더는 없다("승인했는데 안 올라갔다"의 원인).
+        # 응답이 아직 없을 뿐이면 상태를 그대로 'pending' 으로 둬서 다음
+        # review-pending 확인이 계속 다시 물어보게 한다.
+        logger.info(f"{task_id}: 아직 응답이 없습니다 — 다음 review-pending 확인에서 다시 봅니다")
+        return []
+
+    if not decision.approved:
+        # 이건 실제 거절 버튼 클릭이다 — 다시 물어볼 이유가 없으니 종결 상태로 남긴다.
         history.set_review_status(STATE_DB, task_id, "rejected")
-        logger.info(f"{task_id}: 승인되지 않아 업로드하지 않습니다")
+        logger.info(f"{task_id}: 거절되어 업로드하지 않습니다")
         return []
 
     if is_sample:

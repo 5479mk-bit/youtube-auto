@@ -669,6 +669,45 @@ class TestTelegramReviewerMultiWait:
 
 
 class TestResumePendingReviews:
+    def test_timeout_without_response_stays_pending_not_rejected(self, tmp_path):
+        # 실제로 있었던 사고: 초기 대기(review_wait_seconds) 안에 응답이 없으면
+        # "거절"과 똑같이 status 를 'rejected'(종결)로 박아버렸다. 그러면 사람이
+        # 나중에라도 승인 버튼을 눌러도, review-pending 은 'pending'/'decided' 만
+        # 다시 보므로 그 클릭이 조용히 무시됐다("승인했는데 유튜브 안 올라갔다").
+        # 응답이 없을 뿐이면(decision=None) status 는 'pending' 그대로 남아
+        # 다음 review-pending 확인이 다시 물어봐야 한다.
+        from src.review.telegram_bot import TelegramReviewer
+
+        fake_db = tmp_path / "state.sqlite3"
+        history.save_pending(fake_db, "task-timeout", {"topic_key": "disaster:x", "titles": ["제목"]})
+
+        reviewer = MagicMock(spec=TelegramReviewer)
+        with patch.object(pipeline, "STATE_DB", fake_db):
+            result = pipeline._finish_review(
+                MagicMock(), reviewer, "task-timeout", False, [], ["제목"], None
+            )
+
+        assert result == []
+        actionable = history.list_actionable_reviews(fake_db)
+        assert [row["task_id"] for row in actionable] == ["task-timeout"]
+        assert actionable[0]["status"] == "pending"
+
+    def test_explicit_reject_click_is_terminal(self, tmp_path):
+        from src.review.telegram_bot import ReviewDecision, TelegramReviewer
+
+        fake_db = tmp_path / "state.sqlite3"
+        history.save_pending(fake_db, "task-rejected", {"topic_key": "disaster:x", "titles": ["제목"]})
+
+        reviewer = MagicMock(spec=TelegramReviewer)
+        with patch.object(pipeline, "STATE_DB", fake_db):
+            pipeline._finish_review(
+                MagicMock(), reviewer, "task-rejected", False, [],
+                ["제목"], ReviewDecision(approved=False),
+            )
+
+        # 실제 거절이면 다시 물어볼 필요가 없다 — actionable 목록에서 빠진다.
+        assert history.list_actionable_reviews(fake_db) == []
+
     def test_resolved_approval_reaches_upload_and_clears_pending_status(self, tmp_path):
         task_id = "test-task-1"
         part_dir = tmp_path / "output" / task_id
