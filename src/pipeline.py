@@ -910,7 +910,8 @@ def _finish_review(
         [(Path(part.video_path), part.metadata, Path(part.thumbnail_path)) for part in parts],
         settings.get("publish.privacy_status", "private"),
         settings.get("publish.category_id", "25"),
-        playlist_title=settings.get("publish.playlist_title", "재난아카이브"),
+        playlist_title=settings.get("publish.playlist_title", "Archivo de Desastres"),
+        default_language=settings.get("publish.default_language", ""),
     )
 
     history.set_review_status(STATE_DB, task_id, "uploaded")

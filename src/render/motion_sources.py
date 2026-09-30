@@ -20,12 +20,16 @@ from ..visuals.image_collector import ImageCollector
 from . import scene_renderers
 
 # 화면 아래 출처 배지에 쓸 이름. 생성 컷은 "우리가 만든 그림"이라는 걸 밝혀야 한다.
+# ai_image/veo/fallback 은 disaster(현재 유일하게 쓰는 소재) 렌더 화면에 그대로
+# 찍히는 문구라 스페인어로 바꿨다(2026-09-30, 채널 언어 전환). historical_doc/
+# map_motion 은 sillok 전용이라 지금은 화면에 안 나온다 — 나중에 되돌릴 수 있게
+# 한국어 그대로 둔다.
 _CREDIT_NAMES = {
     "historical_doc": "조선왕조실록 원문",
     "map_motion": "대동여지도 (퍼블릭 도메인)",
-    "ai_image": "AI 생성 이미지",
-    "veo": "AI 생성 영상",
-    "fallback": "연출 배경",
+    "ai_image": "Imagen generada por IA",
+    "veo": "Video generado por IA",
+    "fallback": "Fondo ilustrativo",
 }
 
 VEO_PROMPT = (

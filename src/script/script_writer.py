@@ -224,7 +224,11 @@ VEO 로 가는 문장(1부 첫 문장, 가장 센 장면)은 아래와 같은 �
 """
 
 
-GLOBAL_DISASTER_PROMPT = """당신은 3D 엔지니어링 인포그래픽 스타일의 공학 해설 채널의 한국어 쇼츠 작가입니다.
+# 조회수 부진에 대한 특단의 조치(사용자 지시, 2026-09-30): 채널 언어를 한국어에서
+# 스페인어로 전환한다. 아래 GLOBAL_DISASTER_PROMPT_KO_UNUSED 는 폐기가 아니라
+# 설정으로 빠진 것뿐이다 — 나중에 한국어로 되돌릴 수도 있으니 지우지 않는다.
+# 실제로 쓰이는 건 그 아래 스페인어판 GLOBAL_DISASTER_PROMPT다.
+GLOBAL_DISASTER_PROMPT_KO_UNUSED = """당신은 3D 엔지니어링 인포그래픽 스타일의 공학 해설 채널의 한국어 쇼츠 작가입니다.
 아래는 위키백과에 실린 실제 재난·사고 하나입니다. **이 영상은 90초 안에 끝나는 완결된
 세로 쇼츠 한 편입니다 — 두 편으로 나뉘어 따로 올라가는 시리즈가 아닙니다.** 아래
 [구조]에서 편의상 "1부"/"2부"라고 부르는 건 글 쓰는 사람 기준의 내부 구간 구분일
@@ -359,6 +363,166 @@ VEO 문장의 prompt 에는 아래 중 장면에 맞는 카메라 무브먼트�
   ]}},
   "part2": {{"hook_number": "part1 과 같은 자리에 쓰일 타이틀 후보(실제로는 part1 것만 쓰인다). 역시 연도·날짜·회차 구분 표기 금지.",
               "lines": [ ...위와 같은 구조... ]}}
+}}
+"""
+
+
+GLOBAL_DISASTER_PROMPT = """Eres guionista, en español, de una serie de Shorts verticales
+para un canal de infografías de ingeniería en estilo 3D. A continuación hay un desastre o
+accidente real; el texto de referencia viene de Wikipedia **en coreano** — tu trabajo es
+traducirlo con precisión y narrarlo en español. **Este video es una pieza cerrada de máximo
+90 segundos — NO es una serie de dos episodios separados que se publican por separado.** Más
+abajo, en [ESTRUCTURA], "parte 1"/"parte 2" son solo una división interna para escribir el
+guion; el espectador ve un único video continuo de principio a fin, sin corte.
+
+**REGLA ABSOLUTA**: en ninguna frase generada uses expresiones como "parte 1", "parte 2",
+"en la próxima parte", "continuará", "sigue en la parte 2", "primera/segunda entrega" — nada
+que sugiera que el video está dividido en varias publicaciones. La "última frase de la parte 1
+corta en el punto de mayor intriga" del [ESTRUCTURA] significa que la frase deja una pregunta
+en el aire, no que anuncie una continuación en otro video (la respuesta llega en la frase
+siguiente, dentro del mismo video).
+
+El tono es "documental calmado pero imposible de dejar de ver". No es un amigo emocionado
+hablando rápido — es un narrador confiable que va acumulando hechos con calma y, de vez en
+cuando, da un giro.
+
+[MATERIAL]
+Título: {headline}
+Texto de Wikipedia en coreano (única fuente de hechos — tradúcelo con exactitud, no inventes
+nada que no esté ahí):
+{context}
+
+[REGLAS DE VERACIDAD — cumplir siempre]
+- No inventes hechos que no estén en el texto fuente. No cambies fechas, lugares, nombres ni
+  cifras al traducir — tradúcelos con precisión.
+- Los números concretos del texto (víctimas, altura, peso, longitud) son el material más
+  fuerte. Ponlos por delante y, si es posible, añade una comparación que se sienta cercana
+  ("más alto que un edificio de 30 pisos"). Usa solo referencias de sentido común para esas
+  comparaciones (un piso ≈ 3 metros, etc.).
+- **Nunca trates un desastre o accidente ocurrido dentro de Corea del Sur.** Solo desastres
+  naturales globales o fracasos históricos de ingeniería fuera de Corea. Si el material es en
+  realidad un incidente doméstico coreano, rechaza el prompt y no generes nada.
+
+[ESTRUCTURA — sigue el ritmo del canal de referencia]
+Parte 1:
+- **Primera frase**: presenta la escena tal como era (o justo antes del desastre), sin
+  explicaciones de fondo — algo como "Aquí, en ○○, hubo una vez algo que...".
+- **Segunda y tercera frase**: da la vuelta — "Pero esto, en realidad, no era...", un hecho
+  que contradice lo que el espectador esperaba.
+- Después, **haz sentir un número concreto** y fija el eje de la historia con **un resumen de
+  una línea** ("El problema de este desastre se resume en una sola frase").
+- Sigue en orden cronológico cómo se llegó hasta ahí. A mitad de camino, incluye una vez una
+  **cadena de problemas** ("Y entonces pasó otra cosa...").
+- La última frase de la parte 1 no da la respuesta — corta en el punto de mayor intriga.
+Parte 2:
+- La primera frase retoma en una línea la pregunta de la parte 1 y va directo al grano.
+- Explica **por qué falló la ingeniería o la estructura**, como si miraras el interior (solo
+  con base en el texto fuente).
+- Coloca el hecho más decisivo como clímax hacia el final.
+- Cierra con una nota que siga resonando en el presente ("Y este problema, hoy en día, sigue
+  sin resolverse" — solo si el texto lo respalda). Si no hay base para eso, cierra con una
+  frase de conclusión serena.
+- **La parte 2 debe responder directamente a la pregunta que dejó la parte 1.** Si la
+  respuesta no está en el texto, dilo con claridad ("La causa exacta todavía no se ha
+  esclarecido") y continúa.
+- Parte 1: unos {part1_chars} caracteres en total. Parte 2: unos {part2_chars} caracteres en
+  total. **Cada parte, entre 8 y 10 frases (objetos JSON).** **El límite de caracteres tiene
+  prioridad sobre cualquier otra regla** — al ritmo actual de narración, pasarse de esa cifra
+  hace que el video supere los 90 segundos. Después de escribir todo, cuenta los caracteres y,
+  si te pasaste más de un 20%, fusiona frases o elimina las menos importantes (sin tocar los
+  puntos obligatorios de [ESTRUCTURA]: el gancho inicial, el giro, el clímax y la última
+  frase).
+
+[TONO — esto es lo más importante]
+- Español neutro, natural para toda Latinoamérica (evita modismos muy locales de un solo país
+  y evita el "vosotros" de España).
+- Voz seria y confiable — nada de exclamaciones exageradas.
+- **Prohibido el tono informal/juvenil exagerado.** Nada de "¡wow!", "increíble",
+  "no lo vas a creer" — la sorpresa la transmiten los hechos y los números, no las
+  interjecciones.
+- Cada frase: **entre 6 y 12 palabras** (unos 1.5-3 segundos al leerla en voz alta), corta y
+  directa. Sin puntos suspensivos; como máximo una coma por frase.
+- Las frases se leen de corrido, sin cortes — conectores como "pero", "y entonces", "por eso"
+  al inicio de la frase siguiente están bien (una palabra de conexión, no una interjección).
+- En `emphasis` va solo el fragmento corto que se resalta en el subtítulo.
+- En `overlay` va el número o palabra corta que se muestra en grande al centro de la pantalla
+  (ej. "1978", "98 m", "1.514 personas", "grieta"). Solo en **3 o 4 frases por parte**; el
+  resto, cadena vacía. Debe ser un número o palabra que aparezca literalmente en esa frase.
+
+[PANTALLA — concepto de 'diorama de ingeniería 3D' obligatorio]
+No se usan fotos reales. La escena del desastre se representa como una **maqueta 3D miniatura
+sobre un piso de estudio gris con cuadrícula**, y cuando haga falta, se muestra un **corte
+transversal (cutaway)** del terreno, el casco o las paredes. Cada frase elige una de dos rutas
+(`scene_type`).
+
+- "VEO": video real en movimiento de 4 segundos. **3 o 4 frases por parte**, alternando con
+  AI_IMAGE cuando se pueda (que VEO no se repita tres veces seguidas). La primera frase de la
+  parte 1 siempre es VEO. Úsalo en frases donde **el movimiento es la clave** — agua que
+  fluye, gas que se acumula, la estructura que se agrieta.
+- "AI_IMAGE": el resto. El movimiento de cámara se agrega automáticamente en el render.
+
+La pantalla alterna entre **tres distancias**, sin repetir la misma tres veces seguidas.
+- Plano general: vista aérea de toda la maqueta ("aerial view of a miniature diorama of ...")
+- Corte: vista del interior — capas, tuberías, flujo de agua ("cross-section cutaway of ...")
+- Primer plano: grietas, burbujas, agujas de instrumentos ("macro close-up of ...")
+
+`prompt` es un prompt **en inglés** (el modelo de imagen/video solo entiende inglés) que se
+llena solo cuando `scene_type` es VEO o AI_IMAGE.
+**[Advertencia: no dejes la escena vacía]** El prompt debe empezar siempre describiendo **con
+detalle el objeto o escena de esa frase** (ej. "cross-section cutaway of the Titanic hull with
+seawater flooding the forward compartments"). Después agrega una **anotación técnica en rojo**
+adecuada a la escena ("bold red arrows showing the water flow", "red dimension lines measuring
+the hull breach", "red pressure gauge" — flechas, líneas de medida, medidores o marcas X, la
+que corresponda).
+Y al final agrega siempre, tal cual, con una coma antes:
+  ", stylized 3D miniature diorama on a neutral gray grid studio floor, clean
+   clay-render materials, soft studio lighting, bold red technical annotations,
+   photoreal engineering explainer, 8k, no watermark"
+
+**[Movimiento de cámara para VEO]**
+En las frases VEO, agrega uno de estos movimientos de cámara según la escena (en inglés,
+dentro del prompt). La cámara se mueve suave, y **el movimiento lo generan el agua, el humo,
+los escombros o las burbujas dentro de la escena.**
+- "slow aerial drone push-in toward ..." (acercamiento lento desde el plano general)
+- "slow orbit around the diorama" (giro lento alrededor de la maqueta)
+- "smooth dolly along the cross-section" (deslizamiento lateral siguiendo el corte)
+- "slow push-in to macro detail" (acercamiento lento a un detalle)
+
+**El principio de veracidad se mantiene igual.** Lo que cambia es "cómo se muestra", no "qué
+pasó". No dibujes escenas que no estén en el texto fuente.
+
+`sfx` es el sonido que se dispara al comenzar esa frase (corte). **Hubo quejas de que los
+efectos de sonido eran excesivos** — no los pongas en cada corte. Solo en **2 o 3 frases por
+parte**, elegidas para las escenas más fuertes (giro, revelación de un número, clímax), y
+**nunca dos frases seguidas con el mismo sonido** (deja al menos una frase "none" entre
+medio). Las frases tranquilas de explicación no llevan sonido — el resto debe ser "none", y
+eso es lo normal.
+- "sub_boom": revelación de un hecho o número impactante, gran cambio de escena
+- "crack": el instante en que la estructura se agrieta o se rompe
+- "whoosh": agua, gas o escombros en movimiento, o transición de cámara
+- "alarm": alarma, señal de peligro, evacuación
+- "braam": solo en el cliffhanger final de la parte 1
+- "none": todo lo demás (la mayoría de las frases deben estar aquí)
+
+[FORMATO DE SALIDA] Responde únicamente con este JSON (los valores de texto, en español;
+los nombres de campo y los valores de `scene_type`/`sfx`, tal cual se listan aquí).
+{{
+  "title_seed": "Una frase en español que resuma la historia en una línea. Nunca uses el
+            nombre de un canal ni ninguna marca.",
+  "part1": {{"hook_number": "Título corto y llamativo para mostrar arriba en pantalla, en
+             español. Sin año, fecha ni número de episodio. Nunca uses marcas como
+             '(1)'/'(2)'/'parte 1'/'parte 2' — el video se publica como una sola pieza.",
+             "lines": [
+    {{"text": "Una frase de narración en español (6-12 palabras)",
+     "scene_type": "VEO | AI_IMAGE",
+     "prompt": "prompt en inglés que termina con la frase de estilo de arriba",
+     "sfx": "sub_boom | crack | whoosh | alarm | braam | none",
+     "overlay": "número/palabra para mostrar en el centro de la pantalla, o cadena vacía",
+     "emphasis": ["fragmento a resaltar en el subtítulo"]}}
+  ]}},
+  "part2": {{"hook_number": "Candidato de título para el mismo lugar que part1 (en la práctica
+              solo se usa el de part1). También sin año, fecha ni marca de episodio.",
+              "lines": [ ...misma estructura... ]}}
 }}
 """
 
@@ -824,29 +988,33 @@ def _disaster_template_script(candidate: StoryCandidate) -> Script:
             sfx=sfx,
         )
 
+    # 이 폴백(LLM 완전 실패 시에만 탄다)의 문구 자체는 스페인어로 옮겼지만,
+    # facts(candidate.facts)는 한국어 위키백과 원문 그대로다 — 번역 엔진 없이
+    # 오프라인으로 도는 경로라 번역할 방법이 없다. 정상 경로(LLM 동작 중)는
+    # GLOBAL_DISASTER_PROMPT 가 전체를 스페인어로 새로 쓰므로 이 문제가 없다.
     part1_lines = [
         line(
             0,
-            f"{candidate.headline}, 실제로 있었던 일입니다.",
+            f"{candidate.headline}, esto ocurrió de verdad.",
             emphasis=[candidate.headline],
             scene_type="VEO",
         )
     ]
     part1_lines += [line(i, fact) for i, fact in enumerate(facts[:6], start=1)]
-    part1_lines.append(line(7, "그렇다면 원인은 무엇이었을까요?", emphasis=["원인"], sfx="braam"))
+    part1_lines.append(line(7, "¿Cuál fue realmente la causa?", emphasis=["causa"], sfx="braam"))
 
-    part2_lines = [line(0, "1부에서 남긴 질문부터 보겠습니다.")]
+    part2_lines = [line(0, "Retomamos la pregunta que quedó pendiente.")]
     part2_lines += [line(i, fact) for i, fact in enumerate(facts[6:12], start=1)]
     part2_lines.append(
-        line(7, "기록에 남은 건 여기까지입니다.", emphasis=["여기까지"], sfx="sub_boom")
+        line(7, "Hasta aquí llega lo que quedó registrado.", emphasis=["registrado"], sfx="sub_boom")
     )
-    part2_lines.append(line(8, "여러분은 이 사고가 왜 일어났다고 보시나요?"))
+    part2_lines.append(line(8, "¿Por qué creen ustedes que ocurrió este desastre?"))
 
     return Script(
         topic_key=candidate.topic_key,
         title_seed=candidate.headline,
         part1=ScriptPart(part=1, hook_number=candidate.headline, lines=part1_lines),
         part2=ScriptPart(part=2, hook_number=candidate.headline, lines=part2_lines),
-        source_note=f"출처: {candidate.source_name}",
+        source_note=f"Fuente: {candidate.source_name}",
         is_sample=candidate.is_sample,
     )

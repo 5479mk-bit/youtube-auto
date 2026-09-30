@@ -598,11 +598,24 @@ def test_overlay_kept_only_when_in_sentence():
 
 
 def test_disaster_prompt_is_formal_tone():
+    # 스페인어 전환(2026-09-30) 이후에도 옛 한국어 프롬프트는 폐기가 아니라
+    # 설정으로 빠진 것뿐이다 — 되돌릴 수 있게 그 내용은 그대로 유지돼야 한다.
+    from src.script.script_writer import GLOBAL_DISASTER_PROMPT_KO_UNUSED
+
+    assert "합니다체" in GLOBAL_DISASTER_PROMPT_KO_UNUSED
+    assert "반말 금지" in GLOBAL_DISASTER_PROMPT_KO_UNUSED
+    assert '"overlay"' in GLOBAL_DISASTER_PROMPT_KO_UNUSED
+
+
+def test_disaster_prompt_is_spanish_and_formal():
     from src.script.script_writer import GLOBAL_DISASTER_PROMPT
 
-    assert "합니다체" in GLOBAL_DISASTER_PROMPT
-    assert "반말 금지" in GLOBAL_DISASTER_PROMPT
+    assert "en español" in GLOBAL_DISASTER_PROMPT
+    assert "tono informal" in GLOBAL_DISASTER_PROMPT
     assert '"overlay"' in GLOBAL_DISASTER_PROMPT
+    # 나레이션 문장은 스페인어지만, 이미지/영상 생성 프롬프트는 그대로 영어여야
+    # 한다(모델이 영어만 이해한다) — 스타일 문구가 안 깨졌는지 확인.
+    assert "photoreal engineering explainer" in GLOBAL_DISASTER_PROMPT
 
 
 def test_center_overlay_renders(tmp_path):
@@ -738,11 +751,12 @@ def test_seo_metadata_hook_description_excludes_source_and_hashtags():
     )
     metadata = seo_metadata.generate(script, script.part1, candidate, None, [], is_combined=True)
     assert metadata.hook_description
-    assert "출처" not in metadata.hook_description
+    assert "Fuente" not in metadata.hook_description
     assert "#" not in metadata.hook_description
-    assert metadata.source_line == "출처: 위키백과"
+    # disaster 데이터셋은 채널 언어 전환(2026-09-30)으로 출처 표기도 스페인어다.
+    assert metadata.source_line == "Fuente: 위키백과"
     assert metadata.hook_description in metadata.description
-    assert "출처: 위키백과" in metadata.description
+    assert "Fuente: 위키백과" in metadata.description
 
 
 def test_seo_metadata_disaster_uses_fixed_hashtags_not_llm_tags():
@@ -817,15 +831,13 @@ def test_seo_metadata_prompt_forbids_channel_branding():
 
 
 def test_disaster_script_prompt_has_no_channel_branding_leak():
-    """title_seed 필드가 더는 '채널 제목'이라는 모호한 표현으로 브랜드명을
-    유도하지 않는지, 프롬프트 도입부에서 브랜드명 자체가 사라졌는지 확인한다."""
+    """title_seed 필드가 채널 브랜드명을 유도하지 않는지 확인한다(스페인어판도
+    한국어판과 같은 원칙을 지켜야 한다 — 표현만 스페인어로 바뀐다)."""
     from src.script.script_writer import GLOBAL_DISASTER_PROMPT
 
-    # 도입부의 채널 브랜드 지칭("신비한 건축사전"류 채널)은 사라져야 한다 — 남아있는
-    # 유일한 언급은 title_seed 필드의 "쓰지 마라" 금지 예시뿐이어야 한다.
     assert '"신비한 건축사전"류' not in GLOBAL_DISASTER_PROMPT
-    assert "브랜드명" in GLOBAL_DISASTER_PROMPT
-    assert GLOBAL_DISASTER_PROMPT.count("신비한 건축사전") <= 1
+    assert "신비한 건축사전" not in GLOBAL_DISASTER_PROMPT
+    assert "marca" in GLOBAL_DISASTER_PROMPT
 
 
 def test_cap_fact_for_speech_truncates_long_paragraph():
@@ -909,6 +921,29 @@ def test_upload_sets_synthetic_media_flag(tmp_path):
 
     body = service.videos.return_value.insert.call_args.kwargs["body"]
     assert body["status"]["containsSyntheticMedia"] is True
+
+
+def test_upload_sets_default_language_when_given(tmp_path):
+    # 채널 언어를 스페인어로 전환(2026-09-30)하면서 유튜브 알고리즘이 스페인어권
+    # 시청자에게 더 정확히 노출/추천하도록 defaultLanguage/defaultAudioLanguage 를
+    # 설정한다. 값이 없으면(옛 콘텐츠) 아예 보내지 않는다.
+    from src.models import VideoMetadata
+    from src.publish import youtube_uploader
+
+    video_path = tmp_path / "part1.mp4"
+    video_path.write_bytes(b"fake video bytes")
+    metadata = VideoMetadata(title="제목", title_alternatives=[], description="설명", tags=[])
+    service = _fake_youtube_service()
+
+    youtube_uploader.upload(service, video_path, metadata, "private", "25", default_language="es")
+    body = service.videos.return_value.insert.call_args.kwargs["body"]
+    assert body["snippet"]["defaultLanguage"] == "es"
+    assert body["snippet"]["defaultAudioLanguage"] == "es"
+
+    service2 = _fake_youtube_service()
+    youtube_uploader.upload(service2, video_path, metadata, "private", "25")
+    body2 = service2.videos.return_value.insert.call_args.kwargs["body"]
+    assert "defaultLanguage" not in body2["snippet"]
 
 
 def test_upload_creates_playlist_when_missing_and_adds_video(tmp_path):

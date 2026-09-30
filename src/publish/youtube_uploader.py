@@ -96,16 +96,24 @@ def upload(
     category_id: str,
     thumbnail_path: Path | None = None,
     playlist_title: str = DEFAULT_PLAYLIST_TITLE,
+    default_language: str = "",
 ) -> str:
     description = _with_related_video(service, metadata.description)
 
+    snippet = {
+        "title": metadata.title,
+        "description": description,
+        "tags": metadata.tags,
+        "categoryId": category_id,
+    }
+    if default_language:
+        # 채널 언어를 스페인어로 전환(2026-09-30)하면서 추가 — 유튜브 알고리즘이
+        # 이 값으로 스페인어권 시청자에게 더 정확히 노출/추천한다.
+        snippet["defaultLanguage"] = default_language
+        snippet["defaultAudioLanguage"] = default_language
+
     body = {
-        "snippet": {
-            "title": metadata.title,
-            "description": description,
-            "tags": metadata.tags,
-            "categoryId": category_id,
-        },
+        "snippet": snippet,
         "status": {
             "privacyStatus": privacy_status,
             "selfDeclaredMadeForKids": False,
@@ -152,17 +160,19 @@ def upload_series(
     privacy_status: str,
     category_id: str,
     playlist_title: str = DEFAULT_PLAYLIST_TITLE,
+    default_language: str = "",
 ) -> list[str]:
     video_ids: list[str] = []
     for index, (video_path, metadata, thumbnail) in enumerate(parts):
         if index > 0 and video_ids:
             metadata.description = (
-                f"1부 먼저 보기: {WATCH_URL}{video_ids[0]}\n\n{metadata.description}"
+                f"Ver la parte 1: {WATCH_URL}{video_ids[0]}\n\n{metadata.description}"
             )
         video_ids.append(
             upload(
                 service, video_path, metadata, privacy_status, category_id, thumbnail,
                 playlist_title=playlist_title,
+                default_language=default_language,
             )
         )
     return video_ids

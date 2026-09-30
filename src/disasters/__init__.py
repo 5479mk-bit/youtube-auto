@@ -16,7 +16,10 @@ from loguru import logger
 from ..heritage import wikipedia_enrich
 from ..models import StoryCandidate
 
-SOURCE_NAME = "위키백과"
+# 채널 언어를 스페인어로 전환(2026-09-30)하면서 공개 설명란에 노출되는 출처
+# 표기도 스페인어로 바꿨다 — 실제 데이터는 여전히 한국어 위키백과에서 가져온다
+# (fetch_full_text 는 ko.wikipedia.org 를 그대로 쓴다), 표기만 청중 언어에 맞춘다.
+SOURCE_NAME = "Wikipedia"
 MAX_CONTEXT_CHARS = 4000
 MAX_FACTS = 20
 

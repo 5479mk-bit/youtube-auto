@@ -15,7 +15,9 @@ from ..text_ko import particle
 
 # 재난(disaster) 콘텐츠에 고정으로 붙이는 해시태그 5개. LLM 이 고르게 두지 않고
 # 항상 이 다섯 개만 쓴다(사용자 지시) — 설명 하단 해시태그 줄과 API tags 필드 양쪽에 쓴다.
-DISASTER_HASHTAGS = ["#3d", "#재난", "#자연재해", "#인재", "#미스터리"]
+# 조회수 부진에 대한 특단의 조치(사용자 지시, 2026-09-30)로 채널 언어를 스페인어로
+# 전환하면서, 검색에 걸리는 해시태그도 스페인어권 시청자 기준으로 바꿨다.
+DISASTER_HASHTAGS = ["#3d", "#desastres", "#catastrofes", "#historia", "#misterio"]
 
 _COMMON_RULES = """규칙:
 - 제목은 후킹용 한 줄이다. 28자 이내, 숫자를 앞쪽에 배치하고, 낚시가 아니라 실제
@@ -57,6 +59,51 @@ JSON 만 출력한다:
 {{"titles": ["", "", ""], "description": "", "tags": ["", ""]}}
 """
 
+# disaster 데이터셋 전용 스페인어판. 위 PROMPT/COMBINED_PROMPT(한국어, sillok/heritage
+# 용)는 지우지 않는다 — 다른 소재로 되돌릴 때를 위해 남겨둔다.
+_COMMON_RULES_ES = """Reglas:
+- El título es una sola línea que engancha. Máximo 28 caracteres, con el número o dato más
+  fuerte al principio; debe coincidir con el contenido real, sin ser clickbait engañoso.
+  Nada exagerado ni afirmaciones que no estén en los datos.
+- Nunca uses el nombre de un canal ni ninguna marca en el título ni en la descripción.
+- El campo description tiene 2-3 líneas. La primera es una frase que engancha y deja
+  curiosidad ("Este desastre todavía no tiene una causa del todo aclarada"); las siguientes
+  añaden uno o dos elementos concretos de misterio o intriga que atraigan al espectador
+  (por ejemplo: "los expertos ni siquiera se ponen de acuerdo en qué pasó ese día",
+  "los testimonios de los sobrevivientes contradicen el informe oficial"). No inventes
+  hechos que no estén en el material. La fuente y los hashtags se agregan automáticamente
+  después — no los incluyas en description."""
+
+DISASTER_PROMPT_ES = """Escribe 3 títulos candidatos para YouTube y una descripción para
+este Short.
+
+Tema: {title_seed}
+Texto en pantalla: {hook_number}
+Sujeto: {subject}
+Parte: {part} (de una serie de 2 partes)
+Narración: {narration}
+
+""" + _COMMON_RULES_ES + """
+
+Responde solo con JSON, todos los valores de texto en español:
+{{"titles": ["", "", ""], "description": "", "tags": ["", ""]}}
+"""
+
+# 합본(--combine-parts) 렌더용 — "parte"/"serie de 2 partes" 언급을 아예 뺀다.
+DISASTER_COMBINED_PROMPT_ES = """Escribe 3 títulos candidatos para YouTube y una descripción
+para este Short.
+
+Tema: {title_seed}
+Texto en pantalla: {hook_number}
+Sujeto: {subject}
+Narración: {narration}
+
+""" + _COMMON_RULES_ES + """
+
+Responde solo con JSON, todos los valores de texto en español:
+{{"titles": ["", "", ""], "description": "", "tags": ["", ""]}}
+"""
+
 
 def generate(
     script: Script,
@@ -70,9 +117,14 @@ def generate(
     True 다 — 제목에 "(1부)" 를 붙이거나 "전체 2부작"이라고 쓰면 틀린 설명이 된다."""
     narration = " ".join(line.text for line in part.lines)
 
+    if candidate.dataset == "disaster":
+        prompt_template = DISASTER_COMBINED_PROMPT_ES if is_combined else DISASTER_PROMPT_ES
+    else:
+        prompt_template = COMBINED_PROMPT if is_combined else PROMPT
+
     if provider is not None:
         raw = provider.complete_json(
-            (COMBINED_PROMPT if is_combined else PROMPT).format(
+            prompt_template.format(
                 title_seed=script.title_seed,
                 hook_number=part.hook_number,
                 subject=candidate.subject,
@@ -133,18 +185,25 @@ def _template_metadata(
     def suffixed(title: str) -> str:
         return title if is_combined else _with_part_suffix(title, part.part)
 
-    titles = [
-        suffixed(f"{part.hook_number}, {script.title_seed}"),
-        suffixed(f"{script.title_seed} ({part.hook_number})"),
-        suffixed(f"{candidate.subject}에 얽힌 이야기"),
-    ]
+    if candidate.dataset == "disaster":
+        titles = [
+            suffixed(f"{part.hook_number}, {script.title_seed}"),
+            suffixed(f"{script.title_seed} ({part.hook_number})"),
+            suffixed(f"La historia detrás de {candidate.subject}"),
+        ]
+    else:
+        titles = [
+            suffixed(f"{part.hook_number}, {script.title_seed}"),
+            suffixed(f"{script.title_seed} ({part.hook_number})"),
+            suffixed(f"{candidate.subject}에 얽힌 이야기"),
+        ]
     if candidate.dataset == "sillok":
         description = (
             f"{candidate.headline_number} 실록에 적힌 기록. "
             "조선왕조실록 국역(국사편찬위원회)을 그대로 따라 정리했습니다."
         )
     elif candidate.dataset == "disaster":
-        description = f"{particle(candidate.subject, '을', '를')} 위키백과 기록으로 들여다봤습니다."
+        description = f"Repasamos los hechos de {candidate.subject} según los registros de Wikipedia."
     else:
         description = (
             f"{particle(candidate.subject, '을', '를')} 국가유산청 해설과 위키백과로 들여다봤습니다."
@@ -171,7 +230,11 @@ def _with_part_suffix(title: str, part: int) -> str:
 
 
 def _source_line(script: Script, candidate: StoryCandidate) -> str:
-    return script.source_note or f"출처: {candidate.source_name}"
+    if script.source_note:
+        return script.source_note
+    if candidate.dataset == "disaster":
+        return f"Fuente: {candidate.source_name}"
+    return f"출처: {candidate.source_name}"
 
 
 def _with_source(description: str, script: Script, candidate: StoryCandidate) -> str:

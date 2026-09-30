@@ -74,11 +74,15 @@ audio:
   # 서버가 긴 문장을 내부적으로 쪼개 합성하면 이음매에서 말이 끊기는 소리가 난다 —
   # VEO 문장(최대 약 100자)이 한 번에 통째로 합성되도록 넉넉히 잡는다.
   supertonic_max_chunk_length: 400
-  gemini_voice: Charon        # 차분하고 신뢰감 있는 남성 톤(다큐 내레이터에 맞음)
+  gemini_voice: Charon        # 차분하고 신뢰감 있는 남성 톤(다큐 내레이터에 맞음).
+                              # Gemini TTS 는 다국어 모델이라 목소리는 그대로 두고
+                              # 입력 텍스트만 스페인어면 스페인어로 읽는다.
   gemini_model: gemini-2.5-pro-preview-tts
-  gemini_style_prompt: "흥미로운 실화를 들려주는 믿음직한 해설자처럼 자연스럽게, 합니다체 대본 그대로, 문장 사이를 길게 쉬지 말고 매끄럽게 이어서, 차분하지만 긴장감이 점점 올라가도록, 과장된 연기 톤은 빼고 진짜 사람처럼"
+  # 채널 언어를 스페인어로 전환(사용자 지시, 2026-09-30)하면서 스타일 지시문도
+  # 스페인어 대본 기준으로 다시 썼다.
+  gemini_style_prompt: "como un narrador confiable de documentales contando una historia real e interesante, en español neutro, siguiendo el guion tal cual, sin pausas largas entre frases, con un tono calmado que va subiendo la tensión poco a poco, sin sobreactuar, como una persona real"
   gemini_min_request_interval: 1.5
-  edge_voice: injoon          # ko-KR-InJoonNeural (require_quality_voice=false 일 때만 쓰임)
+  edge_voice: es-MX-JorgeNeural   # 스페인어 남성 음성(require_quality_voice=false 일 때만 쓰임)
   edge_pitch: "-5Hz"
   cloud_tts_voice: ko-KR-Neural2-C   # 공식 문서 기준 남성 음성. 실제 톤은 직접 들어보고
                                      # 마음에 안 들면 이 이름만 바꾸면 된다(B/D 등).
@@ -100,13 +104,16 @@ script:
     model: gemini-3.6-flash
     temperature: 0.9
   # 부별 목표 글자 수.
-  # run #35 실측(합본 335자 목표 → 실제 153.5초, 초당 약 0.458초/자 — 이 disaster
-  # 프롬프트·Gemini TTS Charon 조합의 실제 속도. run #34 의 0.253초/자는 다른
-  # 소재·TTS 설정 때였다)으로 다시 역산했다. 90초 상한 + 여유를 두고 목표를 절반
-  # 가까이 낮췄고, 프롬프트의 문장 수도 11~14 → 8~10 으로 같이 줄였다(사용자 지시:
-  # 90초 이내, 영상이 안 옴 문의로 확인된 413 크기 초과의 근본 원인).
-  part1_target_chars: 90
-  part2_target_chars: 95
+  # 채널 언어를 스페인어로 전환(2026-09-30)하면서 이 값도 다시 잡아야 했다 —
+  # 90/95(한국어 기준, run #35 실측 0.458초/자)를 그대로 두니 스페인어 LLM 이
+  # "문장 6~10개, 문장당 6~12단어"라는 구조 규칙(문장 수·길이 자체는 그대로 둬야
+  # 자연스럽다)을 지키면서 글자 수 목표는 무시했다 — 스페인어는 같은 정보량에
+  # 한국어보다 훨씬 많은 글자가 필요하기 때문이다(실측: 강제 후보로 뽑아본 결과
+  # 1부 423자·2부 500자, 9문장씩). 이 값은 그 실측을 반영한 잠정치이고, 실제
+  # 영상 길이는 이번 스페인어 TTS(초당 몇 자인지 아직 모른다)로 첫 실제 렌더를
+  # 돌려봐야 정확히 안다 — 그 결과로 다시 조정할 것.
+  part1_target_chars: 420
+  part2_target_chars: 460
 
 topics:
   # sillok(조선왕조실록) | heritage(국가유산청 해설문) | disaster(해외 자연재해·인재).
@@ -120,6 +127,11 @@ topics:
     # 이력이 무시됨)와 겹쳐 3일 내내 타이타닉만 나온 사고가 있었다(2026-09-29).
     # 이제 reuse_topic 기본은 꺼짐이라 매일 다른 주제가 순서대로 빠지는데, 목록이
     # 짧으면 며칠 안에 다시 바닥나므로 여유를 둔다.
+    # 채널 언어를 스페인어로 전환(2026-09-30)했지만 이 제목들은 그대로 둔다 —
+    # src/disasters/collect_candidates() 가 여전히 한국어 위키백과 본문을 "사실
+    # 재료"로 가져오고(fetch_full_text 가 ko.wikipedia.org 고정), 대본 프롬프트
+    # (GLOBAL_DISASTER_PROMPT, 스페인어판)가 그 본문을 정확히 번역해 스페인어로
+    # 서술한다. 위키백과 API 호출 방식을 바꿀 필요가 없어 가장 안전한 경로다.
     titles:
       - 타이타닉호
       - 체르노빌 원자력 발전소 사고
@@ -171,7 +183,13 @@ publish:
   privacy_status: private
   category_id: "25"  # News & Politics
   # 업로드마다 자동으로 넣을 재생목록. 없으면 채널에 새로 만든다(사용자 지시).
-  playlist_title: 재난아카이브
+  # 채널 언어를 스페인어로 전환(2026-09-30)하면서 재생목록 이름도 시청자에게
+  # 보이는 텍스트라 스페인어로 바꿨다.
+  playlist_title: Archivo de Desastres
+  # 유튜브 videos.insert 의 snippet.defaultLanguage/defaultAudioLanguage 에 쓴다.
+  # 스페인어권 시청자에게 더 정확히 노출/추천되도록 돕는다. 비우면(옛 한국어
+  # 콘텐츠로 되돌릴 때) 아예 안 보낸다.
+  default_language: es
   default_tags:
     - 문화유산
     - 역사
