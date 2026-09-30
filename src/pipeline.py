@@ -665,6 +665,7 @@ def _finish_part(
         video_path,
         veo_client=veo_client,
         ai_client=ai_client,
+        is_combined=is_combined,
     )
 
     thumbnail_path = build_thumbnail(

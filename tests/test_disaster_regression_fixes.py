@@ -1019,3 +1019,30 @@ def test_get_service_reraises_non_scope_refresh_errors(tmp_path):
     with patch.object(youtube_uploader, "_get_service", side_effect=fake_get_service):
         with pytest.raises(RefreshError):
             youtube_uploader.get_service("secret.json", "token.json")
+
+
+def test_badge_layers_never_shows_next_part_banner_when_combined(tmp_path):
+    # 실제로 있었던 사고: 합본(--combine-parts) 렌더는 _merge_parts() 가 1·2부를
+    # 이어 붙인 뒤에도 ScriptPart.part 를 1로 둔다(화면 상단 타이틀이 1부
+    # hook_number 를 쓰기 때문) — 그래서 "part.part == 1 이면 '2부에서 계속' 배지를
+    # 붙인다"는 옛 로직이 합본(사실상 유일한 영상)의 끝에도 그 배지를 찍었다.
+    # is_combined=True 면 이 분기를 절대 타면 안 된다.
+    from src.models import Script
+    from src.render.video_builder import _badge_layers
+
+    script = Script(
+        topic_key="k", title_seed="제목",
+        part1=_make_script_part(1, "훅", ["문장"]),
+        part2=_make_script_part(2, "훅2", ["문장2"]),
+        source_note="출처: 위키백과",
+    )
+    merged_part = _make_script_part(1, "훅", ["문장1", "문장2"])
+
+    layers = _badge_layers(
+        script, merged_part, tmp_path, (1080, 1920), duration=80.0, credits=[],
+        is_combined=True,
+    )
+
+    assert not (tmp_path / "banner_cliffhanger.png").exists()
+    assert (tmp_path / "banner_source.png").exists()
+    assert len(layers) >= 1

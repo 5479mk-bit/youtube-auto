@@ -46,6 +46,7 @@ def build_part(
     out_path: Path,
     veo_client=None,
     ai_client=None,
+    is_combined: bool = False,
 ) -> tuple[float, list[PhotoCredit]]:
     width = settings.get("video.width")
     height = settings.get("video.height")
@@ -72,7 +73,7 @@ def build_part(
     layers.extend(_overlay_layers(part, work_dir, size, total_duration))
     layers.extend(_subtitle_layers(cues, work_dir, part.part, size, settings, box=None))
     layers.extend(
-        _badge_layers(script, part, work_dir, size, background.duration, credits)
+        _badge_layers(script, part, work_dir, size, background.duration, credits, is_combined)
     )
 
     # 이어붙인 클립은 마지막 프레임 시각이 총 길이와 같아질 때 어느 컷에도 속하지 않아
@@ -301,10 +302,20 @@ def _badge_layers(
     size: tuple[int, int],
     duration: float,
     credits: list[PhotoCredit],
+    is_combined: bool = False,
 ):
+    """말미 배지(다음 편 안내 또는 출처 표기)를 붙인다.
+
+    `_merge_parts()`(합본 렌더)는 1·2부를 이어 붙인 뒤에도 `part.part`를 1로 둔다
+    (화면 상단 타이틀은 1부 hook_number 를 그대로 쓰기 위해서다) — 그래서 이 함수가
+    "part.part == 1 이면 다음 편 안내"라는 옛 가정을 그대로 쓰면, 합본(사실상 유일한
+    영상)의 끝에도 "2부에서 계속"이 찍힌다(실제로 있었던 사고 — 나레이션 텍스트가
+    아니라 이 배지 그래픽이 원인이었다). `is_combined`가 참이면 애초에 다음 편이
+    없으므로 그 분기를 절대 타지 않는다.
+    """
     layers = []
 
-    if part.part == 1:
+    if part.part == 1 and not is_combined:
         path = overlays.render_banner(
             "2부에서 계속", work_dir / "banner_cliffhanger.png", size, 58, 0.52
         )
@@ -313,8 +324,9 @@ def _badge_layers(
             ImageClip(str(path)).with_start(max(duration - tail, 0)).with_duration(tail)
         )
     else:
-        # 2부 말미에 통계 출처와 사진 출처를 함께 남긴다. 공공누리 1유형은 출처 표기가
-        # 이용 조건이라 화면에서 빠지면 안 된다.
+        # 합본이면 이 영상 말미에, 2부작이면 2부 말미에 통계 출처와 사진 출처를
+        # 함께 남긴다. 공공누리 1유형은 출처 표기가 이용 조건이라 화면에서 빠지면
+        # 안 된다.
         path = overlays.render_banner(
             script.source_note, work_dir / "banner_source.png", size, 34, 0.68, "#C3C2B7"
         )
