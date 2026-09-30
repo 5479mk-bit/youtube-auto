@@ -733,14 +733,9 @@ def review_and_publish(
 
     first = result.parts[0].metadata
     titles = [first.title, *first.title_alternatives]
-    # 출처/사진 출처/비용은 검수 카드 본문에 섞지 않고 각각 별도 메시지로 보낸다
-    # (사용자 지시) — 카드 자체는 순수 후킹 설명(hook_description)만 보여준다.
-    summary = build_summary(
-        result.script.title_seed,
-        titles,
-        first.hook_description or first.description,
-        result.script.is_sample,
-    )
+    # 제목 후보(+승인 버튼)/설명/한국어 번역/출처/사진 출처/비용을 각각 별도
+    # 말풍선으로 보낸다(사용자 지시, 2026-09-30) — 한 메시지에 다 몰아넣지 않는다.
+    summary = build_summary(result.script.title_seed, titles, result.script.is_sample)
 
     history.save_pending(
         STATE_DB,
@@ -750,6 +745,14 @@ def review_and_publish(
     reviewer.send_review(
         result.task_id, summary, titles, [Path(part.video_path) for part in result.parts]
     )
+    description = first.hook_description or first.description
+    if description:
+        # notify() 는 parse_mode 를 안 쓰므로 HTML 태그 대신 일반 텍스트 라벨을 쓴다.
+        reviewer.notify(f"설명\n{description}")
+    if first.description_ko:
+        # 채널 언어가 스페인어라 위 설명은 스페인어다 — 한국어 운영자용 번역을
+        # 따로 보낸다(유튜브에는 올라가지 않는다).
+        reviewer.notify(f"설명(한국어 번역)\n{first.description_ko}")
     if first.source_line:
         reviewer.notify(first.source_line)
     photo_note = photo_credit_line(result.credits)

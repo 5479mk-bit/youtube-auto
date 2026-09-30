@@ -212,6 +212,10 @@ class VideoMetadata:
     # 사용자 지시: 출처/사진/비용은 검수 카드 본문이 아니라 별도 텔레그램 메시지로.
     hook_description: str = ""
     source_line: str = ""
+    # 채널 언어가 스페인어라 hook_description 은 스페인어다 — 한국어 운영자가
+    # 검수할 때 내용을 바로 알 수 있게 LLM 이 같이 만든 한국어 번역(운영자 전용,
+    # 유튜브에는 올라가지 않는다).
+    description_ko: str = ""
 
 
 @dataclass

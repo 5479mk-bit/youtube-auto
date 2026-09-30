@@ -16,8 +16,13 @@ from ..text_ko import particle
 # 재난(disaster) 콘텐츠에 고정으로 붙이는 해시태그 5개. LLM 이 고르게 두지 않고
 # 항상 이 다섯 개만 쓴다(사용자 지시) — 설명 하단 해시태그 줄과 API tags 필드 양쪽에 쓴다.
 # 조회수 부진에 대한 특단의 조치(사용자 지시, 2026-09-30)로 채널 언어를 스페인어로
-# 전환하면서, 검색에 걸리는 해시태그도 스페인어권 시청자 기준으로 바꿨다.
-DISASTER_HASHTAGS = ["#3d", "#desastres", "#catastrofes", "#historia", "#misterio"]
+# 전환하면서, 해시태그도 전 세계 스페인어권 조회수를 노리도록 다시 골랐다(사용자
+# 요청: "조회수 10만 넘을지 고민해서"). #3d/#catastrofes(검색량 낮음) 를 빼고:
+# - #shorts: 쇼츠 알고리즘 노출·추천의 핵심 태그. 사실상 필수.
+# - #datoscuriosos: 스페인어권에서 "흥미로운 사실" 계열 콘텐츠의 대표 해시태그로,
+#   검색·추천 유입이 크다.
+# - #historia / #desastres / #misterio: 소재와 직접 맞는 핵심 검색어.
+DISASTER_HASHTAGS = ["#shorts", "#historia", "#datoscuriosos", "#desastres", "#misterio"]
 
 _COMMON_RULES = """규칙:
 - 제목은 후킹용 한 줄이다. 28자 이내, 숫자를 앞쪽에 배치하고, 낚시가 아니라 실제
@@ -72,7 +77,11 @@ _COMMON_RULES_ES = """Reglas:
   (por ejemplo: "los expertos ni siquiera se ponen de acuerdo en qué pasó ese día",
   "los testimonios de los sobrevivientes contradicen el informe oficial"). No inventes
   hechos que no estén en el material. La fuente y los hashtags se agregan automáticamente
-  después — no los incluyas en description."""
+  después — no los incluyas en description.
+- Además, en el campo description_ko escribe una traducción fiel al coreano del campo
+  description (sin agregar ni quitar información, misma cantidad de líneas). Es solo para
+  que el equipo (que no lee español) revise el contenido antes de publicar — nunca se sube
+  a YouTube."""
 
 DISASTER_PROMPT_ES = """Escribe 3 títulos candidatos para YouTube y una descripción para
 este Short.
@@ -85,8 +94,8 @@ Narración: {narration}
 
 """ + _COMMON_RULES_ES + """
 
-Responde solo con JSON, todos los valores de texto en español:
-{{"titles": ["", "", ""], "description": "", "tags": ["", ""]}}
+Responde solo con JSON. titles/description en español, description_ko en coreano:
+{{"titles": ["", "", ""], "description": "", "description_ko": "", "tags": ["", ""]}}
 """
 
 # 합본(--combine-parts) 렌더용 — "parte"/"serie de 2 partes" 언급을 아예 뺀다.
@@ -100,8 +109,8 @@ Narración: {narration}
 
 """ + _COMMON_RULES_ES + """
 
-Responde solo con JSON, todos los valores de texto en español:
-{{"titles": ["", "", ""], "description": "", "tags": ["", ""]}}
+Responde solo con JSON. titles/description en español, description_ko en coreano:
+{{"titles": ["", "", ""], "description": "", "description_ko": "", "tags": ["", ""]}}
 """
 
 
@@ -152,6 +161,7 @@ def _parse(
         return None
     titles = [str(title).strip() for title in raw.get("titles", []) if str(title).strip()]
     description = str(raw.get("description", "")).strip()
+    description_ko = str(raw.get("description_ko", "")).strip()
     if not titles or not description:
         return None
 
@@ -172,6 +182,7 @@ def _parse(
         tags=tags,
         hook_description=description,
         source_line=_source_line(script, candidate),
+        description_ko=description_ko,
     )
 
 

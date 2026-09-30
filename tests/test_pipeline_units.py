@@ -1105,14 +1105,40 @@ class TestReviewSummarySplitsInfoLines:
 
             pipeline.review_and_publish(settings, result, wait_seconds=1)
 
-        # 카드 본문(build_summary)에는 순수 후킹 설명만 들어가고 출처/비용은 안 섞인다.
+        # 카드 본문(build_summary)에는 제목 후보만 들어간다 — 설명/출처/사진/비용은
+        # 전부 안 섞이고 각각 별도 notify() 메시지로 간다.
         summary_call = mock_build_summary.call_args
-        assert summary_call.args[2] == "후킹 설명"
+        assert summary_call.args[1] == ["제목", "대안"]
 
         notified = [call.args[0] for call in reviewer.notify.call_args_list]
+        assert any("후킹 설명" in n for n in notified)
         assert "출처: 위키백과" in notified
         assert any("AI 생성 영상" in n and "AI 생성 이미지" in n for n in notified)
         assert any("Veo lite 7클립" in n for n in notified)
+
+    def test_korean_translation_sent_as_separate_bubble_when_present(self, tmp_path):
+        # 사용자 지시(2026-09-30): 채널 언어가 스페인어라 설명도 스페인어다 —
+        # 한국어 운영자가 검수할 때 바로 알아보게 번역을 별도 말풍선으로 보낸다.
+        from src.models import PhotoCredit
+
+        result = self._make_result(tmp_path, credits=[])
+        result.parts[0].metadata.description_ko = "이 참사는 설계 결함이 원인이었습니다."
+
+        settings = MagicMock()
+        settings.secrets.telegram_bot_token = "x"
+        settings.secrets.telegram_chat_id = "y"
+
+        with patch.object(pipeline, "STATE_DB", tmp_path / "state.sqlite3"), patch(
+            "src.review.telegram_bot.TelegramReviewer"
+        ) as MockReviewer, patch("src.review.telegram_bot.build_summary"):
+            reviewer = MockReviewer.return_value
+            reviewer.enabled = True
+            reviewer.wait_for_decision.return_value = None
+
+            pipeline.review_and_publish(settings, result, wait_seconds=1)
+
+        notified = [call.args[0] for call in reviewer.notify.call_args_list]
+        assert any("이 참사는 설계 결함이 원인이었습니다" in n for n in notified)
 
     def test_single_video_upload_completion_has_no_part_label(self, tmp_path):
         # 사용자 지시: 통합본은 하나의 영상으로 종결이다. 업로드 완료 메시지가
