@@ -404,9 +404,21 @@ nada que no esté ahí):
   realidad un incidente doméstico coreano, rechaza el prompt y no generes nada.
 
 [ESTRUCTURA — sigue el ritmo del canal de referencia]
+**Gancho de misterio/conspiración (busca esto en el texto fuente antes de escribir)**: revisa
+si el material menciona alguna de estas cosas — una advertencia ignorada, un informe ocultado
+o publicado tarde, un ingeniero o inspector que alertó del riesgo antes de morir o ser
+silenciado, una negligencia de una autoridad o empresa, una investigación que nunca dio
+respuestas completas. Si SÍ aparece en el texto, es tu material más fuerte — enmárcalo como
+"lo que casi nadie sabe", "la advertencia que nadie quiso escuchar", "lo que las autoridades
+tardaron años en admitir". Si el texto NO tiene nada de esto, no lo inventes — usa en su lugar
+la ironía de los hechos reales (algo se creía perfectamente seguro y no lo era). En cualquier
+caso, la primera frase debe lanzar el elemento más intrigante posible dentro de los primeros
+segundos.
 Parte 1:
 - **Primera frase**: presenta la escena tal como era (o justo antes del desastre), sin
-  explicaciones de fondo — algo como "Aquí, en ○○, hubo una vez algo que...".
+  explicaciones de fondo — algo como "Aquí, en ○○, hubo una vez algo que...". Si hay un
+  ángulo de misterio/advertencia ignorada real en el texto, ábrela aquí mismo o en la frase
+  siguiente ("Lo que nadie contó es que...").
 - **Segunda y tercera frase**: da la vuelta — "Pero esto, en realidad, no era...", un hecho
   que contradice lo que el espectador esperaba.
 - Después, **haz sentir un número concreto** y fija el eje de la historia con **un resumen de
@@ -476,8 +488,13 @@ the hull breach", "red pressure gauge" — flechas, líneas de medida, medidores
 que corresponda).
 Y al final agrega siempre, tal cual, con una coma antes:
   ", stylized 3D miniature diorama on a neutral gray grid studio floor, clean
-   clay-render materials, soft studio lighting, bold red technical annotations,
-   photoreal engineering explainer, 8k, no watermark"
+   clay-render materials, dark cinematic lighting, glowing deep red light spilling through
+   cracks and fractures, harsh high-contrast red and black color grading, bold red technical
+   annotations, photoreal engineering explainer, 8k, no watermark"
+En las frases de clímax/revelación (el momento más fuerte de cada parte), añade además, antes
+del cierre anterior: "dramatic catastrophic collapse, structure disintegrating into dust and
+debris, intense destruction". No lo uses en frases tranquilas de explicación — solo en el
+punto más alto de tensión de cada parte, para que el contraste con el resto se sienta.
 
 **[Movimiento de cámara para VEO]**
 En las frases VEO, agrega uno de estos movimientos de cámara según la escena (en inglés,
@@ -492,17 +509,21 @@ los escombros o las burbujas dentro de la escena.**
 pasó". No dibujes escenas que no estén en el texto fuente.
 
 `sfx` es el sonido que se dispara al comenzar esa frase (corte). **Hubo quejas de que los
-efectos de sonido eran excesivos** — no los pongas en cada corte. Solo en **2 o 3 frases por
-parte**, elegidas para las escenas más fuertes (giro, revelación de un número, clímax), y
-**nunca dos frases seguidas con el mismo sonido** (deja al menos una frase "none" entre
-medio). Las frases tranquilas de explicación no llevan sonido — el resto debe ser "none", y
-eso es lo normal.
-- "sub_boom": revelación de un hecho o número impactante, gran cambio de escena
-- "crack": el instante en que la estructura se agrieta o se rompe
-- "whoosh": agua, gas o escombros en movimiento, o transición de cámara
-- "alarm": alarma, señal de peligro, evacuación
-- "braam": solo en el cliffhanger final de la parte 1
-- "none": todo lo demás (la mayoría de las frases deben estar aquí)
+efectos de sonido eran excesivos** — no los pongas en cada corte, pero el volumen ya se subió
+bastante (sonido más presente y contundente), así que úsalos con intención en los momentos que
+más lo necesitan. En **3 o 4 frases por parte**, elegidas para las escenas más fuertes (giro,
+revelación de un número, clímax, colapso), y **nunca dos frases seguidas con el mismo sonido**
+(deja al menos una frase "none" entre medio). Las frases tranquilas de explicación no llevan
+sonido — el resto debe ser "none", y eso es lo normal.
+- "sub_boom": revelación de un hecho o número impactante, gran cambio de escena — el golpe
+  grave que se siente en el pecho.
+- "crack": el instante en que la estructura se agrieta, se parte o se hace pedazos.
+- "whoosh": agua, gas o escombros en movimiento, o transición de cámara.
+- "alarm": alarma, señal de peligro, evacuación — resérvalo para el momento más tenso e
+  inminente (justo antes del colapso o la revelación clave), no lo repitas.
+- "braam": el cliffhanger final de la parte 1, y también sirve para el clímax de la parte 2
+  si la escena es lo bastante grande.
+- "none": todo lo demás (la mayoría de las frases deben estar aquí).
 
 [FORMATO DE SALIDA] Responde únicamente con este JSON (los valores de texto, en español;
 los nombres de campo y los valores de `scene_type`/`sfx`, tal cual se listan aquí).

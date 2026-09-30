@@ -618,6 +618,18 @@ def test_disaster_prompt_is_spanish_and_formal():
     assert "photoreal engineering explainer" in GLOBAL_DISASTER_PROMPT
 
 
+def test_disaster_prompt_has_mystery_hook_and_high_contrast_destruction_style():
+    # 사용자 지시(2026-09-30): 더 자극적으로 — 실제 자료에 있을 때만 미스터리/
+    # 은폐 앵글을 쓰라는 가드레일과, 붉은빛·고대비 파괴 연출 스타일이 프롬프트에
+    # 실제로 들어갔는지 확인한다.
+    from src.script.script_writer import GLOBAL_DISASTER_PROMPT
+
+    assert "no lo inventes" in GLOBAL_DISASTER_PROMPT  # 없는 음모론은 지어내지 않는다
+    assert "glowing deep red light" in GLOBAL_DISASTER_PROMPT
+    assert "high-contrast red and black" in GLOBAL_DISASTER_PROMPT
+    assert "disintegrating into dust" in GLOBAL_DISASTER_PROMPT
+
+
 def test_center_overlay_renders(tmp_path):
     from PIL import Image
 
