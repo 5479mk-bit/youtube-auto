@@ -11,18 +11,25 @@ from __future__ import annotations
 
 from ..models import ScriptPart
 
-HOOK_PAUSE = 0.5  # 훅 숫자가 꽂히도록 한 박자 쉰다
-SENTENCE_PAUSE = 0.25
-CLIFFHANGER_PAUSE = 0.6  # 질문을 던지기 전에 뜸을 들인다
-CLOSING_PAUSE = 0.4
-LAST_LINE_PAUSE = 0.3  # 끝나자마자 잘리면 급하게 들린다
+# 사용자 지시(2026-09-30): "배속과 컷 전환 간격을 0.8초 이내로 바짝 조여줘" —
+# 확인해보니 모든 쉼(pause_after)이 이미 0.8초 아래였다(가장 긴 CLIFFHANGER_PAUSE
+# 도 0.6초). 그래도 "더 조여달라"는 요청 취지에 맞춰 쉼을 한 번 더 줄이고 기본
+# 속도(BODY_RATE)도 살짝 더 올렸다 — 단, 1.1배속이 "자연스러운 상한"이라고 이미
+# 청취로 확인된 적이 있어(주석 참고) 그 선을 크게 넘기진 않는다.
+HOOK_PAUSE = 0.45  # 훅 숫자가 꽂히도록 한 박자 쉰다
+SENTENCE_PAUSE = 0.2
+CLIFFHANGER_PAUSE = 0.5  # 질문을 던지기 전에 뜸을 들인다
+CLOSING_PAUSE = 0.35
+LAST_LINE_PAUSE = 0.25  # 끝나자마자 잘리면 급하게 들린다
 
 # 0.85~0.9배속으로 낮췄더니 "멍청하게 느리고 자꾸 쉰다"는 반응이 나왔다 — 실제
 # 샘플을 들어보고 1.1배속(기본보다 살짝 빠름)이 자연스럽다고 확인됐다. 문장 종류별
-# 완급은 그 근처(1.05~1.1)에서만 준다.
-HOOK_RATE = "+5%"  # 1.05배속 — 첫 문장은 살짝 무게감 있게
-BODY_RATE = "+10%"  # 1.10배속 — 사용자가 청취로 확인한 자연스러운 속도
-CLOSING_RATE = "+5%"  # 1.05배속
+# 완급은 그 근처에서만 준다. "속도감을 더 조여달라"는 요청으로 본문 속도를
+# 1.10배속 → 1.13배속으로 소폭 더 올렸다(1.1배속이 확인된 상한 근처라 크게는
+# 안 벗어난다).
+HOOK_RATE = "+6%"  # 1.06배속 — 첫 문장은 살짝 무게감 있게
+BODY_RATE = "+13%"  # 1.13배속
+CLOSING_RATE = "+6%"  # 1.06배속
 
 
 def _rate_to_percent(rate: str) -> float:

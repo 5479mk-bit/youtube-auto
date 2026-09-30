@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import random
 from pathlib import Path
@@ -68,9 +69,10 @@ def build_part(
     # 화면 전체를 꽉 채운다. `_build_background`가 이미 `size` 그대로(1080×1920)
     # 클립을 만들어주므로 추가 리사이즈·크롭이 필요 없다.
     total_duration = max(background.duration - 1e-3, 0.1)
+    background = _apply_camera_shake(background, scenes, size, settings)
     layers = [background.with_duration(total_duration)]
     layers.extend(_title_layers(part, work_dir, size, settings, background.duration))
-    layers.extend(_overlay_layers(part, work_dir, size, total_duration))
+    layers.extend(_overlay_layers(part, work_dir, size, total_duration, settings))
     layers.extend(_subtitle_layers(cues, work_dir, part.part, size, settings, box=None))
     layers.extend(
         _badge_layers(script, part, work_dir, size, background.duration, credits, is_combined)
@@ -128,6 +130,48 @@ def _build_background(
         if credit not in credits:
             credits.append(credit)
     return concatenate_videoclips(clips), credits
+
+
+# 임팩트가 큰 sfx 태그가 붙은 컷에만 카메라 셰이크를 건다 — 매 컷마다 흔들면
+# 멀미 나는 화면이 된다(사용자 지시, 2026-09-30: "화면이 미세하게 흔들리는
+# 카메라 셰이크 효과").
+_SHAKE_SFX = {"sub_boom", "crack", "alarm", "braam"}
+
+
+def _apply_camera_shake(clip, scenes: list[Scene], size: tuple[int, int], settings):
+    """임팩트 sfx 컷이 시작되는 순간 화면을 짧게(약 0.3초) 흔들고 빠르게 잦아든다.
+
+    배경 클립 전체를 살짝(기본 5%) 확대해둔 뒤, 그 여유 공간 안에서만 위치를
+    흔든다 — 그래야 흔들려도 프레임 가장자리에 빈 틈이 안 보인다.
+    """
+    if not settings.get("video.camera_shake", True):
+        return clip
+
+    windows = [
+        (scene.start, scene.start + min(scene.duration, 0.35))
+        for scene in scenes
+        if scene.sfx in _SHAKE_SFX
+    ]
+    if not windows:
+        return clip
+
+    amplitude = settings.get("video.camera_shake_px", 10)
+    margin = settings.get("video.camera_shake_margin", 1.05)
+    base_x = -size[0] * (margin - 1) / 2
+    base_y = -size[1] * (margin - 1) / 2
+
+    def _position(t: float) -> tuple[float, float]:
+        for start, end in windows:
+            if start <= t < end:
+                local = t - start
+                span = max(end - start, 1e-3)
+                decay = max(0.0, 1.0 - local / span)  # 시작이 가장 세고 빠르게 잦아든다
+                dx = amplitude * decay * math.sin(2 * math.pi * 22 * local)
+                dy = amplitude * decay * math.cos(2 * math.pi * 27 * local)
+                return (base_x + dx, base_y + dy)
+        return (base_x, base_y)
+
+    return clip.resized(margin).with_position(_position)
 
 
 def _hex_to_rgb(value: str) -> tuple[int, int, int]:
@@ -246,8 +290,30 @@ def _title_layers(
     return [ImageClip(str(path)).with_start(0).with_duration(duration)]
 
 
-def _overlay_layers(part: ScriptPart, work_dir: Path, size: tuple[int, int], total: float):
-    """문장에 overlay(핵심 숫자/단어)가 있으면 그 문장이 읽히는 동안 화면 중앙에 띄운다."""
+def _overlay_pop_scale(t: float, pop_seconds: float = 0.25) -> float:
+    """숫자/단어 오버레이가 뜨는 순간 커졌다 살짝 작아지며 자리 잡는 "팝인" 곡선.
+
+    0→60%(0.6배까지) 급격히 커지고, 나머지 40%(0.15배 오버슈트) 구간에서 1.0배로
+    가라앉는다 — 틱톡/릴스에서 흔한 kinetic typography 연출(사용자 지시,
+    2026-09-30). `t` 는 이 오버레이 클립 자신의 로컬 시간(시작=0)이다.
+    """
+    if t >= pop_seconds:
+        return 1.0
+    progress = t / pop_seconds
+    if progress < 0.6:
+        return 0.6 + (1.15 - 0.6) * (progress / 0.6)
+    settle = (progress - 0.6) / 0.4
+    return 1.15 - 0.15 * settle
+
+
+def _overlay_layers(
+    part: ScriptPart, work_dir: Path, size: tuple[int, int], total: float, settings=None
+):
+    """문장에 overlay(핵심 숫자/단어)가 있으면 그 문장이 읽히는 동안 화면 중앙에 띄운다.
+
+    화면에 나타나는 순간 커졌다 자리 잡는 팝인 애니메이션을 준다(설정으로 끌 수 있다).
+    """
+    kinetic = settings is None or settings.get("video.kinetic_overlay", True)
     layers = []
     cursor = 0.0
     for index, line in enumerate(part.lines):
@@ -258,7 +324,10 @@ def _overlay_layers(part: ScriptPart, work_dir: Path, size: tuple[int, int], tot
             line.overlay, work_dir / f"overlay_part{part.part}_{index:02d}.png", size
         )
         length = max(min(cursor, total) - start, 0.1)
-        layers.append(ImageClip(str(path)).with_start(start).with_duration(length))
+        clip = ImageClip(str(path)).with_start(start).with_duration(length)
+        if kinetic:
+            clip = clip.resized(_overlay_pop_scale).with_position("center")
+        layers.append(clip)
     return layers
 
 
@@ -373,14 +442,29 @@ def _build_audio(part: ScriptPart, settings, duration: float, scenes: list[Scene
     total = min(narration.duration, duration)
 
     layers = [narration]
+    sfx_layers, duck_windows = _sfx_layers(scenes or [], settings, total)
     bed = _load_bgm(settings, duration)
     if bed is not None:
+        # 사용자 지시(2026-09-30): 효과음이 터지는 동안 배경음을 살짝 눌러줘서
+        # ("더킹") 타격음이 더 또렷하게 튀어나오게 한다 — 시네마틱 믹싱의 기본기다.
+        bed = _duck(bed, duck_windows, settings.get("audio.sfx_duck_db", -4))
         layers.append(bed)
-    layers.extend(_sfx_layers(scenes or [], settings, total))
+    layers.extend(sfx_layers)
 
     if len(layers) == 1:
         return narration.with_duration(total)
     return CompositeAudioClip(layers).with_duration(total)
+
+
+def _duck(clip, windows: list[tuple[float, float]], duck_db: float):
+    """`windows` 구간 동안만 clip 볼륨을 duck_db 만큼 더 낮춘다(그 밖은 그대로)."""
+    if not windows or duck_db == 0:
+        return clip
+    factor = _db_to_gain(duck_db)
+    for start, end in windows:
+        if end > start:
+            clip = clip.with_volume_scaled(factor, start_time=start, end_time=end)
+    return clip
 
 
 _SFX_FILES = {"paper_rustle": assets.AUDIO_PAPER_RUSTLE}
@@ -407,12 +491,18 @@ def _pick_sfx_path(tag: str, used_index: dict[str, int]) -> Path | None:
 
 
 def _sfx_layers(scenes: list[Scene], settings, total: float):
-    """`sfx` 태그가 붙은 컷이 시작될 때 그 태그에 맞는 소리를 얹는다."""
+    """`sfx` 태그가 붙은 컷이 시작될 때 그 태그에 맞는 소리를 얹는다.
+
+    반환값은 (오디오 레이어 목록, 배경음 더킹 구간 목록) 쌍이다 — 더킹 구간은
+    실제로 튼 효과음의 길이 그대로라, `_build_audio` 가 그 시간 동안 배경음을
+    낮춰 효과음이 또렷하게 들리게 한다(사용자 지시, 2026-09-30).
+    """
     # "효과음이 난잡하다"는 지적 이후: 대본이 명시한 sfx 만 쓴다(자동 전환음 없음).
     # plan_typed_scenes 는 문장 하나 = 씬 하나라 대본의 sfx 배정이 이미 컷 전환과
     # 맞아떨어진다 — 여기에 더 얹으면 겹쳐서 시끄러워진다.
     gain = _db_to_gain(settings.get("audio.sfx_volume_db", -6))
     layers = []
+    duck_windows: list[tuple[float, float]] = []
     used_index: dict[str, int] = {}
     for scene in scenes:
         if scene.sfx == "none" or scene.start >= total:
@@ -435,7 +525,8 @@ def _sfx_layers(scenes: list[Scene], settings, total: float):
         layers.append(
             hit.subclipped(0, length).with_start(scene.start).with_volume_scaled(gain)
         )
-    return layers
+        duck_windows.append((scene.start, scene.start + length))
+    return layers, duck_windows
 
 
 def _load_bgm(settings, duration: float):

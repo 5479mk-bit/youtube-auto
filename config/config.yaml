@@ -30,6 +30,13 @@ video:
   frame_border_width: 4
   frame_border_radius: 18
   frame_title_color: "#FFFFFF"
+  # 사용자 지시(2026-09-30): 틱톡/릴스 트렌드에 맞춘 kinetic typography — 숫자/단어
+  # 오버레이가 뜰 때 팝인 애니메이션, sub_boom/crack/alarm/braam 컷 시작 순간
+  # 화면이 짧게 흔들리는 카메라 셰이크. 과하면 언제든 false 로 끈다.
+  kinetic_overlay: true
+  camera_shake: true
+  camera_shake_px: 10      # 흔들림 최대 진폭(픽셀)
+  camera_shake_margin: 1.05  # 배경을 이만큼 오버사이즈해서 흔들려도 가장자리가 안 보이게
 
 subtitle:
   # 외곽선을 버리고 드롭 섀도우로 바꿨다. 글자가 얇아진 만큼 크기도 줄인다.
@@ -97,6 +104,9 @@ audio:
   bgm_volume_db: -11
   bgm_hook_volume_db: -6
   sfx_volume_db: -2
+  # 효과음이 터지는 동안 배경음을 이만큼 더 낮춘다("더킹") — 시네마틱 믹싱 기본기
+  # (사용자 지시, 2026-09-30). 배경음 자체 볼륨(bgm_volume_db)에 곱해서 적용된다.
+  sfx_duck_db: -4
 
 script:
   llm:

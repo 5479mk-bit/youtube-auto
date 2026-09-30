@@ -761,6 +761,21 @@ def review_and_publish(
     if result.cost_note:
         reviewer.notify(f"비용 {result.cost_note}")
 
+    # 틱톡/인스타 릴스에 그대로 복붙할 캡션 묶음(사용자 지시, 2026-09-30) —
+    # 유튜브 API로 자동 업로드/자동 댓글을 달지는 않는다(각 플랫폼 자동화는
+    # 이 파이프라인 범위 밖이다), 대신 사람이 바로 붙여넣을 수 있게 준비해서 보낸다.
+    hashtag_line = " ".join(seo_metadata.DISASTER_HASHTAGS)
+    caption_lines = [
+        "멀티플랫폼 캡션(틱톡/릴스용, 복붙)",
+        "",
+        first.title,
+        "",
+        hashtag_line,
+    ]
+    if first.pinned_comment:
+        caption_lines += ["", f"고정 댓글 후보: {first.pinned_comment}"]
+    reviewer.notify("\n".join(caption_lines))
+
     decision = reviewer.wait_for_decision(result.task_id, wait_seconds)
     if decision is not None:
         # 업로드를 시도하기 전에 판정부터 남긴다 — 업로드가 실패해도(유튜브 API
@@ -914,7 +929,10 @@ def _finish_review(
         settings.get("publish.privacy_status", "private"),
         settings.get("publish.category_id", "25"),
         playlist_title=settings.get("publish.playlist_title", "Archivo de Desastres"),
-        default_language=settings.get("publish.default_language", ""),
+        # 사용자 지시(2026-09-30): "무조건 es로 고정" — config 값이 어쩌다 비어도
+        # 기본값 자체를 "es"로 둬서 항상 채워지게 한다(옛 한국어 콘텐츠로 되돌릴
+        # 때만 config.yaml 의 publish.default_language 를 명시적으로 "" 로 비운다).
+        default_language=settings.get("publish.default_language", "es"),
     )
 
     history.set_review_status(STATE_DB, task_id, "uploaded")

@@ -90,7 +90,12 @@ _COMMON_RULES_ES = """Reglas:
 - Además, en el campo description_ko escribe una traducción fiel al coreano del campo
   description (sin agregar ni quitar información, misma cantidad de líneas). Es solo para
   que el equipo (que no lee español) revise el contenido antes de publicar — nunca se sube
-  a YouTube."""
+  a YouTube.
+- En el campo pinned_comment escribe un comentario corto (1 línea, máximo 20 palabras) para
+  fijar como comentario destacado — algo que invite a responder o debatir, relacionado con el
+  hecho concreto del video (ej. "¿Tú habrías notado la falla antes de que fuera tarde?",
+  "¿Negligencia o mala suerte? Dime qué piensas 👇"). Nada genérico tipo "like y suscríbete".
+  No inventes hechos nuevos — solo invita a opinar sobre lo ya narrado."""
 
 DISASTER_PROMPT_ES = """Escribe 3 títulos candidatos para YouTube y una descripción para
 este Short.
@@ -103,8 +108,10 @@ Narración: {narration}
 
 """ + _COMMON_RULES_ES + """
 
-Responde solo con JSON. titles/description en español, description_ko en coreano:
-{{"titles": ["", "", ""], "description": "", "description_ko": "", "tags": ["", ""]}}
+Responde solo con JSON. titles/description/pinned_comment en español, description_ko en
+coreano:
+{{"titles": ["", "", ""], "description": "", "description_ko": "", "pinned_comment": "",
+  "tags": ["", ""]}}
 """
 
 # 합본(--combine-parts) 렌더용 — "parte"/"serie de 2 partes" 언급을 아예 뺀다.
@@ -118,8 +125,10 @@ Narración: {narration}
 
 """ + _COMMON_RULES_ES + """
 
-Responde solo con JSON. titles/description en español, description_ko en coreano:
-{{"titles": ["", "", ""], "description": "", "description_ko": "", "tags": ["", ""]}}
+Responde solo con JSON. titles/description/pinned_comment en español, description_ko en
+coreano:
+{{"titles": ["", "", ""], "description": "", "description_ko": "", "pinned_comment": "",
+  "tags": ["", ""]}}
 """
 
 
@@ -171,6 +180,7 @@ def _parse(
     titles = [str(title).strip() for title in raw.get("titles", []) if str(title).strip()]
     description = str(raw.get("description", "")).strip()
     description_ko = str(raw.get("description_ko", "")).strip()
+    pinned_comment = str(raw.get("pinned_comment", "")).strip()
     if not titles or not description:
         return None
 
@@ -192,6 +202,7 @@ def _parse(
         hook_description=description,
         source_line=_source_line(script, candidate),
         description_ko=description_ko,
+        pinned_comment=pinned_comment,
     )
 
 

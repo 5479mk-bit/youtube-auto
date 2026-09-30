@@ -414,6 +414,14 @@ tardaron años en admitir". Si el texto NO tiene nada de esto, no lo inventes �
 la ironía de los hechos reales (algo se creía perfectamente seguro y no lo era). En cualquier
 caso, la primera frase debe lanzar el elemento más intrigante posible dentro de los primeros
 segundos.
+
+**Pregunta detonante (obligatoria)**: dentro de las primeras 2-3 frases de la parte 1, incluye
+una pregunta directa y provocadora que quede clavada (estilo "¿Por qué falló?", "¿Qué
+ocultaron?", "¿Cómo pasó esto sin que nadie lo notara?") — corta, de máximo 5-6 palabras, en
+español. Esta pregunta también debe ir (igual o casi igual) en `hook_number` de la parte 1, que
+se queda fijo en pantalla desde el segundo 0 — así el gancho está visible incluso antes de que
+la voz la diga. No hace falta responderla de inmediato; es la intriga que sostiene los primeros
+segundos.
 Parte 1:
 - **Primera frase**: presenta la escena tal como era (o justo antes del desastre), sin
   explicaciones de fondo — algo como "Aquí, en ○○, hubo una vez algo que...". Si hay un

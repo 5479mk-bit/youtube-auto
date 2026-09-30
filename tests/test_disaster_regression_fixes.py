@@ -412,11 +412,12 @@ def test_sfx_layer_falls_back_to_pool_when_tag_unmapped(tmp_path):
     settings = MagicMock()
     settings.get.return_value = -4
 
-    layers = video_builder._sfx_layers([scene], settings, total=5.0)
+    layers, duck_windows = video_builder._sfx_layers([scene], settings, total=5.0)
     # 실제 sub_boom 풀 파일이 폴백으로 쓰였는지 확인한다 — 에셋이 실제로
     # 존재하는 한 완전히 비어 있으면 안 된다.
     if any(path.exists() for path in assets.SFX_POOLS.get("sub_boom", [])):
         assert len(layers) == 1
+        assert len(duck_windows) == 1
 
 
 def test_sfx_pools_registered_for_all_tags():
@@ -810,6 +811,39 @@ def test_seo_metadata_disaster_uses_fixed_hashtags_not_llm_tags():
     assert " ".join(seo_metadata.DISASTER_HASHTAGS) in metadata.description
 
 
+def test_seo_metadata_extracts_pinned_comment_from_llm():
+    # 사용자 지시(2026-09-30): 틱톡/릴스에도 붙여넣을 고정 댓글 후보를 LLM 이 같이
+    # 만든다.
+    from src.models import Script, StoryCandidate
+    from src.publish import seo_metadata
+
+    script = Script(
+        topic_key="k", title_seed="제목",
+        part1=_make_script_part(1, "훅", ["문장"]),
+        part2=_make_script_part(2, "훅2", ["문장2"]),
+    )
+    candidate = StoryCandidate(
+        dataset="disaster", topic_key="disaster:x", headline="사건",
+        headline_number="", subject="사건", context="", source_name="위키백과",
+    )
+
+    class FakeProvider:
+        def complete_json(self, prompt, temperature=0.8):
+            return {
+                "titles": ["LLM 제목1", "LLM 제목2"],
+                "description": "후킹 설명",
+                "description_ko": "한국어 번역",
+                "pinned_comment": "¿Tú qué habrías hecho? 👇",
+                "tags": [],
+            }
+
+    metadata = seo_metadata.generate(
+        script, script.part1, candidate, FakeProvider(), [], is_combined=True
+    )
+    assert metadata.pinned_comment == "¿Tú qué habrías hecho? 👇"
+    assert metadata.description_ko == "한국어 번역"
+
+
 def test_seo_metadata_disaster_template_also_uses_fixed_hashtags():
     """LLM 이 없을 때(템플릿 폴백)도 해시태그는 그대로 고정 5개다."""
     from src.models import Script, StoryCandidate
@@ -1093,3 +1127,122 @@ def test_badge_layers_never_shows_next_part_banner_when_combined(tmp_path):
     assert not (tmp_path / "banner_cliffhanger.png").exists()
     assert (tmp_path / "banner_source.png").exists()
     assert len(layers) >= 1
+
+
+def test_overlay_pop_scale_starts_small_overshoots_and_settles():
+    # 사용자 지시(2026-09-30): 숫자/단어 오버레이가 뜰 때 커졌다 자리 잡는
+    # kinetic typography 팝인 애니메이션.
+    from src.render.video_builder import _overlay_pop_scale
+
+    assert _overlay_pop_scale(0.0) == pytest.approx(0.6)
+    assert _overlay_pop_scale(0.15) == pytest.approx(1.15)  # 오버슈트 정점
+    assert _overlay_pop_scale(0.25) == pytest.approx(1.0)   # 팝인이 끝나면 1.0배
+    assert _overlay_pop_scale(1.0) == pytest.approx(1.0)    # 그 뒤로는 계속 1.0배
+
+
+def test_camera_shake_only_windows_around_impact_sfx(tmp_path):
+    # 사용자 지시(2026-09-30): 임팩트 sfx(sub_boom/crack/alarm/braam) 컷이 시작될
+    # 때만 화면이 짧게 흔들리고, "none"/"whoosh" 컷에서는 흔들리지 않는다.
+    from moviepy import ColorClip
+    from src.render.video_builder import _apply_camera_shake
+
+    size = (200, 200)
+    bg = ColorClip(size, color=(10, 10, 10), duration=3.0)
+    scenes = [
+        Scene(start=0.0, duration=1.0, image_query_ko="a", image_query_en="a", camera="push_in", sfx="none"),
+        Scene(start=1.0, duration=1.0, image_query_ko="a", image_query_en="a", camera="push_in", sfx="crack"),
+        Scene(start=2.0, duration=1.0, image_query_ko="a", image_query_en="a", camera="push_in", sfx="whoosh"),
+    ]
+
+    class S:
+        def get(self, key, default=None):
+            return default
+
+    shaken = _apply_camera_shake(bg, scenes, size, S())
+    pos_quiet = shaken.pos(0.5)   # "none" 컷 — 흔들리지 않는 기준 위치
+    pos_impact = shaken.pos(1.05)  # "crack" 컷 시작 직후 — 흔들려야 한다
+    pos_whoosh = shaken.pos(2.05)  # "whoosh" — 흔들리지 않는다(기준 위치와 같아야 함)
+
+    assert pos_impact != pos_quiet
+    assert pos_whoosh == pos_quiet
+
+
+def test_camera_shake_disabled_by_setting(tmp_path):
+    from moviepy import ColorClip
+    from src.render.video_builder import _apply_camera_shake
+
+    size = (200, 200)
+    bg = ColorClip(size, color=(10, 10, 10), duration=2.0)
+    scenes = [
+        Scene(start=0.0, duration=1.0, image_query_ko="a", image_query_en="a", camera="push_in", sfx="crack"),
+    ]
+
+    class S:
+        def get(self, key, default=None):
+            return False if key == "video.camera_shake" else default
+
+    result = _apply_camera_shake(bg, scenes, size, S())
+    assert result is bg  # 꺼두면 손대지 않고 그대로 돌려준다
+
+
+def test_multiplatform_caption_sent_with_hashtags_and_pinned_comment(tmp_path):
+    # 사용자 지시(2026-09-30): 틱톡/릴스에 바로 복붙할 캡션(해시태그 묶음)과
+    # 고정 댓글 후보를 텔레그램으로 같이 보낸다.
+    from src import pipeline as pipeline_module
+
+    result = _make_result_for_multiplatform_test(tmp_path)
+
+    settings = MagicMock()
+    settings.secrets.telegram_bot_token = "x"
+    settings.secrets.telegram_chat_id = "y"
+
+    with patch.object(pipeline_module, "STATE_DB", tmp_path / "state.sqlite3"), patch(
+        "src.review.telegram_bot.TelegramReviewer"
+    ) as MockReviewer, patch("src.review.telegram_bot.build_summary"):
+        reviewer = MockReviewer.return_value
+        reviewer.enabled = True
+        reviewer.wait_for_decision.return_value = None
+
+        pipeline_module.review_and_publish(settings, result, wait_seconds=1)
+
+    notified = [call.args[0] for call in reviewer.notify.call_args_list]
+    caption = next(n for n in notified if "멀티플랫폼" in n)
+    assert "#shorts" in caption
+    assert "¿Tú qué habrías hecho?" in caption
+
+
+def _make_result_for_multiplatform_test(tmp_path):
+    from src.models import RenderedPart, Script, StoryCandidate, VideoMetadata
+    from src import pipeline as pipeline_module
+
+    video = tmp_path / "part1.mp4"
+    video.write_bytes(b"fake")
+    thumb = tmp_path / "part1_thumb.jpg"
+    thumb.write_bytes(b"fake")
+
+    metadata = VideoMetadata(
+        title="El Titanic y su falla fatal",
+        title_alternatives=[],
+        description="Una falla de diseño...",
+        tags=[],
+        hook_description="Una falla de diseño...",
+        source_line="Fuente: Wikipedia",
+        pinned_comment="¿Tú qué habrías hecho? 👇",
+    )
+    part = RenderedPart(
+        part=1, video_path=str(video), thumbnail_path=str(thumb), duration=80.0,
+        metadata=metadata,
+    )
+    script = Script(
+        topic_key="k", title_seed="제목",
+        part1=_make_script_part(1, "훅", ["문장"]),
+        part2=_make_script_part(2, "훅2", []),
+    )
+    candidate = StoryCandidate(
+        dataset="disaster", topic_key="disaster:x", headline="사건",
+        headline_number="", subject="사건", context="", source_name="Wikipedia",
+    )
+    return pipeline_module.PipelineResult(
+        task_id="task-multiplatform", candidate=candidate, script=script, parts=[part],
+        work_dir=tmp_path, credits=[], veo_clips=0, cost_note="",
+    )
