@@ -13,16 +13,25 @@ from ..models import Script, ScriptPart, StoryCandidate, VideoMetadata
 from ..script.llm_client import LLMProvider
 from ..text_ko import particle
 
-# 재난(disaster) 콘텐츠에 고정으로 붙이는 해시태그 5개. LLM 이 고르게 두지 않고
-# 항상 이 다섯 개만 쓴다(사용자 지시) — 설명 하단 해시태그 줄과 API tags 필드 양쪽에 쓴다.
+# 재난(disaster) 콘텐츠에 고정으로 붙이는 해시태그. LLM 이 고르게 두지 않고
+# 항상 이 목록만 쓴다(사용자 지시) — 설명 하단 해시태그 줄과 API tags 필드
+# 양쪽에 그대로 들어간다(_parse/_template_metadata 가 둘 다 이 리스트를 그대로
+# 쓴다 — 한 곳만 고치면 자동으로 둘 다 반영된다).
+#
 # 조회수 부진에 대한 특단의 조치(사용자 지시, 2026-09-30)로 채널 언어를 스페인어로
-# 전환하면서, 해시태그도 전 세계 스페인어권 조회수를 노리도록 다시 골랐다(사용자
-# 요청: "조회수 10만 넘을지 고민해서"). #3d/#catastrofes(검색량 낮음) 를 빼고:
-# - #shorts: 쇼츠 알고리즘 노출·추천의 핵심 태그. 사실상 필수.
-# - #datoscuriosos: 스페인어권에서 "흥미로운 사실" 계열 콘텐츠의 대표 해시태그로,
-#   검색·추천 유입이 크다.
-# - #historia / #desastres / #misterio: 소재와 직접 맞는 핵심 검색어.
-DISASTER_HASHTAGS = ["#shorts", "#historia", "#datoscuriosos", "#desastres", "#misterio"]
+# 전환했고, 이후 "더 많이 해도 되잖아? 스페인어도 포함하고" 요청으로 5개 → 13개로
+# 늘렸다(2026-09-30). 세 갈래로 구성:
+# - 알고리즘 노출용(언어 무관, 검색량 최상위): #shorts #viral #fyp
+# - 스페인어권 콘텐츠 카테고리 대표 태그(검색·추천 유입이 큰 상위 태그들):
+#   #datoscuriosos #curiosidades #documental
+# - 소재 직결 핵심 검색어(전부 스페인어): #historia #desastres #catastrofes
+#   #misterio #ciencia #ingenieria #terror
+DISASTER_HASHTAGS = [
+    "#shorts", "#viral", "#fyp",
+    "#historia", "#desastres", "#catastrofes", "#misterio",
+    "#datoscuriosos", "#curiosidades", "#documental",
+    "#ciencia", "#ingenieria", "#terror",
+]
 
 _COMMON_RULES = """규칙:
 - 제목은 후킹용 한 줄이다. 28자 이내, 숫자를 앞쪽에 배치하고, 낚시가 아니라 실제
