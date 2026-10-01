@@ -844,6 +844,38 @@ def test_seo_metadata_extracts_pinned_comment_from_llm():
     assert metadata.description_ko == "한국어 번역"
 
 
+def test_seo_metadata_extracts_korean_title_translations_from_llm():
+    # 사용자 지시(2026-10-01): 설명처럼 제목 후보도 한국어 번역을 LLM 이 같이 만든다.
+    from src.models import Script, StoryCandidate
+    from src.publish import seo_metadata
+
+    script = Script(
+        topic_key="k", title_seed="제목",
+        part1=_make_script_part(1, "훅", ["문장"]),
+        part2=_make_script_part(2, "훅2", ["문장2"]),
+    )
+    candidate = StoryCandidate(
+        dataset="disaster", topic_key="disaster:x", headline="사건",
+        headline_number="", subject="사건", context="", source_name="위키백과",
+    )
+
+    class FakeProvider:
+        def complete_json(self, prompt, temperature=0.8):
+            return {
+                "titles": ["El Titanic y su falla fatal", "1,514 vidas perdidas"],
+                "titles_ko": ["타이타닉과 치명적 결함", "1,514명의 희생"],
+                "description": "후킹 설명",
+                "description_ko": "한국어 번역",
+                "tags": [],
+            }
+
+    metadata = seo_metadata.generate(
+        script, script.part1, candidate, FakeProvider(), [], is_combined=True
+    )
+    assert metadata.title_ko == "타이타닉과 치명적 결함"
+    assert metadata.title_alternatives_ko == ["1,514명의 희생"]
+
+
 def test_seo_metadata_disaster_template_also_uses_fixed_hashtags():
     """LLM 이 없을 때(템플릿 폴백)도 해시태그는 그대로 고정 5개다."""
     from src.models import Script, StoryCandidate
@@ -1185,9 +1217,10 @@ def test_camera_shake_disabled_by_setting(tmp_path):
     assert result is bg  # 꺼두면 손대지 않고 그대로 돌려준다
 
 
-def test_multiplatform_caption_sent_with_hashtags_and_pinned_comment(tmp_path):
-    # 사용자 지시(2026-09-30): 틱톡/릴스에 바로 복붙할 캡션(해시태그 묶음)과
-    # 고정 댓글 후보를 텔레그램으로 같이 보낸다.
+def test_multiplatform_caption_sent_with_hashtags_but_no_pinned_comment(tmp_path):
+    # 사용자 지시(2026-09-30): 틱톡/릴스에 바로 복붙할 캡션(해시태그 묶음)을
+    # 텔레그램으로 같이 보낸다. 이후 사용자 지시(2026-10-01)로 고정 댓글 후보
+    # 줄은 뺐다 — 운영자에게 불필요한 정보였다.
     from src import pipeline as pipeline_module
 
     result = _make_result_for_multiplatform_test(tmp_path)
@@ -1208,7 +1241,9 @@ def test_multiplatform_caption_sent_with_hashtags_and_pinned_comment(tmp_path):
     notified = [call.args[0] for call in reviewer.notify.call_args_list]
     caption = next(n for n in notified if "멀티플랫폼" in n)
     assert "#shorts" in caption
-    assert "¿Tú qué habrías hecho?" in caption
+    assert "¿Tú qué habrías hecho?" not in caption
+    assert not any("고정 댓글" in n for n in notified)
+    assert not any("출처" in n or "Fuente" in n or "Fotos" in n or "사진" in n for n in notified)
 
 
 def _make_result_for_multiplatform_test(tmp_path):

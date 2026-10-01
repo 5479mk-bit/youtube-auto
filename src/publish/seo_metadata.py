@@ -91,6 +91,9 @@ _COMMON_RULES_ES = """Reglas:
   description (sin agregar ni quitar información, misma cantidad de líneas). Es solo para
   que el equipo (que no lee español) revise el contenido antes de publicar — nunca se sube
   a YouTube.
+- En el campo titles_ko escribe una traducción al coreano de cada título de titles, en el
+  mismo orden (3 elementos). También es solo para la revisión del equipo, nunca se sube a
+  YouTube.
 - En el campo pinned_comment escribe un comentario corto (1 línea, máximo 20 palabras) para
   fijar como comentario destacado — algo que invite a responder o debatir, relacionado con el
   hecho concreto del video (ej. "¿Tú habrías notado la falla antes de que fuera tarde?",
@@ -108,10 +111,10 @@ Narración: {narration}
 
 """ + _COMMON_RULES_ES + """
 
-Responde solo con JSON. titles/description/pinned_comment en español, description_ko en
-coreano:
-{{"titles": ["", "", ""], "description": "", "description_ko": "", "pinned_comment": "",
-  "tags": ["", ""]}}
+Responde solo con JSON. titles/description/pinned_comment en español, description_ko y
+titles_ko en coreano:
+{{"titles": ["", "", ""], "titles_ko": ["", "", ""], "description": "", "description_ko": "",
+  "pinned_comment": "", "tags": ["", ""]}}
 """
 
 # 합본(--combine-parts) 렌더용 — "parte"/"serie de 2 partes" 언급을 아예 뺀다.
@@ -125,10 +128,10 @@ Narración: {narration}
 
 """ + _COMMON_RULES_ES + """
 
-Responde solo con JSON. titles/description/pinned_comment en español, description_ko en
-coreano:
-{{"titles": ["", "", ""], "description": "", "description_ko": "", "pinned_comment": "",
-  "tags": ["", ""]}}
+Responde solo con JSON. titles/description/pinned_comment en español, description_ko y
+titles_ko en coreano:
+{{"titles": ["", "", ""], "titles_ko": ["", "", ""], "description": "", "description_ko": "",
+  "pinned_comment": "", "tags": ["", ""]}}
 """
 
 
@@ -178,6 +181,7 @@ def _parse(
     if not raw:
         return None
     titles = [str(title).strip() for title in raw.get("titles", []) if str(title).strip()]
+    titles_ko = [str(title).strip() for title in raw.get("titles_ko", []) if str(title).strip()]
     description = str(raw.get("description", "")).strip()
     description_ko = str(raw.get("description_ko", "")).strip()
     pinned_comment = str(raw.get("pinned_comment", "")).strip()
@@ -199,6 +203,8 @@ def _parse(
         title_alternatives=titles[1:],
         description=_with_source(description, script, candidate),
         tags=tags,
+        title_ko=titles_ko[0] if titles_ko else "",
+        title_alternatives_ko=titles_ko[1:],
         hook_description=description,
         source_line=_source_line(script, candidate),
         description_ko=description_ko,

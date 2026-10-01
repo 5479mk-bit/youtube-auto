@@ -747,25 +747,27 @@ def review_and_publish(
     reviewer.send_review(
         result.task_id, summary, titles, [Path(part.video_path) for part in result.parts]
     )
+    # 제목 후보/설명/비용/멀티플랫폼 캡션만 별도 말풍선으로 보낸다 — 위키백과
+    # 출처 줄과 사진 출처(예: "Fotos: Video generado por IA")는 운영자에게
+    # 의미가 없어 뺐다(사용자 지시, 2026-10-01).
+    titles_ko = [first.title_ko, *first.title_alternatives_ko] if first.title_ko else []
+    if titles_ko:
+        reviewer.notify("제목 후보(한국어 번역)\n" + "\n".join(titles_ko))
     description = first.hook_description or first.description
     if description:
         # notify() 는 parse_mode 를 안 쓰므로 HTML 태그 대신 일반 텍스트 라벨을 쓴다.
-        reviewer.notify(f"설명\n{description}")
+        reviewer.notify(f"설명(스페인어)\n{description}")
     if first.description_ko:
         # 채널 언어가 스페인어라 위 설명은 스페인어다 — 한국어 운영자용 번역을
         # 따로 보낸다(유튜브에는 올라가지 않는다).
         reviewer.notify(f"설명(한국어 번역)\n{first.description_ko}")
-    if first.source_line:
-        reviewer.notify(first.source_line)
-    photo_note = photo_credit_line(result.credits)
-    if photo_note:
-        reviewer.notify(photo_note)
     if result.cost_note:
         reviewer.notify(f"비용 {result.cost_note}")
 
     # 틱톡/인스타 릴스에 그대로 복붙할 캡션 묶음(사용자 지시, 2026-09-30) —
     # 유튜브 API로 자동 업로드/자동 댓글을 달지는 않는다(각 플랫폼 자동화는
     # 이 파이프라인 범위 밖이다), 대신 사람이 바로 붙여넣을 수 있게 준비해서 보낸다.
+    # 고정 댓글 후보 줄은 뺐다(사용자 지시, 2026-10-01).
     hashtag_line = " ".join(seo_metadata.DISASTER_HASHTAGS)
     caption_lines = [
         "멀티플랫폼 캡션(틱톡/릴스용, 복붙)",
@@ -774,8 +776,6 @@ def review_and_publish(
         "",
         hashtag_line,
     ]
-    if first.pinned_comment:
-        caption_lines += ["", f"고정 댓글 후보: {first.pinned_comment}"]
     reviewer.notify("\n".join(caption_lines))
 
     decision = reviewer.wait_for_decision(result.task_id, wait_seconds)

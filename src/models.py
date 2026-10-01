@@ -207,6 +207,10 @@ class VideoMetadata:
     title_alternatives: list[str]
     description: str
     tags: list[str]
+    # 제목 후보의 한국어 번역(검수용, 유튜브에는 올라가지 않는다) — title/
+    # title_alternatives 와 같은 순서(사용자 지시, 2026-10-01).
+    title_ko: str = ""
+    title_alternatives_ko: list[str] = field(default_factory=list)
     # 텔레그램 검수 카드에는 이 순수 후킹 문구만 보여준다(출처·사진 출처·해시태그가
     # 안 섞인 상태) — 실제 유튜브 업로드용 description 에는 그것들이 그대로 붙는다.
     # 사용자 지시: 출처/사진/비용은 검수 카드 본문이 아니라 별도 텔레그램 메시지로.
