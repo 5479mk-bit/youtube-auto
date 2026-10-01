@@ -349,19 +349,46 @@ def _subtitle_layers(
     else:
         safe_bottom = settings.get("video.safe_bottom")
 
+    dynamic = settings.get("subtitle.dynamic_pop", True)
     layers = []
     for index, cue in enumerate(cues):
-        path = overlays.render_subtitle(
+        path, (bx, by, bw, bh) = overlays.render_subtitle(
             cue,
             work_dir / f"sub_part{part_number}_{index:02d}.png",
             size,
             style,
             safe_bottom,
         )
-        layers.append(
-            ImageClip(str(path)).with_start(cue.start).with_duration(max(cue.end - cue.start, 0.1))
+        clip = ImageClip(str(path)).with_start(cue.start).with_duration(
+            max(cue.end - cue.start, 0.1)
         )
+        if dynamic:
+            center_x, center_y = bx + bw / 2, by + bh / 2
+
+            def _pos(t: float, cx=center_x, cy=center_y, w=bw, h=bh) -> tuple[float, float]:
+                scale = _subtitle_pop_scale(t)
+                return (cx - w * scale / 2, cy - h * scale / 2)
+
+            clip = clip.resized(_subtitle_pop_scale).with_position(_pos)
+        layers.append(clip)
     return layers
+
+
+def _subtitle_pop_scale(t: float, pop_seconds: float = 0.14) -> float:
+    """자막 큐가 뜨는 순간 살짝 튀어오르듯 커졌다 자리 잡는 짧은 팝인.
+
+    오버레이 숫자(`_overlay_pop_scale`)보다 훨씬 작고 빠르다 — 자막은 1초 안팎으로
+    자주 바뀌므로 큰 모션이면 어지럽다. 0.82배에서 시작해 1.06배로 살짝 오버슈트한
+    뒤 1.0배로 가라앉는다. 글자가 톡톡 튀어 들어오는 "타이핑" 리듬을 준다(사용자
+    지시, 2026-10-01).
+    """
+    if t >= pop_seconds:
+        return 1.0
+    progress = t / pop_seconds
+    if progress < 0.65:
+        return 0.82 + (1.06 - 0.82) * (progress / 0.65)
+    settle = (progress - 0.65) / 0.35
+    return 1.06 - 0.06 * settle
 
 
 def _badge_layers(
@@ -577,9 +604,13 @@ def _db_to_gain(volume_db: float) -> float:
     return 10 ** (float(volume_db) / 20)
 
 
-def photo_credit_line(credits: list[PhotoCredit]) -> str:
-    """화면과 설명란에 같이 쓰는 사진 출처 한 줄."""
+def photo_credit_line(credits: list[PhotoCredit], prefix: str = "사진: ") -> str:
+    """화면과 설명란에 같이 쓰는 사진 출처 한 줄.
+
+    기본 접두사(한국어)는 텔레그램 운영자 알림용이다. 유튜브 설명란(시청자 공개)에
+    쓸 때는 채널 언어에 맞는 접두사를 넘긴다(disaster 데이터셋은 스페인어 "Fotos: ").
+    """
     names = list(dict.fromkeys(credit.source_name for credit in credits if credit.source_name))
     if not names:
         return ""
-    return "사진: " + ", ".join(names)
+    return prefix + ", ".join(names)

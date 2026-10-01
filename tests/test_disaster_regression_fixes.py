@@ -1246,3 +1246,146 @@ def _make_result_for_multiplatform_test(tmp_path):
         task_id="task-multiplatform", candidate=candidate, script=script, parts=[part],
         work_dir=tmp_path, credits=[], veo_clips=0, cost_note="",
     )
+
+
+# --- 2026-10-01: 화면 Korean 누출 수정 + Veo 전체 길이 사용 + 자막 팝인 회귀 테스트 ---
+
+
+def test_disaster_source_note_is_spanish_not_korean():
+    # _parse() 는 실제 LLM 경로에서 쓰이는 유일한 경로다 — 여기서 "출처: X"를
+    # 하드코딩하면 스페인어 영상 말미 배지에 한글이 그대로 섞여 나온다(사용자가
+    # "자막이 한글어 섞여나와"로 지적한 원인).
+    raw = _raw_script(part1_lines=10, part2_lines=10)
+    script = _parse(raw, _disaster_candidate())
+    assert script is not None
+    assert script.source_note == "Fuente: 위키백과"
+    assert "출처" not in script.source_note
+
+
+def test_non_disaster_source_note_stays_korean():
+    candidate = StoryCandidate(
+        dataset="heritage", topic_key="heritage:test", headline="테스트 문화재",
+        headline_number="국보 1호", subject="테스트 문화재", context="본문",
+        source_name="국가유산청",
+    )
+    raw = _raw_script(part1_lines=2, part2_lines=2)
+    script = _parse(raw, candidate)
+    assert script is not None
+    assert script.source_note == "출처: 국가유산청"
+
+
+def test_photo_credit_line_uses_given_prefix():
+    from src.models import PhotoCredit
+    from src.render.video_builder import photo_credit_line
+
+    credits = [PhotoCredit(query="q", source_name="Imagen generada por IA")]
+    assert photo_credit_line(credits, prefix="Fotos: ") == "Fotos: Imagen generada por IA"
+    # 기본값(텔레그램 운영자 알림용)은 계속 한국어다 — 호출부를 안 바꿔도 되게.
+    assert photo_credit_line(credits) == "사진: Imagen generada por IA"
+
+
+def test_thumbnail_label_drops_part_suffix_when_combined():
+    from pathlib import Path
+    from src.render.thumbnail import build_thumbnail
+
+    part = _make_script_part(1, "El naufragio que nadie esperaba", ["문장"])
+    with patch("src.render.thumbnail.VideoFileClip") as mock_clip_cls, patch(
+        "src.render.thumbnail.overlays.render_banner"
+    ) as mock_banner:
+        mock_clip = MagicMock()
+        mock_clip.get_frame.return_value = np.zeros((10, 10, 3), dtype=np.uint8)
+        mock_clip.duration = 10.0
+        mock_clip_cls.return_value.__enter__.return_value = mock_clip
+        mock_banner.return_value = Path("/tmp/does-not-matter.png")
+        with patch("src.render.thumbnail.Image.open"):
+            try:
+                build_thumbnail(Path("x.mp4"), part, Path("out.jpg"), (1080, 1920), is_combined=True)
+            except Exception:
+                pass  # PIL 합성까지는 목이 아니라 label 인자만 확인하면 된다
+
+    label_arg = mock_banner.call_args[0][0]
+    assert label_arg == "El naufragio que nadie esperaba"
+    assert "부" not in label_arg
+
+
+def test_veo_clip_speed_scales_instead_of_truncating_when_longer():
+    from pathlib import Path
+    from src.models import Scene
+    from src.render import motion_sources
+
+    scene = Scene(
+        start=0.0, duration=4.0, image_query_ko="", image_query_en="",
+        camera="push_in", engine="veo", prompt="a test veo prompt",
+    )
+    fake_source_clip = MagicMock()
+    fake_source_clip.duration = 8.0  # Veo 가 4초를 요청해도 8초를 돌려준 상황
+    fake_resized = MagicMock()
+    fake_source_clip.without_audio.return_value = fake_source_clip
+    fake_source_clip.with_speed_scaled.return_value = fake_source_clip
+    fake_source_clip.subclipped.return_value = fake_source_clip
+    fake_source_clip.resized.return_value = fake_resized
+
+    veo_client = MagicMock()
+    veo_client.animate.return_value = Path("/tmp/fake_veo.mp4")
+
+    with patch("src.render.motion_sources.VideoFileClip", return_value=fake_source_clip), patch(
+        "src.render.motion_sources._pad_to_duration", side_effect=lambda c, d: c
+    ):
+        motion_sources._veo_clip(veo_client, Path("img.png"), scene, (1080, 1920))
+
+    # 잘라내지 않고(subclipped 미호출) 속도만 올려 전체 프레임을 다 쓴다.
+    fake_source_clip.with_speed_scaled.assert_called_once_with(final_duration=4.0)
+    fake_source_clip.subclipped.assert_not_called()
+
+
+def test_veo_clip_pads_instead_of_speed_scaling_when_close_to_scene_duration():
+    from pathlib import Path
+    from src.models import Scene
+    from src.render import motion_sources
+
+    scene = Scene(
+        start=0.0, duration=4.0, image_query_ko="", image_query_en="",
+        camera="push_in", engine="veo", prompt="a test veo prompt",
+    )
+    fake_source_clip = MagicMock()
+    fake_source_clip.duration = 4.05  # 반올림 오차 수준
+    fake_source_clip.without_audio.return_value = fake_source_clip
+    fake_source_clip.subclipped.return_value = fake_source_clip
+    fake_source_clip.resized.return_value = fake_source_clip
+
+    veo_client = MagicMock()
+    veo_client.animate.return_value = Path("/tmp/fake_veo.mp4")
+
+    with patch("src.render.motion_sources.VideoFileClip", return_value=fake_source_clip), patch(
+        "src.render.motion_sources._pad_to_duration", side_effect=lambda c, d: c
+    ):
+        motion_sources._veo_clip(veo_client, Path("img.png"), scene, (1080, 1920))
+
+    fake_source_clip.with_speed_scaled.assert_not_called()
+    fake_source_clip.subclipped.assert_called_once_with(0, 4.0)
+
+
+def test_disaster_prompt_requires_minimum_veo_count():
+    from src.script.script_writer import GLOBAL_DISASTER_PROMPT
+
+    assert "Mínimo 4 frases por parte" in GLOBAL_DISASTER_PROMPT
+    assert "mínimo 8 en total" in GLOBAL_DISASTER_PROMPT
+
+
+def test_render_subtitle_returns_cropped_bbox_not_full_frame():
+    from pathlib import Path
+    from src.subtitles.subtitle_builder import SubtitleCue
+    from src.render import overlays
+
+    cue = SubtitleCue(start=0.0, end=1.0, lines=["hola mundo"], emphasis=[])
+    style = {
+        "font_size": 46, "font_color": "#FFFFFF", "emphasis_color": "#FFFFFF",
+        "shadow_blur": 6, "bottom_ratio": 0.24,
+    }
+    path, (x0, y0, w, h) = overlays.render_subtitle(
+        cue, Path("/tmp/test_sub.png"), (1080, 1920), style, 0.24
+    )
+    assert path.exists()
+    assert 0 < w < 1080
+    assert 0 < h < 1920
+    path.unlink()

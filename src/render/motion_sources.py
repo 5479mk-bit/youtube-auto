@@ -214,8 +214,14 @@ def _veo_clip(veo_client, image_path: Path, scene: Scene, size: tuple[int, int])
         return None
 
     clip = VideoFileClip(str(clip_path)).without_audio()
-    # 생성 길이가 씬보다 길면 씬 길이에 맞춰 자르고, 짧으면(반올림 오차 등) 마지막
-    # 프레임을 정지시켜 채운다 — 어느 쪽이든 돈 주고 만든 영상은 끝까지 쓴다.
-    usable = min(clip.duration, scene.duration)
-    clip = clip.subclipped(0, usable).resized(size)
+    # Veo 가 요청한 초 수와 다르게 돌려줄 수 있다(모델이 지원하는 길이로 반올림 등 —
+    # 실제로 "8초짜리든 5초짜리든 뒷부분이 잘려나간다"는 문제가 있었다). 돈 주고 만든
+    # 영상을 자르는 대신, 씬보다 길면 속도를 올려 끝까지 다 보여준다(전체 프레임 유지,
+    # 재생 속도만 빨라짐) — 반올림 오차 수준(0.3초 이내)만 자르고 패딩한다.
+    if clip.duration > scene.duration + 0.3:
+        clip = clip.with_speed_scaled(final_duration=scene.duration)
+    else:
+        usable = min(clip.duration, scene.duration)
+        clip = clip.subclipped(0, usable)
+    clip = clip.resized(size)
     return _pad_to_duration(clip, scene.duration)

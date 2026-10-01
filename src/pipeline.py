@@ -673,13 +673,15 @@ def _finish_part(
         part,
         work_dir / f"part{part.part}_thumb.jpg",
         (settings.get("video.width"), settings.get("video.height")),
+        is_combined=is_combined,
     )
 
     metadata = seo_metadata.generate(
         script, part, candidate, provider, settings.get("publish.default_tags", []),
         is_combined=is_combined,
     )
-    photo_note = photo_credit_line(credits)
+    photo_prefix = "Fotos: " if candidate.dataset == "disaster" else "사진: "
+    photo_note = photo_credit_line(credits, prefix=photo_prefix)
     if photo_note:
         metadata.description = f"{metadata.description}\n{photo_note}"
 

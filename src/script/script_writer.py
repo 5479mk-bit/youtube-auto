@@ -475,10 +475,12 @@ sobre un piso de estudio gris con cuadrícula**, y cuando haga falta, se muestra
 transversal (cutaway)** del terreno, el casco o las paredes. Cada frase elige una de dos rutas
 (`scene_type`).
 
-- "VEO": video real en movimiento de 4 segundos. **3 o 4 frases por parte**, alternando con
-  AI_IMAGE cuando se pueda (que VEO no se repita tres veces seguidas). La primera frase de la
-  parte 1 siempre es VEO. Úsalo en frases donde **el movimiento es la clave** — agua que
-  fluye, gas que se acumula, la estructura que se agrieta.
+- "VEO": video real en movimiento. **Mínimo 4 frases por parte (mínimo 8 en total en todo el
+  video)** — el video entero depende de que haya bastante movimiento real y no solo imágenes
+  fijas, así que este mínimo tiene prioridad alta. Alterna con AI_IMAGE cuando se pueda (que
+  VEO no se repita tres veces seguidas). La primera frase de la parte 1 siempre es VEO. Úsalo
+  en frases donde **el movimiento es la clave** — agua que fluye, gas que se acumula, la
+  estructura que se agrieta.
 - "AI_IMAGE": el resto. El movimiento de cámara se agrega automáticamente en el render.
 
 La pantalla alterna entre **tres distancias**, sin repetir la misma tres veces seguidas.
@@ -661,12 +663,17 @@ def _parse(raw: dict | None, candidate: StoryCandidate) -> Script | None:
             )
             return None
 
+    source_note = (
+        f"Fuente: {candidate.source_name}"
+        if candidate.dataset == "disaster"
+        else f"출처: {candidate.source_name}"
+    )
     return Script(
         topic_key=candidate.topic_key,
         title_seed=str(raw.get("title_seed") or candidate.headline),
         part1=part1,
         part2=part2,
-        source_note=f"출처: {candidate.source_name}",
+        source_note=source_note,
         is_sample=candidate.is_sample,
     )
 

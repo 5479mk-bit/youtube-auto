@@ -46,6 +46,7 @@ subtitle:
   shadow_blur: 6
   bottom_ratio: 0.24          # 자막 블록 아래끝을 화면 하단 24% 지점에
   max_chars_per_line: 18
+  dynamic_pop: true           # 자막 큐마다 짧게 튀어오르는 팝인 애니메이션(사용자 지시, 2026-10-01)
 
 audio:
   # voxcpm(GPU 전용)과 supertonic(로컬 서버)이 항상 1·2순위로 시도된다

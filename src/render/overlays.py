@@ -51,7 +51,16 @@ def render_subtitle(
     size: tuple[int, int],
     style: dict,
     safe_bottom: float,
-) -> Path:
+) -> tuple[Path, tuple[int, int, int, int]]:
+    """자막 큐 하나를 PNG 로 그린다.
+
+    반환하는 bbox(x0, y0, w, h)는 이미지를 화면 전체 캔버스가 아니라 텍스트
+    블록만 꽉 차게 잘라낸 크기다 — 자막에 "팝인" 애니메이션(스케일)을 줄 때,
+    풀프레임 이미지를 그대로 스케일하면 중심이 화면 한가운데로 쏠려 자막이
+    엉뚱한 자리로 움직인다. 블록 자신을 기준으로 잘라야 제자리에서 커졌다
+    작아지는 자연스러운 팝인이 된다(사용자 지시, 2026-10-01: "자막이 역동적
+    이게 타이핑느낌이라던지").
+    """
     width, height = size
     image = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
@@ -64,13 +73,23 @@ def render_subtitle(
     bottom_ratio = max(float(style.get("bottom_ratio", 0.24)), float(safe_bottom))
     baseline = int(height * (1 - bottom_ratio)) - block_height
 
+    max_line_width = 0.0
     for index, text in enumerate(cue.lines):
         y = baseline + index * line_height
         _draw_line_with_emphasis(draw, text, cue.emphasis, font, width, y, style)
+        max_line_width = max(max_line_width, draw.textlength(text, font=font))
+
+    # 그림자·팝인 오버슈트(최대 1.15배)가 잘리지 않을 여유를 둔다.
+    margin = int(style["font_size"] * 0.6)
+    x0 = max(int((width - max_line_width) / 2) - margin, 0)
+    y0 = max(baseline - margin, 0)
+    x1 = min(int((width + max_line_width) / 2) + margin, width)
+    y1 = min(baseline + block_height + margin, height)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(out_path)
-    return out_path
+    cropped = image.crop((x0, y0, x1, y1))
+    cropped.save(out_path)
+    return out_path, (x0, y0, x1 - x0, y1 - y0)
 
 
 def _draw_line_with_emphasis(

@@ -12,14 +12,20 @@ from . import overlays
 
 
 def build_thumbnail(
-    video_path: Path, part: ScriptPart, out_path: Path, size: tuple[int, int]
+    video_path: Path,
+    part: ScriptPart,
+    out_path: Path,
+    size: tuple[int, int],
+    is_combined: bool = False,
 ) -> Path:
     with VideoFileClip(str(video_path)) as clip:
         frame = clip.get_frame(min(1.0, clip.duration / 2))
 
     base = Image.fromarray(frame).convert("RGBA")
 
-    label = f"{part.hook_number}  |  {part.part}부"
+    # 합본(현재 유일하게 쓰는 모드)은 "N부" 라벨이 의미가 없다 — 영상이 하나뿐이라
+    # 그 표기는 한국어 글자가 유튜브 썸네일(시청자에게 그대로 노출)에 새는 통로였다.
+    label = part.hook_number if is_combined else f"{part.hook_number}  |  {part.part}부"
     overlay_path = overlays.render_banner(
         label, out_path.with_name(f"{out_path.stem}_label.png"), size, 84, 0.42
     )
