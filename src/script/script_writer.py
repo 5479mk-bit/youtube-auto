@@ -566,7 +566,19 @@ def generate(
     temperature: float,
 ) -> Script:
     if provider is not None:
-        raw = provider.complete_json(_prompt(candidate, part1_chars, part2_chars), temperature)
+        prompt = _prompt(candidate, part1_chars, part2_chars)
+        raw = provider.complete_json(prompt, temperature)
+        script = _parse(raw, candidate)
+        if script is not None:
+            return script
+        # 대본이 구조 요건(최소 문장 수 등)에 못 미쳐 거절됐을 수 있다 — 그렇다고
+        # 바로 템플릿 폴백으로 넘기면 너무 비싸다: 폴백(특히 disaster)은 번역 없이
+        # 위키백과 한국어 원문을 그대로 읽고, 길이 상한도 느슨해 몇 분짜리 영상이
+        # 될 수 있다(실제로 7문장짜리 대본이 거절되어 3분 37초짜리 한국어 혼입
+        # 영상이 나온 사고가 있었다, 2026-10-02). LLM 이 방금 응답했다는 건
+        # 자격증명·네트워크가 살아있다는 뜻이니, 폴백보다 재시도 한 번이 싸다.
+        logger.warning("[script] 1차 응답이 구조 요건에 못 미쳐 한 번 더 시도합니다")
+        raw = provider.complete_json(prompt, temperature)
         script = _parse(raw, candidate)
         if script is not None:
             return script
@@ -976,7 +988,11 @@ def _sillok_template_script(candidate: StoryCandidate) -> Script:
 # 한다. 이걸 그대로 한 줄(=TTS 한 문장)로 읽히면 컷 하나가 몇 분씩 늘어난다 — 실제로
 # 이 사고로 6분 넘는 영상이 나온 적이 있다(run #32). 문장 하나가 화면 한 컷과 맞물려야
 # 하는 이 파이프라인 구조상, 폴백 문장도 최대 길이를 지켜야 한다.
-_FALLBACK_FACT_MAX_CHARS = 120
+# 사고 이력(2026-10-02): 이 폴백이 LLM 완전 실패뿐 아니라 "LLM 응답은 받았지만
+# 구조 검증에서 거절됐을 때"도 탄다(generate() 가 재시도 한 번 뒤에도 실패하면
+# 여기로 떨어진다) — 번역이 안 되는 한국어 원문을 그대로 읽는 경로이므로 상한을
+# 120자에서 더 낮춰 최악의 경우에도 영상이 과도하게 길어지지 않게 한다.
+_FALLBACK_FACT_MAX_CHARS = 70
 
 
 def _cap_fact_for_speech(fact: str, max_chars: int = _FALLBACK_FACT_MAX_CHARS) -> str:
@@ -1024,10 +1040,12 @@ def _disaster_template_script(candidate: StoryCandidate) -> Script:
             sfx=sfx,
         )
 
-    # 이 폴백(LLM 완전 실패 시에만 탄다)의 문구 자체는 스페인어로 옮겼지만,
-    # facts(candidate.facts)는 한국어 위키백과 원문 그대로다 — 번역 엔진 없이
-    # 오프라인으로 도는 경로라 번역할 방법이 없다. 정상 경로(LLM 동작 중)는
-    # GLOBAL_DISASTER_PROMPT 가 전체를 스페인어로 새로 쓰므로 이 문제가 없다.
+    # 이 폴백(LLM 이 끝내 구조 요건을 못 맞췄을 때 탄다, generate() 참고)의 문구
+    # 자체는 스페인어로 옮겼지만, facts(candidate.facts)는 한국어 위키백과 원문
+    # 그대로다 — 번역 엔진 없이 오프라인으로 도는 경로라 번역할 방법이 없다.
+    # 정상 경로(LLM 동작 중)는 GLOBAL_DISASTER_PROMPT 가 전체를 스페인어로 새로
+    # 쓰므로 이 문제가 없다. 사실 줄 수도 4개로 줄였다(기존 6개는 길이 상한을
+    # 낮춰도 217초짜리 영상이 나온 사고의 원인 중 하나였다, 2026-10-02).
     part1_lines = [
         line(
             0,
@@ -1036,13 +1054,13 @@ def _disaster_template_script(candidate: StoryCandidate) -> Script:
             scene_type="VEO",
         )
     ]
-    part1_lines += [line(i, fact) for i, fact in enumerate(facts[:6], start=1)]
-    part1_lines.append(line(7, "¿Cuál fue realmente la causa?", emphasis=["causa"], sfx="braam"))
+    part1_lines += [line(i, fact) for i, fact in enumerate(facts[:4], start=1)]
+    part1_lines.append(line(5, "¿Cuál fue realmente la causa?", emphasis=["causa"], sfx="braam"))
 
     part2_lines = [line(0, "Retomamos la pregunta que quedó pendiente.")]
-    part2_lines += [line(i, fact) for i, fact in enumerate(facts[6:12], start=1)]
+    part2_lines += [line(i, fact) for i, fact in enumerate(facts[4:8], start=1)]
     part2_lines.append(
-        line(7, "Hasta aquí llega lo que quedó registrado.", emphasis=["registrado"], sfx="sub_boom")
+        line(5, "Hasta aquí llega lo que quedó registrado.", emphasis=["registrado"], sfx="sub_boom")
     )
     part2_lines.append(line(8, "¿Por qué creen ustedes que ocurrió este desastre?"))
 

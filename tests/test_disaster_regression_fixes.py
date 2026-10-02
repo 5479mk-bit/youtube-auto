@@ -1424,3 +1424,77 @@ def test_render_subtitle_returns_cropped_bbox_not_full_frame():
     assert 0 < w < 1080
     assert 0 < h < 1920
     path.unlink()
+
+
+# --- 2026-10-02: 구조 검증 실패 시 템플릿 대신 재시도, 폴백 길이/한글 완화 ---
+
+
+def test_generate_retries_once_before_falling_back_to_template():
+    # 사고(2026-10-02): 7문장짜리 대본이 최소 문장 수(8) 미달로 거절되자 바로
+    # 템플릿 폴백(한국어 원문 그대로, 길이 상한도 느슨함)으로 떨어져 3분 37초
+    # 짜리 한국어 혼입 영상이 나왔다. LLM 이 응답은 했으니(자격증명은 살아있다)
+    # 템플릿보다 재시도가 싸다 — generate() 가 한 번 더 시도해야 한다.
+    from src.models import StoryCandidate
+    from src.script import script_writer
+
+    candidate = StoryCandidate(
+        dataset="disaster", topic_key="disaster:x", headline="사건",
+        headline_number="", subject="사건", context="", source_name="위키백과",
+        facts=["hecho uno"] * 10,
+    )
+
+    calls = {"n": 0}
+
+    class FlakyProvider:
+        def complete_json(self, prompt, temperature=0.9):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return _raw_script(part1_lines=7, part2_lines=7)  # 최소 미달
+            return _raw_script(part1_lines=10, part2_lines=10)  # 재시도는 통과
+
+    script = script_writer.generate(candidate, FlakyProvider(), 420, 460, 0.9)
+    assert calls["n"] == 2
+    assert len(script.part1.lines) == 10
+
+
+def test_generate_falls_back_to_template_after_two_failed_attempts():
+    from src.models import StoryCandidate
+    from src.script import script_writer
+
+    candidate = StoryCandidate(
+        dataset="disaster", topic_key="disaster:x", headline="사건",
+        headline_number="", subject="사건", context="", source_name="위키백과",
+        facts=["hecho uno"] * 10,
+    )
+
+    class AlwaysShortProvider:
+        def complete_json(self, prompt, temperature=0.9):
+            return _raw_script(part1_lines=7, part2_lines=7)
+
+    script = script_writer.generate(candidate, AlwaysShortProvider(), 420, 460, 0.9)
+    # 템플릿 폴백 특유의 훅 문장("esto ocurrió de verdad")이 나오면 폴백이 맞다.
+    assert "esto ocurrió de verdad" in script.part1.lines[0].text
+
+
+def test_disaster_template_fallback_keeps_short_fact_cap_and_fewer_lines():
+    # 2026-10-02: 상한을 120→70자로, 사실 줄 수를 6→4개(부당)로 줄여 폴백이
+    # 타더라도 영상이 과도하게 길어지지 않게 했다.
+    from src.models import StoryCandidate
+    from src.script.script_writer import _disaster_template_script, _FALLBACK_FACT_MAX_CHARS
+
+    assert _FALLBACK_FACT_MAX_CHARS <= 70
+
+    long_fact = "가" * 200  # 상한보다 훨씬 긴 한국어 문단
+    candidate = StoryCandidate(
+        dataset="disaster", topic_key="disaster:x", headline="사건",
+        headline_number="", subject="사건", context="", source_name="위키백과",
+        facts=[long_fact] * 12,
+    )
+    script = _disaster_template_script(candidate)
+    for l in script.part1.lines + script.part2.lines:
+        assert len(l.text) <= _FALLBACK_FACT_MAX_CHARS or "ocurrió" in l.text or "causa" in l.text or \
+            "pendiente" in l.text or "registrado" in l.text or "desastre" in l.text
+    # 부당 사실 줄 수가 4개로 줄었는지 확인(1부: 훅+사실4+클리프행어=6줄,
+    # 2부: 도입+사실4+클로징+닫는 질문=7줄).
+    assert len(script.part1.lines) == 6
+    assert len(script.part2.lines) == 7
