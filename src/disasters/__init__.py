@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import time
+
 from loguru import logger
 
 from ..heritage import wikipedia_enrich
@@ -36,12 +38,24 @@ _BLOCKED_KR_TITLES = {
 }
 
 
-def collect_candidates(titles: list[str]) -> list[StoryCandidate]:
+def collect_candidates(titles: list[str], used: set[str] = frozenset()) -> list[StoryCandidate]:
+    """`used`(이미 다룬 topic_key 집합)에 들어있는 제목은 위키백과 호출 자체를
+    건너뛴다 — 목록이 길어질수록(지금 16개) 매 회차 전부를 순서대로 조회하다가
+    위키미디어 429(Too Many Requests)에 한꺼번에 걸려 후보가 0개로 떨어진 사고가
+    있었다(run #51, 2026-10-03). 안 쓸 제목을 안 부르는 게 가장 확실한 예방이고,
+    남은 제목들 사이에도 0.3초를 둬 같은 초에 몰리지 않게 한다."""
     candidates = []
+    first = True
     for title in titles:
         if title in _BLOCKED_KR_TITLES:
             logger.warning(f"[disasters] '{title}' 은 국내 인재라 후보에서 제외합니다")
             continue
+        if f"disaster:{title}" in used:
+            continue
+
+        if not first:
+            time.sleep(0.3)
+        first = False
 
         text = wikipedia_enrich.fetch_full_text(title)
         if not text:

@@ -8,6 +8,7 @@ API 키가 필요 없는 유일한 소스라 국가유산청/관광공사가 막
 from __future__ import annotations
 
 import re
+import time
 
 import requests
 from loguru import logger
@@ -75,31 +76,46 @@ def fetch_mystery_excerpt(title: str) -> str:
 def _fetch_plaintext(title: str) -> str:
     if not title:
         return ""
-    try:
-        response = requests.get(
-            API_URL,
-            params={
-                "action": "query",
-                "prop": "extracts",
-                "explaintext": 1,
-                "format": "json",
-                "titles": title,
-                "redirects": 1,
-            },
-            timeout=TIMEOUT,
-            headers=HEADERS,
-        )
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        logger.warning(f"[wikipedia] '{title}' 본문 조회 실패: {exc}")
+    # disasters.collect_candidates() 가 후보 목록 전체를 쉴 틈 없이 연속 호출하면
+    # (run #51 실제로 6개 요청이 1초 안에 몰렸다) 위키미디어가 429 로 전부 거부해
+    # "선정할 주제 후보가 없습니다"로 회차가 통째로 중단된다 — 제목 자체는 멀쩡해도
+    # 그랬다. 429 만 짧게 재시도한다(그 외 오류는 재시도해도 같은 결과라 바로 포기).
+    for attempt in range(3):
+        try:
+            response = requests.get(
+                API_URL,
+                params={
+                    "action": "query",
+                    "prop": "extracts",
+                    "explaintext": 1,
+                    "format": "json",
+                    "titles": title,
+                    "redirects": 1,
+                },
+                timeout=TIMEOUT,
+                headers=HEADERS,
+            )
+            if response.status_code == 429:
+                wait = 1.5 * (attempt + 1)
+                logger.warning(
+                    f"[wikipedia] '{title}' 요청이 429(Too Many Requests) — {wait:.1f}초 뒤 재시도"
+                )
+                time.sleep(wait)
+                continue
+            response.raise_for_status()
+            data = response.json()
+        except Exception as exc:
+            logger.warning(f"[wikipedia] '{title}' 본문 조회 실패: {exc}")
+            return ""
+
+        pages = data.get("query", {}).get("pages", {})
+        for page in pages.values():
+            if "missing" in page:
+                return ""
+            return str(page.get("extract") or "")
         return ""
 
-    pages = data.get("query", {}).get("pages", {})
-    for page in pages.values():
-        if "missing" in page:
-            return ""
-        return str(page.get("extract") or "")
+    logger.warning(f"[wikipedia] '{title}' 429 로 재시도 3회 모두 실패")
     return ""
 
 

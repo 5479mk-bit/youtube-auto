@@ -1498,3 +1498,73 @@ def test_disaster_template_fallback_keeps_short_fact_cap_and_fewer_lines():
     # 2부: 도입+사실4+클로징+닫는 질문=7줄).
     assert len(script.part1.lines) == 6
     assert len(script.part2.lines) == 7
+
+
+# --- 2026-10-03: 위키백과 429 재시도, 이미 쓴 제목은 호출 자체를 건너뜀 ---
+
+
+def test_fetch_plaintext_retries_on_429_then_succeeds():
+    from unittest.mock import MagicMock, patch
+
+    from src.heritage import wikipedia_enrich
+
+    rate_limited = MagicMock(status_code=429)
+    ok_response = MagicMock(status_code=200)
+    ok_response.raise_for_status.return_value = None
+    ok_response.json.return_value = {
+        "query": {"pages": {"123": {"extract": "본문 내용"}}}
+    }
+
+    with patch("src.heritage.wikipedia_enrich.requests.get", side_effect=[rate_limited, ok_response]), \
+         patch("src.heritage.wikipedia_enrich.time.sleep"):
+        text = wikipedia_enrich._fetch_plaintext("테스트 문서")
+
+    assert text == "본문 내용"
+
+
+def test_fetch_plaintext_gives_up_after_three_429s():
+    from unittest.mock import MagicMock, patch
+
+    from src.heritage import wikipedia_enrich
+
+    rate_limited = MagicMock(status_code=429)
+
+    with patch("src.heritage.wikipedia_enrich.requests.get", return_value=rate_limited), \
+         patch("src.heritage.wikipedia_enrich.time.sleep"):
+        text = wikipedia_enrich._fetch_plaintext("테스트 문서")
+
+    assert text == ""
+
+
+def test_disasters_collect_candidates_skips_already_used_titles():
+    # 사고(2026-10-03, run #51): 16개 제목을 매번 전부 위키백과에 조회하다가
+    # 429(Too Many Requests)에 한꺼번에 걸려 후보가 0개로 떨어졌다. 이미 다룬
+    # 제목은 호출 자체를 건너뛰어야 한다.
+    from unittest.mock import patch
+
+    from src.disasters import collect_candidates
+
+    with patch(
+        "src.disasters.wikipedia_enrich.fetch_full_text", return_value="본문" * 50
+    ) as mock_fetch:
+        candidates = collect_candidates(
+            ["제목1", "제목2", "제목3"], used={"disaster:제목1", "disaster:제목2"}
+        )
+
+    mock_fetch.assert_called_once_with("제목3")
+    assert len(candidates) == 1
+    assert candidates[0].headline == "제목3"
+
+
+def test_disasters_collect_candidates_fetches_all_when_used_empty():
+    from unittest.mock import patch
+
+    from src.disasters import collect_candidates
+
+    with patch(
+        "src.disasters.wikipedia_enrich.fetch_full_text", return_value="본문" * 50
+    ) as mock_fetch:
+        candidates = collect_candidates(["제목1", "제목2"])
+
+    assert mock_fetch.call_count == 2
+    assert len(candidates) == 2

@@ -67,12 +67,19 @@ def select_topic(settings: Settings, ignore_history: bool = False) -> StoryCandi
 
     문화재·실록 경로는 지우지 않았다 — 다른 소재가 필요할 때 그대로 다시 쓴다.
     """
+    # 같은 소재를 다시 렌더할 때(연출을 고치며 반복할 때)는 중복 방지를 건너뛴다.
+    used = set() if ignore_history else history.used_topic_keys(STATE_DB)
+
     source = settings.get("topics.source", "heritage")
     if source == "sillok":
         candidates = sillok.collect_candidates(settings.get("topics.sillok.article_ids", []))
         weights = settings.get("topics.sillok.weights", {})
     elif source == "disaster":
-        candidates = disasters.collect_candidates(settings.get("topics.disaster.titles", []))
+        # used 를 넘겨 이미 다룬 제목은 위키백과 호출 자체를 건너뛴다 — 목록 전체를
+        # 매번 조회하다 429 로 한꺼번에 막히는 사고를 줄인다(run #51 참고).
+        candidates = disasters.collect_candidates(
+            settings.get("topics.disaster.titles", []), used
+        )
         weights = settings.get("topics.disaster.weights", {})
     else:
         client = DataGoKrClient(settings.secrets.data_go_kr_service_key)
@@ -82,8 +89,6 @@ def select_topic(settings: Settings, ignore_history: bool = False) -> StoryCandi
         )
         weights = settings.get("topics.weights", {})
 
-    # 같은 소재를 다시 렌더할 때(연출을 고치며 반복할 때)는 중복 방지를 건너뛴다.
-    used = set() if ignore_history else history.used_topic_keys(STATE_DB)
     return topic_scorer.pick(candidates, weights, used)
 
 
