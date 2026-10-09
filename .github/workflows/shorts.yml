@@ -359,5 +359,8 @@ jobs:
             output/**/*.srt
             output/sample_images/*
             logs/*.log
-          retention-days: 14
+          # 14일치를 다 쌓아두다 저장소 용량을 초과해 업로드 자체가 막힌 적이
+          # 있다(run #58, 2026-10-09 — 아티팩트 32개·9GB 누적). 회차당
+          # 400~900MB 라 14일을 쌓으면 금방 다시 찬다 — 3일로 줄인다.
+          retention-days: 3
           if-no-files-found: warn
