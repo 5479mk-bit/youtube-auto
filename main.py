@@ -75,7 +75,7 @@ def main() -> int:
         help="렌더 후 텔레그램으로 검수 요청을 보내고 승인 시 업로드한다",
     )
     run_parser.add_argument(
-        "--wait", type=int, default=1800, help="검수 응답을 기다릴 최대 시간(초)"
+        "--wait", type=int, default=10800, help="검수 응답을 기다릴 최대 시간(초, 기본 3시간)"
     )
 
     subparsers.add_parser("topics", help="주제 후보 순위만 확인한다")

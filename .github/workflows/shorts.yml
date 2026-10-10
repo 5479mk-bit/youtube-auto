@@ -42,9 +42,10 @@ on:
         default: ""
       review_wait_seconds:
         description: "텔레그램 승인을 기다리는 시간(초). 이 안에 승인하면 같은 실행에서
-          바로 업로드까지 끝난다 — 못 받으면 review-pending 스케줄 워크플로가 나중에 잡는다."
+          바로 업로드까지 끝난다 — 못 받으면 review-pending 스케줄 워크플로가 나중에 잡는다.
+          기본 10800(3시간) — 사용자가 승인까지 더 넉넉한 시간을 쓰고 싶다고 요청(2026-10-10)."
         type: string
-        default: "1200"
+        default: "10800"
   # 하루 한 편, 자동으로 만든다(사용자 지시, 2026-09-27). combine_parts 가
   # workflow_dispatch 쪽 기본값(true)과 같은 자리에서 스케줄 실행도 그대로 물려받는다
   # (schedule 이벤트는 inputs 가 전부 비므로, ARGS 조립부의 `|| 기본값` 폴백이 그대로
@@ -61,9 +62,9 @@ permissions:
 jobs:
   render:
     runs-on: ubuntu-latest
-    # 렌더(최대 ~20분/부) + 검수 대기(review_wait_seconds, 기본 20분)를 합치면
-    # 60분을 넘길 수 있어 여유를 둔다.
-    timeout-minutes: 90
+    # 렌더(최대 ~40분, 합본 기준) + 검수 대기(review_wait_seconds, 기본 3시간=180분)
+    # + 캐시 저장/아티팩트 업로드 등 마무리 단계를 합쳐 여유를 둔다.
+    timeout-minutes: 240
 
     steps:
       - uses: actions/checkout@v4
@@ -331,7 +332,7 @@ jobs:
           # 여기서 승인이 오면 같은 실행 안에서 바로 업로드까지 끝난다. 못 받으면
           # review-pending 스케줄 워크플로가 캐시에 남은 state.sqlite3/output 으로 잡는다.
           if [ "${{ inputs.review }}" != "false" ]; then
-            ARGS="$ARGS --review --wait ${{ inputs.review_wait_seconds || '1200' }}"
+            ARGS="$ARGS --review --wait ${{ inputs.review_wait_seconds || '10800' }}"
           fi
           python main.py run $ARGS
 
