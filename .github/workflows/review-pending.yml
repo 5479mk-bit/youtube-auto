@@ -115,7 +115,9 @@ jobs:
       # 따로 두지 않는 건, 이 워크플로는 15분마다 돌아 실패해도 비용 손실이 없다).
       - name: GCP 인증 (Workload Identity)
         id: auth
-        if: ${{ (secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || vars.GCP_WORKLOAD_IDENTITY_PROVIDER) != '' }}
+        # step 레벨 if 는 secrets 컨텍스트를 못 읽는다(DOTENV 때 겪은 것과 같은
+        # 제약) — 조건 없이 항상 시도하고, 시크릿이 비어 있으면 continue-on-error
+        # 가 실패를 삼켜서 다음 스텝(유튜브/틱톡 업로드)은 영향받지 않는다.
         continue-on-error: true
         uses: google-github-actions/auth@v2
         with:
