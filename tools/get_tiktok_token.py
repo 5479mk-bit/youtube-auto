@@ -10,11 +10,11 @@
        터미널에 붙여넣는다.
     6) 리프레시 토큰이 출력된다 — 이 값이 "GitHub Secrets에 넣을 값"이다.
 
-틱톡은 Login Kit 의 redirect_uri 를 앱에 등록한 "Web/Desktop URL" 도메인과
-같은 도메인으로만 허용한다 — localhost 는 그 도메인이 아니라서 거부된다. 그래서
-`http://localhost:8787/callback` 으로 직접 받는 대신, 앱의 Web/Desktop URL 로 등록해
-둔 도메인(5479mk-bit.github.io)의 정적 페이지로 보내고, 거기 화면에 뜨는 코드를
-사람이 직접 복사해서 붙여넣는 방식을 쓴다.
+이 틱톡 앱에는 별도의 "Redirect URI" 입력칸이 없다 — Basic information 의
+"Web/Desktop URL"과 **완전히 똑같은 주소**만 redirect_uri 로 허용된다(도메인만
+같아도 안 되고 경로까지 1바이트도 다르면 안 된다). 그래서 그 주소 그대로 쓰고,
+로그인이 끝나면 브라우저 주소창에 "?code=..."가 붙은 채로 그 페이지가 뜬다 —
+그 code 값을 사람이 주소창에서 직접 복사해 붙여넣는 방식을 쓴다.
 
 리프레시 토큰은 쓸 때마다 새로 발급되므로(코드가 자동으로 캐시 파일에 최신 값을
 저장한다), 여기서 받는 값은 "최초 시드"일 뿐이다.
@@ -29,7 +29,7 @@ import sys
 
 import requests
 
-REDIRECT_URI = "https://5479mk-bit.github.io/callback.html"
+REDIRECT_URI = "https://5479mk-bit.github.io/"
 AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/"
 TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
 SCOPES = "video.publish"
@@ -60,8 +60,12 @@ def main() -> None:
         f"&code_challenge={code_challenge}&code_challenge_method=S256"
     )
     print(f"아래 주소를 브라우저로 열고, 업로드할 틱톡 계정으로 로그인·동의하세요:\n{auth_url}\n")
+    print(
+        "동의가 끝나면 브라우저 주소창에 '...?code=XXXX&state=...' 가 붙은 채로 "
+        "우리 사이트가 뜹니다 — 그 'code=' 뒤에서 '&' 앞까지만 복사하세요."
+    )
 
-    received_code = input("동의 후 뜨는 페이지에 표시된 코드를 여기에 붙여넣으세요: ").strip()
+    received_code = input("code 값을 여기에 붙여넣으세요: ").strip()
     if not received_code:
         print("코드가 비어 있습니다.")
         raise SystemExit(1)
