@@ -978,11 +978,8 @@ def _upload_to_extra_platforms(settings: Settings, part: RenderedPart) -> list[s
 
             client = tiktok_uploader.get_client(settings)
             if client is not None:
-                privacy_level = settings.get("publish.tiktok.privacy_level", "SELF_ONLY")
-                post_id = tiktok_uploader.upload(
-                    client, Path(part.video_path), caption, privacy_level
-                )
-                extra_links.append(f"틱톡({privacy_level}): {post_id}")
+                post_id = tiktok_uploader.upload(client, Path(part.video_path), caption)
+                extra_links.append(f"틱톡(앱 초안함에 업로드됨 — 직접 게시 필요): {post_id}")
             else:
                 logger.info("[tiktok] 시크릿이 없어 건너뜁니다")
         except Exception:

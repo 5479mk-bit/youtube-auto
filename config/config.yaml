@@ -248,8 +248,11 @@ publish:
   # 실패해도 다른 쪽·유튜브 업로드에는 영향 없다.
   tiktok:
     enabled: true
-    # 앱이 심사(audit) 승인 전까지는 SELF_ONLY(비공개 초안)만 가능하다. 승인되면
-    # "PUBLIC_TO_EVERYONE" 등으로 이 값만 바꾸면 된다.
+    # 지금은 "초안함(Inbox) 업로드"를 쓴다 — 계정을 공개로 유지하고 싶어서
+    # (사용자 지시, 2026-10-11) "다이렉트 포스트"(바로 게시)를 못 쓴다. 다이렉트
+    # 포스트는 심사 전 앱이면 대상 계정이 비공개여야만 허용된다
+    # (unaudited_client_can_only_post_to_private_accounts). privacy_level 은
+    # 지금 코드에서 안 쓰이지만, 나중에 다이렉트 포스트로 되돌릴 때를 위해 남겨둔다.
     privacy_level: SELF_ONLY
   instagram:
     enabled: false

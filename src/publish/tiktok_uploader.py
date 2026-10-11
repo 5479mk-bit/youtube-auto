@@ -1,8 +1,11 @@
-"""틱톡 Content Posting API — 비공개(SELF_ONLY) 초안 업로드.
+"""틱톡 Content Posting API — 초안함(Inbox) 업로드.
 
-앱이 심사(audit) 승인을 받기 전까지는 공개 게시가 거부된다. 그래서
-`privacy_level` 은 설정값(`publish.tiktok.privacy_level`)으로 빼두되 기본은
-`SELF_ONLY`로 둔다 — 심사가 승인되면 설정값 한 줄만 바꾸면 된다.
+심사(audit) 안 받은 앱의 "다이렉트 포스트"(바로 게시, `video/init/`)는 대상
+계정이 비공개 계정일 때만 허용된다(`unaudited_client_can_only_post_to_private_accounts`,
+실제로 겪은 오류) — 사용자가 계정을 공개로 유지하길 원해서 이 경로는 못 쓴다.
+대신 **초안함 업로드**(`inbox/video/init/`)를 쓴다 — 이건 "게시"가 아니라 영상을
+그 계정의 틱톡 앱 인박스에 넣어주기만 하고, 실제 게시는 사람이 앱에서 직접 눌러야
+한다 — 그래서 계정 공개/비공개와 무관하게 심사 전 앱도 쓸 수 있다.
 
 액세스 토큰은 24시간, 리프레시 토큰은 쓸 때마다 새로 발급된다. GitHub Secrets 는
 워크플로가 못 고쳐 쓰므로, 리프레시 토큰은 `platform_tokens` 캐시 파일에 저장하고
@@ -20,7 +23,7 @@ from ..settings import Settings
 from . import platform_tokens
 
 _TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
-_INIT_URL = "https://open.tiktokapis.com/v2/post/publish/video/init/"
+_INBOX_INIT_URL = "https://open.tiktokapis.com/v2/post/publish/inbox/video/init/"
 _REFRESH_TOKEN_CACHE_KEY = "tiktok_refresh_token"
 
 
@@ -73,24 +76,20 @@ def get_client(settings: Settings) -> TikTokClient | None:
 
 
 def upload(client: TikTokClient, video_path: Path, caption: str, privacy_level: str = "SELF_ONLY") -> str:
-    """영상을 올리고 publish_id 를 돌려준다. 심사 승인 전엔 `privacy_level` 을
-    SELF_ONLY 이외의 값으로 바꾸면 틱톡 쪽에서 거부한다."""
+    """영상을 그 계정의 틱톡 앱 인박스(초안함)에 올리고 publish_id 를 돌려준다.
+
+    `caption`/`privacy_level` 은 인박스 업로드 API에는 안 쓰인다(게시 메타데이터는
+    사람이 앱에서 직접 입력한다) — 기존 호출부와 시그니처를 맞추려고만 남겨둔다.
+    """
     client._refresh()
     size = video_path.stat().st_size
     response = requests.post(
-        _INIT_URL,
+        _INBOX_INIT_URL,
         headers={
             "Authorization": f"Bearer {client.access_token}",
             "Content-Type": "application/json",
         },
         json={
-            "post_info": {
-                "title": caption,
-                "privacy_level": privacy_level,
-                "disable_duet": False,
-                "disable_comment": False,
-                "disable_stitch": False,
-            },
             "source_info": {
                 "source": "FILE_UPLOAD",
                 "video_size": size,
@@ -119,5 +118,5 @@ def upload(client: TikTokClient, video_path: Path, caption: str, privacy_level: 
     if put_response.status_code >= 300:
         raise TikTokUploadError(f"영상 업로드 실패: {put_response.status_code}")
 
-    logger.info(f"[tiktok] 업로드 완료(비공개 초안): {publish_id}")
+    logger.info(f"[tiktok] 인박스(초안함) 업로드 완료 — 틱톡 앱에서 직접 게시 필요: {publish_id}")
     return publish_id
