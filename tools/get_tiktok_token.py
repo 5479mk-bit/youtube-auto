@@ -26,6 +26,7 @@ import base64
 import hashlib
 import secrets
 import sys
+from urllib.parse import urlencode
 
 import requests
 
@@ -54,11 +55,18 @@ def main() -> None:
     client_key, client_secret = sys.argv[1], sys.argv[2]
     code_verifier, code_challenge = _pkce_pair()
 
-    auth_url = (
-        f"{AUTH_URL}?client_key={client_key}&scope={SCOPES}&response_type=code"
-        f"&redirect_uri={REDIRECT_URI}&state=get_token"
-        f"&code_challenge={code_challenge}&code_challenge_method=S256"
+    query = urlencode(
+        {
+            "client_key": client_key,
+            "scope": SCOPES,
+            "response_type": "code",
+            "redirect_uri": REDIRECT_URI,
+            "state": "get_token",
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
     )
+    auth_url = f"{AUTH_URL}?{query}"
     print(f"아래 주소를 브라우저로 열고, 업로드할 틱톡 계정으로 로그인·동의하세요:\n{auth_url}\n")
     print(
         "동의가 끝나면 브라우저 주소창에 '...?code=XXXX&state=...' 가 붙은 채로 "
