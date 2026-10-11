@@ -26,7 +26,7 @@ import base64
 import hashlib
 import secrets
 import sys
-from urllib.parse import urlencode
+from urllib.parse import unquote, urlencode
 
 import requests
 
@@ -73,7 +73,7 @@ def main() -> None:
         "우리 사이트가 뜹니다 — 그 'code=' 뒤에서 '&' 앞까지만 복사하세요."
     )
 
-    received_code = input("code 값을 여기에 붙여넣으세요: ").strip()
+    received_code = unquote(input("code 값을 여기에 붙여넣으세요: ").strip())
     if not received_code:
         print("코드가 비어 있습니다.")
         raise SystemExit(1)
