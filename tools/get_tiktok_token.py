@@ -33,7 +33,10 @@ import requests
 REDIRECT_URI = "https://5479mk-bit.github.io/"
 AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/"
 TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
-SCOPES = "video.publish"
+# video.upload = 초안함(Inbox) 업로드에 필요한 권한(지금 쓰는 방식).
+# video.publish = 다이렉트 포스트(바로 게시)에 필요한 권한 — 나중에 심사 통과 후
+# 그쪽으로 바꿀 걸 대비해 같이 받아둔다.
+SCOPES = "video.upload,video.publish"
 
 
 def _pkce_pair() -> tuple[str, str]:
