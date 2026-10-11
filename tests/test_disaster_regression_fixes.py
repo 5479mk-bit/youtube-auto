@@ -1217,30 +1217,37 @@ def test_camera_shake_disabled_by_setting(tmp_path):
     assert result is bg  # 꺼두면 손대지 않고 그대로 돌려준다
 
 
-def test_multiplatform_caption_sent_with_hashtags_but_no_pinned_comment(tmp_path):
-    # 사용자 지시(2026-09-30): 틱톡/릴스에 바로 복붙할 캡션(해시태그 묶음)을
-    # 텔레그램으로 같이 보낸다. 이후 사용자 지시(2026-10-01)로 고정 댓글 후보
-    # 줄은 뺐다 — 운영자에게 불필요한 정보였다.
+def test_approved_caption_has_no_pinned_comment_or_source_lines(tmp_path):
+    # 사용자 지시(2026-09-30, 2026-10-01): 틱톡/릴스 복붙용 캡션에 고정 댓글
+    # 후보나 출처 줄이 섞이면 안 된다. 2026-10-11 재정리 이후에는 이 캡션이
+    # 승인 "직후"(_finish_review)에 나간다 — 승인 전(review_and_publish)에는
+    # 전혀 안 나간다.
     from src import pipeline as pipeline_module
+    from src.review.telegram_bot import ReviewDecision
 
     result = _make_result_for_multiplatform_test(tmp_path)
 
     settings = MagicMock()
     settings.secrets.telegram_bot_token = "x"
     settings.secrets.telegram_chat_id = "y"
+    settings.get.side_effect = lambda key, default=None: default
 
     with patch.object(pipeline_module, "STATE_DB", tmp_path / "state.sqlite3"), patch(
         "src.review.telegram_bot.TelegramReviewer"
-    ) as MockReviewer, patch("src.review.telegram_bot.build_summary"):
+    ) as MockReviewer, patch("src.review.telegram_bot.build_summary"), patch(
+        "src.publish.youtube_uploader.get_service", return_value=object()
+    ), patch(
+        "src.publish.youtube_uploader.upload_series", return_value=["vid1"]
+    ):
         reviewer = MockReviewer.return_value
         reviewer.enabled = True
-        reviewer.wait_for_decision.return_value = None
+        reviewer.wait_for_decision.return_value = ReviewDecision(approved=True, title_index=0)
 
         pipeline_module.review_and_publish(settings, result, wait_seconds=1)
 
     notified = [call.args[0] for call in reviewer.notify.call_args_list]
-    caption = next(n for n in notified if "멀티플랫폼" in n)
-    assert "#shorts" in caption
+    caption = next(n for n in notified if "Una falla de diseño" in n)
+    assert "#historia" in caption
     assert "¿Tú qué habrías hecho?" not in caption
     assert not any("고정 댓글" in n for n in notified)
     assert not any("출처" in n or "Fuente" in n or "Fotos" in n or "사진" in n for n in notified)

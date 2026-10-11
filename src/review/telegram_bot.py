@@ -249,15 +249,25 @@ def _describe(response) -> str:
     return str(body.get("description") or body)[:200]
 
 
-def build_summary(title_seed: str, titles: list[str], is_sample: bool) -> str:
+def build_summary(
+    title_seed: str,
+    titles: list[str],
+    is_sample: bool,
+    titles_ko: list[str] | None = None,
+) -> str:
     """제목 후보 + 승인 버튼이 달리는 그 메시지의 본문.
 
     사용자 지시(2026-09-30): 설명·출처·사진·비용은 여기 섞지 않고 각각 별도
     말풍선으로 보낸다(review_and_publish 가 build_summary 뒤에 이어서 보낸다) —
-    이 함수는 이제 "제목 후보" 한 가지만 담당한다.
+    이 함수는 "제목 후보"(+ 한국어 번역)만 담당한다. titles_ko 는 승인 요청과
+    같은 말풍선에 넣기 위해 여기로 합쳤다(사용자 지시, 2026-10-11) — 예전엔
+    별도 notify 로 따로 보냈다.
     """
     lines = [f"<b>{title_seed}</b>", "", "<b>제목 후보</b>"]
     lines.extend(f"{index + 1}. {title}" for index, title in enumerate(titles))
+    if titles_ko:
+        lines.extend(["", "<b>제목 후보(한국어 번역)</b>"])
+        lines.extend(titles_ko)
     if is_sample:
         lines.insert(0, "⚠️ 샘플 데이터로 만든 영상입니다. 업로드가 차단됩니다.")
     return "\n".join(lines)

@@ -1041,6 +1041,24 @@ def _make_script_part(part_num: int, hook: str, texts: list[str]):
     )
 
 
+def test_build_summary_appends_korean_titles_to_same_bubble():
+    from src.review.telegram_bot import build_summary
+
+    text = build_summary(
+        "제목", ["제목1", "제목2"], is_sample=False, titles_ko=["한글제목1", "한글제목2"],
+    )
+    assert "제목 후보(한국어 번역)" in text
+    assert "한글제목1" in text
+    assert "한글제목2" in text
+
+
+def test_build_summary_omits_korean_section_when_absent():
+    from src.review.telegram_bot import build_summary
+
+    text = build_summary("제목", ["제목1"], is_sample=False, titles_ko=None)
+    assert "제목 후보(한국어 번역)" not in text
+
+
 class TestReviewSummarySplitsInfoLines:
     def _make_result(self, tmp_path, credits):
         from src.models import (
@@ -1084,10 +1102,9 @@ class TestReviewSummarySplitsInfoLines:
             cost_note="Veo lite 7클립 · 약 2,058원",
         )
 
-    def test_source_photo_cost_sent_as_separate_messages_not_in_summary(self, tmp_path):
-        # 사용자 지시(2026-09-30): 설명/비용은 검수 카드 본문에 섞지 말고 각각
-        # 따로 보낸다. 사용자 지시(2026-10-01): 위키백과 출처 줄과 사진 출처
-        # 줄은 운영자에게 불필요해 아예 빼고, 더는 notify() 로 보내지 않는다.
+    def test_cost_sent_as_separate_message_not_in_summary(self, tmp_path):
+        # 사용자 지시(2026-10-11): 설명/캡션은 승인 "이후"에만 보낸다 — 승인
+        # 전(카드 발송 시점)에 notify() 로 나가는 건 비용 한 줄뿐이다.
         from src.models import PhotoCredit
 
         credits = [PhotoCredit(query="q", source_name="AI 생성 영상"),
@@ -1110,44 +1127,19 @@ class TestReviewSummarySplitsInfoLines:
 
             pipeline.review_and_publish(settings, result, wait_seconds=1)
 
-        # 카드 본문(build_summary)에는 제목 후보만 들어간다 — 설명/비용은
-        # 전부 안 섞이고 각각 별도 notify() 메시지로 간다.
+        # 카드 본문(build_summary)에는 제목 후보(+한국어 번역)만 들어간다.
         summary_call = mock_build_summary.call_args
         assert summary_call.args[1] == ["제목", "대안"]
 
         notified = [call.args[0] for call in reviewer.notify.call_args_list]
-        assert any("후킹 설명" in n for n in notified)
+        assert not any("후킹 설명" in n for n in notified)
         assert not any("출처" in n or "Fuente" in n for n in notified)
         assert not any("AI 생성 영상" in n or "AI 생성 이미지" in n for n in notified)
         assert any("Veo lite 7클립" in n for n in notified)
 
-    def test_korean_translation_sent_as_separate_bubble_when_present(self, tmp_path):
-        # 사용자 지시(2026-09-30): 채널 언어가 스페인어라 설명도 스페인어다 —
-        # 한국어 운영자가 검수할 때 바로 알아보게 번역을 별도 말풍선으로 보낸다.
-        from src.models import PhotoCredit
-
-        result = self._make_result(tmp_path, credits=[])
-        result.parts[0].metadata.description_ko = "이 참사는 설계 결함이 원인이었습니다."
-
-        settings = MagicMock()
-        settings.secrets.telegram_bot_token = "x"
-        settings.secrets.telegram_chat_id = "y"
-
-        with patch.object(pipeline, "STATE_DB", tmp_path / "state.sqlite3"), patch(
-            "src.review.telegram_bot.TelegramReviewer"
-        ) as MockReviewer, patch("src.review.telegram_bot.build_summary"):
-            reviewer = MockReviewer.return_value
-            reviewer.enabled = True
-            reviewer.wait_for_decision.return_value = None
-
-            pipeline.review_and_publish(settings, result, wait_seconds=1)
-
-        notified = [call.args[0] for call in reviewer.notify.call_args_list]
-        assert any("이 참사는 설계 결함이 원인이었습니다" in n for n in notified)
-
-    def test_title_candidates_korean_translation_sent_when_present(self, tmp_path):
-        # 사용자 지시(2026-10-01): 제목 후보도 설명처럼 한국어 번역을 별도
-        # 말풍선으로 보낸다.
+    def test_title_candidates_korean_translation_passed_to_summary_when_present(self, tmp_path):
+        # 사용자 지시(2026-10-11): 제목 후보 한국어 번역은 별도 말풍선이 아니라
+        # 승인 요청(build_summary)과 같은 말풍선으로 합쳐 보낸다.
         result = self._make_result(tmp_path, credits=[])
         metadata = result.parts[0].metadata
         metadata.title_ko = "타이타닉, 치명적 설계 결함"
@@ -1159,19 +1151,21 @@ class TestReviewSummarySplitsInfoLines:
 
         with patch.object(pipeline, "STATE_DB", tmp_path / "state.sqlite3"), patch(
             "src.review.telegram_bot.TelegramReviewer"
-        ) as MockReviewer, patch("src.review.telegram_bot.build_summary"):
+        ) as MockReviewer, patch(
+            "src.review.telegram_bot.build_summary"
+        ) as mock_build_summary:
             reviewer = MockReviewer.return_value
             reviewer.enabled = True
             reviewer.wait_for_decision.return_value = None
 
             pipeline.review_and_publish(settings, result, wait_seconds=1)
 
-        notified = [call.args[0] for call in reviewer.notify.call_args_list]
-        title_bubble = next(n for n in notified if "제목 후보(한국어 번역)" in n)
-        assert "타이타닉, 치명적 설계 결함" in title_bubble
-        assert "1,514명을 앗아간 결함" in title_bubble
+        summary_call = mock_build_summary.call_args
+        assert summary_call.args[3] == [
+            "타이타닉, 치명적 설계 결함", "1,514명을 앗아간 결함",
+        ]
 
-    def test_title_candidates_korean_translation_skipped_when_absent(self, tmp_path):
+    def test_title_candidates_korean_translation_empty_when_absent(self, tmp_path):
         result = self._make_result(tmp_path, credits=[])
 
         settings = MagicMock()
@@ -1180,15 +1174,54 @@ class TestReviewSummarySplitsInfoLines:
 
         with patch.object(pipeline, "STATE_DB", tmp_path / "state.sqlite3"), patch(
             "src.review.telegram_bot.TelegramReviewer"
-        ) as MockReviewer, patch("src.review.telegram_bot.build_summary"):
+        ) as MockReviewer, patch(
+            "src.review.telegram_bot.build_summary"
+        ) as mock_build_summary:
             reviewer = MockReviewer.return_value
             reviewer.enabled = True
             reviewer.wait_for_decision.return_value = None
 
             pipeline.review_and_publish(settings, result, wait_seconds=1)
 
+        summary_call = mock_build_summary.call_args
+        assert summary_call.args[3] == []
+
+    def test_approved_title_and_caption_sent_right_after_decision(self, tmp_path):
+        # 사용자 지시(2026-10-11): 승인 접수 직후 선택된 제목(스페인어만) 한
+        # 줄과, 설명+해시태그 5개를 라벨 없이 바로 복붙 가능한 형태로 보낸다.
+        result = self._make_result(tmp_path, credits=[])
+
+        settings = MagicMock()
+        settings.secrets.telegram_bot_token = "x"
+        settings.secrets.telegram_chat_id = "y"
+        settings.get.side_effect = lambda key, default=None: default
+
+        with patch.object(pipeline, "STATE_DB", tmp_path / "state.sqlite3"), patch(
+            "src.review.telegram_bot.TelegramReviewer"
+        ) as MockReviewer, patch("src.review.telegram_bot.build_summary"), patch(
+            "src.publish.youtube_uploader.get_service", return_value=object()
+        ), patch(
+            "src.publish.youtube_uploader.upload_series", return_value=["vid1"]
+        ):
+            reviewer = MockReviewer.return_value
+            reviewer.enabled = True
+            reviewer.wait_for_decision.return_value = ReviewDecision(
+                approved=True, title_index=0
+            )
+
+            pipeline.review_and_publish(settings, result, wait_seconds=1)
+
         notified = [call.args[0] for call in reviewer.notify.call_args_list]
-        assert not any("제목 후보(한국어 번역)" in n for n in notified)
+        assert "제목" in notified
+        caption = next(n for n in notified if "후킹 설명" in n)
+        assert "#historia" in caption
+        assert "#desastres" in caption
+        assert "#catastrofes" in caption
+        assert "#misterio" in caption
+        assert "#datoscuriosos" in caption
+        # 유튜브용 12개 해시태그 목록은 안 섞여 들어간다(텔레그램 전용 5개만).
+        assert "#shorts" not in caption
+        assert "#terror" not in caption
 
     def test_single_video_upload_completion_has_no_part_label(self, tmp_path):
         # 사용자 지시: 통합본은 하나의 영상으로 종결이다. 업로드 완료 메시지가

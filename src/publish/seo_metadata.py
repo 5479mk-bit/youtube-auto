@@ -33,6 +33,13 @@ DISASTER_HASHTAGS = [
     "#ciencia", "#ingenieria", "#terror",
 ]
 
+# 텔레그램 복붙용 캡션 전용 — DISASTER_HASHTAGS(유튜브 메타데이터, 12개)와는
+# 별개로, 틱톡/인스타그램에 손으로 붙여넣을 때는 이 5개만 쓴다(사용자 지시,
+# 2026-10-11).
+TELEGRAM_CAPTION_HASHTAGS = [
+    "#historia", "#desastres", "#catastrofes", "#misterio", "#datoscuriosos",
+]
+
 _COMMON_RULES = """규칙:
 - 제목은 후킹용 한 줄이다. 28자 이내, 숫자를 앞쪽에 배치하고, 낚시가 아니라 실제
   내용과 일치해야 한다. 과장 금지, 데이터에 없는 주장 금지.

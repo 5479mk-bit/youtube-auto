@@ -740,9 +740,11 @@ def review_and_publish(
 
     first = result.parts[0].metadata
     titles = [first.title, *first.title_alternatives]
-    # 제목 후보(+승인 버튼)/설명/한국어 번역/출처/사진 출처/비용을 각각 별도
-    # 말풍선으로 보낸다(사용자 지시, 2026-09-30) — 한 메시지에 다 몰아넣지 않는다.
-    summary = build_summary(result.script.title_seed, titles, result.script.is_sample)
+    # 제목 후보(한국어 번역 포함)+승인 버튼을 한 말풍선으로, 비용은 별도
+    # 말풍선으로 보낸다(사용자 지시, 2026-10-11) — 설명/캡션은 승인 "이후"에
+    # 선택된 제목 기준으로 보낸다(아래 _finish_review).
+    titles_ko = [first.title_ko, *first.title_alternatives_ko] if first.title_ko else []
+    summary = build_summary(result.script.title_seed, titles, result.script.is_sample, titles_ko)
 
     history.save_pending(
         STATE_DB,
@@ -752,36 +754,8 @@ def review_and_publish(
     reviewer.send_review(
         result.task_id, summary, titles, [Path(part.video_path) for part in result.parts]
     )
-    # 제목 후보/설명/비용/멀티플랫폼 캡션만 별도 말풍선으로 보낸다 — 위키백과
-    # 출처 줄과 사진 출처(예: "Fotos: Video generado por IA")는 운영자에게
-    # 의미가 없어 뺐다(사용자 지시, 2026-10-01).
-    titles_ko = [first.title_ko, *first.title_alternatives_ko] if first.title_ko else []
-    if titles_ko:
-        reviewer.notify("제목 후보(한국어 번역)\n" + "\n".join(titles_ko))
-    description = first.hook_description or first.description
-    if description:
-        # notify() 는 parse_mode 를 안 쓰므로 HTML 태그 대신 일반 텍스트 라벨을 쓴다.
-        reviewer.notify(f"설명(스페인어)\n{description}")
-    if first.description_ko:
-        # 채널 언어가 스페인어라 위 설명은 스페인어다 — 한국어 운영자용 번역을
-        # 따로 보낸다(유튜브에는 올라가지 않는다).
-        reviewer.notify(f"설명(한국어 번역)\n{first.description_ko}")
     if result.cost_note:
         reviewer.notify(f"비용 {result.cost_note}")
-
-    # 틱톡/인스타 릴스에 그대로 복붙할 캡션 묶음(사용자 지시, 2026-09-30) —
-    # 유튜브 API로 자동 업로드/자동 댓글을 달지는 않는다(각 플랫폼 자동화는
-    # 이 파이프라인 범위 밖이다), 대신 사람이 바로 붙여넣을 수 있게 준비해서 보낸다.
-    # 고정 댓글 후보 줄은 뺐다(사용자 지시, 2026-10-01).
-    hashtag_line = " ".join(seo_metadata.DISASTER_HASHTAGS)
-    caption_lines = [
-        "멀티플랫폼 캡션(틱톡/릴스용, 복붙)",
-        "",
-        first.title,
-        "",
-        hashtag_line,
-    ]
-    reviewer.notify("\n".join(caption_lines))
 
     decision = reviewer.wait_for_decision(result.task_id, wait_seconds)
     if decision is not None:
@@ -941,6 +915,14 @@ def _finish_review(
     # 사람이 고른 제목을 1부에 반영하고, 2부는 같은 어투로 맞춘다.
     chosen = titles[min(decision.title_index, len(titles) - 1)]
     parts[0].metadata.title = chosen
+
+    # 승인 접수 직후 바로 복붙용 캡션을 보낸다(사용자 지시, 2026-10-11) — 업로드
+    # 성공 여부와 무관하게, 사람이 틱톡/인스타그램에 수동으로 붙여넣을 수 있게.
+    reviewer.notify(chosen)
+    description = parts[0].metadata.hook_description or parts[0].metadata.description
+    if description:
+        hashtag_line = " ".join(seo_metadata.TELEGRAM_CAPTION_HASHTAGS)
+        reviewer.notify(f"{description}\n\n{hashtag_line}")
 
     service = get_service(
         settings.secrets.youtube_client_secret_file, settings.secrets.youtube_token_file
