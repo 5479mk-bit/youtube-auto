@@ -854,6 +854,13 @@ def resume_pending_reviews(settings: Settings, wait_seconds: int) -> dict[str, l
             # 업로드를 시도하기 전에 판정부터 남긴다 — 업로드가 실패해도 방금 받은
             # 승인/거절은 다음 실행에서 재사용된다.
             history.record_decision(STATE_DB, task_id, decision.approved, decision.title_index)
+            # 늦게(이 15분 주기 회차에서야) 받은 승인은 실제 업로드까지 이 함수
+            # 안에서 바로 이어지지만, 사람 입장에선 버튼이 먹혔는지 알 길이 없다
+            # (사용자 지시, 2026-10-11) — 접수 사실을 즉시 알려준다.
+            if decision.approved:
+                reviewer.notify(f"{task_id}: 승인 접수 — 곧 업로드를 시작합니다")
+            else:
+                reviewer.notify(f"{task_id}: 거절 접수")
         decisions.update(fresh)
     if already_decided:
         logger.info(
