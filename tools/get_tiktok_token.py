@@ -2,12 +2,19 @@
 
 사용법:
     1) https://developers.tiktok.com 에서 앱을 만들고 "Content Posting API" 제품을
-       추가한 뒤, client_key/client_secret 을 확인한다.
-    2) 앱의 리다이렉트 URI를 http://localhost:8787/callback 으로 등록한다.
-    3) pip install requests (이미 requirements.txt 에 있다)
-    4) python tools/get_tiktok_token.py <client_key> <client_secret>
-    5) 브라우저가 열리면 업로드할 틱톡 계정으로 로그인·동의한다.
+       추가한다. client_key/client_secret 을 확인한다.
+    2) pip install requests (이미 requirements.txt 에 있다)
+    3) python tools/get_tiktok_token.py <client_key> <client_secret>
+    4) 브라우저가 열리면 업로드할 틱톡 계정으로 로그인·동의한다.
+    5) 인가가 끝나면 코드가 적힌 페이지로 이동한다 — 그 코드를 복사해서
+       터미널에 붙여넣는다.
     6) 리프레시 토큰이 출력된다 — 이 값이 "GitHub Secrets에 넣을 값"이다.
+
+틱톡은 Login Kit 의 redirect_uri 를 앱에 등록한 "Web/Desktop URL" 도메인과
+같은 도메인으로만 허용한다 — localhost 는 그 도메인이 아니라서 거부된다. 그래서
+`http://localhost:8787/callback` 으로 직접 받는 대신, 앱의 Web/Desktop URL 로 등록해
+둔 도메인(5479mk-bit.github.io)의 정적 페이지로 보내고, 거기 화면에 뜨는 코드를
+사람이 직접 복사해서 붙여넣는 방식을 쓴다.
 
 리프레시 토큰은 쓸 때마다 새로 발급되므로(코드가 자동으로 캐시 파일에 최신 값을
 저장한다), 여기서 받는 값은 "최초 시드"일 뿐이다.
@@ -19,18 +26,13 @@ import base64
 import hashlib
 import secrets
 import sys
-import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import parse_qs, urlparse
 
 import requests
 
-REDIRECT_URI = "http://localhost:8787/callback"
+REDIRECT_URI = "https://5479mk-bit.github.io/callback.html"
 AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/"
 TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
 SCOPES = "video.publish"
-
-_received_code: str | None = None
 
 
 def _pkce_pair() -> tuple[str, str]:
@@ -45,16 +47,6 @@ def _pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
-class _CallbackHandler(BaseHTTPRequestHandler):
-    def do_GET(self) -> None:  # noqa: N802 (http.server 관례)
-        global _received_code
-        query = parse_qs(urlparse(self.path).query)
-        _received_code = query.get("code", [None])[0]
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write("인가 완료 — 이 창은 닫아도 됩니다.".encode("utf-8"))
-
-
 def main() -> None:
     if len(sys.argv) != 3:
         print("사용법: python get_tiktok_token.py <client_key> <client_secret>")
@@ -67,14 +59,11 @@ def main() -> None:
         f"&redirect_uri={REDIRECT_URI}&state=get_token"
         f"&code_challenge={code_challenge}&code_challenge_method=S256"
     )
-    print(f"브라우저가 안 열리면 이 주소를 직접 여세요:\n{auth_url}\n")
-    webbrowser.open(auth_url)
+    print(f"아래 주소를 브라우저로 열고, 업로드할 틱톡 계정으로 로그인·동의하세요:\n{auth_url}\n")
 
-    server = HTTPServer(("localhost", 8787), _CallbackHandler)
-    server.handle_request()
-
-    if not _received_code:
-        print("인가 코드를 받지 못했습니다.")
+    received_code = input("동의 후 뜨는 페이지에 표시된 코드를 여기에 붙여넣으세요: ").strip()
+    if not received_code:
+        print("코드가 비어 있습니다.")
         raise SystemExit(1)
 
     response = requests.post(
@@ -82,7 +71,7 @@ def main() -> None:
         data={
             "client_key": client_key,
             "client_secret": client_secret,
-            "code": _received_code,
+            "code": received_code,
             "grant_type": "authorization_code",
             "redirect_uri": REDIRECT_URI,
             "code_verifier": code_verifier,
