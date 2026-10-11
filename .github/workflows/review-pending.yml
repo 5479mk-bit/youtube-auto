@@ -14,6 +14,8 @@ on:
 
 permissions:
   contents: read
+  # 인스타그램 업로드가 GCS 공개 버킷에 접근하려면(WIF, 키 없는 인증) 필요하다.
+  id-token: write
 
 jobs:
   check:
@@ -39,6 +41,15 @@ jobs:
             state.sqlite3
           key: shorts-pending-review-nonexistent-${{ github.run_id }}
           restore-keys: shorts-pending-review-
+
+      # 틱톡/인스타그램 회전 토큰(.cache/platform_tokens.json)이 여기 들어있다.
+      # shorts.yml 이 쓰는 것과 같은 캐시 키라 서로 최신값을 주고받는다.
+      - name: 회전 토큰 캐시 복원
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache
+          key: shorts-cache-nonexistent-${{ github.run_id }}
+          restore-keys: shorts-cache-
 
       - name: 의존성 설치
         run: |
@@ -98,10 +109,31 @@ jobs:
               print(f"[{name}] JSON 파싱 성공, {p.stat().st_size}바이트, 필요한 키 있음={ok}")
           PY
 
+      # 인스타그램 업로드(GCS 공개 버킷에 임시 업로드)에 필요하다 — 틱톡/유튜브는
+      # 이 인증 없이도 동작하므로, WIF 값이 없으면 그냥 건너뛴다(has_gcp 체크 없이
+      # 바로 시도하고 실패하면 로그만 남긴다 — shorts.yml 처럼 사전 점검 스텝을
+      # 따로 두지 않는 건, 이 워크플로는 15분마다 돌아 실패해도 비용 손실이 없다).
+      - name: GCP 인증 (Workload Identity)
+        id: auth
+        if: ${{ (secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || vars.GCP_WORKLOAD_IDENTITY_PROVIDER) != '' }}
+        continue-on-error: true
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT || vars.GCP_SERVICE_ACCOUNT }}
+
       - name: 대기 중인 승인 확인 및 업로드
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || env.TELEGRAM_CHAT_ID }}
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY || env.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET || env.TIKTOK_CLIENT_SECRET }}
+          TIKTOK_REFRESH_TOKEN_SEED: ${{ secrets.TIKTOK_REFRESH_TOKEN_SEED || env.TIKTOK_REFRESH_TOKEN_SEED }}
+          META_APP_ID: ${{ secrets.META_APP_ID || env.META_APP_ID }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET || env.META_APP_SECRET }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN || env.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_BUSINESS_ACCOUNT_ID: ${{ secrets.INSTAGRAM_BUSINESS_ACCOUNT_ID || env.INSTAGRAM_BUSINESS_ACCOUNT_ID }}
+          GCS_PUBLIC_BUCKET: ${{ secrets.GCS_PUBLIC_BUCKET || env.GCS_PUBLIC_BUCKET }}
         run: python main.py review-pending --wait 30
 
       # 승인 처리 결과(state.sqlite3 갱신, 업로드된 회차의 output/ 은 더는 필요
@@ -115,3 +147,10 @@ jobs:
             output
             state.sqlite3
           key: shorts-pending-review-${{ github.run_id }}
+
+      - name: 회전 토큰 캐시 저장
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache
+          key: shorts-cache-${{ github.run_id }}

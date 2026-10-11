@@ -883,9 +883,17 @@ def resume_pending_reviews(settings: Settings, wait_seconds: int) -> dict[str, l
             )
             for part in data["parts"]
         ]
-        results[task_id] = _finish_review(
-            settings, reviewer, task_id, data["is_sample"], parts, data["titles"], decision
-        )
+        try:
+            results[task_id] = _finish_review(
+                settings, reviewer, task_id, data["is_sample"], parts, data["titles"], decision
+            )
+        except Exception:
+            # 한 회차의 업로드가 깨져도(예: 유튜브 토큰 만료) 같은 배치에 있는
+            # 다른 회차들까지 같이 멈추면 안 된다 — 나머지는 처리하고, 이 회차는
+            # 다음 15분 주기에 다시 시도된다(판정은 이미 record_decision 으로
+            # 저장돼 있어 재시도해도 텔레그램에 다시 묻지 않는다).
+            logger.exception(f"{task_id}: 처리 중 오류 — 다음 주기에 다시 시도합니다")
+            results[task_id] = []
     return results
 
 
@@ -952,5 +960,45 @@ def _finish_review(
             f"{index + 1}부: https://www.youtube.com/watch?v={video_id}"
             for index, video_id in enumerate(video_ids)
         )
-    reviewer.notify(f"업로드 완료\n{body}")
+
+    # 틱톡/인스타그램은 유튜브와 완전히 독립이다 — 하나가 실패해도 유튜브 업로드
+    # 결과나 다른 플랫폼 결과에 영향을 주지 않는다(사용자 지시, 2026-10-11).
+    extra_links = _upload_to_extra_platforms(settings, parts[0])
+    reviewer.notify("업로드 완료\n" + "\n".join([body, *extra_links]))
     return video_ids
+
+
+def _upload_to_extra_platforms(settings: Settings, part: RenderedPart) -> list[str]:
+    extra_links: list[str] = []
+    caption = part.metadata.title
+
+    if settings.get("publish.tiktok.enabled", False):
+        try:
+            from .publish import tiktok_uploader
+
+            client = tiktok_uploader.get_client(settings)
+            if client is not None:
+                privacy_level = settings.get("publish.tiktok.privacy_level", "SELF_ONLY")
+                post_id = tiktok_uploader.upload(
+                    client, Path(part.video_path), caption, privacy_level
+                )
+                extra_links.append(f"틱톡({privacy_level}): {post_id}")
+            else:
+                logger.info("[tiktok] 시크릿이 없어 건너뜁니다")
+        except Exception:
+            logger.exception("[tiktok] 업로드 실패 — 유튜브 결과는 그대로 둡니다")
+
+    if settings.get("publish.instagram.enabled", False):
+        try:
+            from .publish import instagram_uploader
+
+            client = instagram_uploader.get_client(settings)
+            if client is not None:
+                media_id = instagram_uploader.upload(client, Path(part.video_path), caption)
+                extra_links.append(f"인스타그램 릴스: {media_id}")
+            else:
+                logger.info("[instagram] 시크릿이 없어 건너뜁니다")
+        except Exception:
+            logger.exception("[instagram] 업로드 실패 — 유튜브 결과는 그대로 둡니다")
+
+    return extra_links

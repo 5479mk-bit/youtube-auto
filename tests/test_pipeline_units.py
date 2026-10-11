@@ -831,8 +831,11 @@ class TestResumePendingReviews:
             reviewer.wait_for_decisions.return_value = {
                 task_id: ReviewDecision(approved=True, title_index=0)
             }
-            with pytest.raises(RuntimeError):
-                pipeline.resume_pending_reviews(settings, 5)
+            # 한 회차의 업로드가 깨져도 resume_pending_reviews 자체는 예외를 삼키고
+            # 계속 진행한다(배치 안 다른 회차가 같이 멈추면 안 되므로) — 이 회차의
+            # 결과만 빈 리스트로 남고, 판정(decided)은 그대로 보존돼 재시도된다.
+            results = pipeline.resume_pending_reviews(settings, 5)
+        assert results == {task_id: []}
 
         # 판정은 'decided' 로 남아야 하고, 다음 실행이 볼 수 있어야 한다.
         actionable = history.list_actionable_reviews(fake_db)

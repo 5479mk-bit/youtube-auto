@@ -31,6 +31,18 @@ class Secrets:
     youtube_token_file: str
     # Vertex AI(구글 클라우드) 인증용 서비스 계정 키 파일. 없으면 ADC 를 찾는다.
     vertex_service_account_file: str = ""
+    # 틱톡 Content Posting API. 리프레시 토큰은 쓸 때마다 새로 발급되므로 이 값은
+    # "최초 시드"일 뿐이고, 실제 최신 값은 캐시 파일(.cache/platform_tokens.json)
+    # 에서 우선 읽는다(tiktok_uploader._load_refresh_token 참고).
+    tiktok_client_key: str = ""
+    tiktok_client_secret: str = ""
+    tiktok_refresh_token_seed: str = ""
+    # 인스타그램(릴스) Graph API. 장기 토큰도 같은 이유로 캐시 파일을 우선 읽는다.
+    meta_app_id: str = ""
+    meta_app_secret: str = ""
+    instagram_access_token: str = ""
+    instagram_business_account_id: str = ""
+    gcs_public_bucket: str = ""
 
 
 class Settings:
@@ -88,5 +100,13 @@ def load_settings(config_path: Path | None = None) -> Settings:
             "YOUTUBE_TOKEN_FILE", "credentials/youtube_token.json"
         ),
         vertex_service_account_file=os.getenv("VERTEX_SERVICE_ACCOUNT_FILE", ""),
+        tiktok_client_key=os.getenv("TIKTOK_CLIENT_KEY", ""),
+        tiktok_client_secret=os.getenv("TIKTOK_CLIENT_SECRET", ""),
+        tiktok_refresh_token_seed=os.getenv("TIKTOK_REFRESH_TOKEN_SEED", ""),
+        meta_app_id=os.getenv("META_APP_ID", ""),
+        meta_app_secret=os.getenv("META_APP_SECRET", ""),
+        instagram_access_token=os.getenv("INSTAGRAM_ACCESS_TOKEN", ""),
+        instagram_business_account_id=os.getenv("INSTAGRAM_BUSINESS_ACCOUNT_ID", ""),
+        gcs_public_bucket=os.getenv("GCS_PUBLIC_BUCKET", ""),
     )
     return Settings(config, secrets)
