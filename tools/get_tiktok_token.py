@@ -15,6 +15,9 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import secrets
 import sys
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -28,6 +31,18 @@ TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
 SCOPES = "video.publish"
 
 _received_code: str | None = None
+
+
+def _pkce_pair() -> tuple[str, str]:
+    # 틱톡이 2024년부터 PKCE를 요구한다 — code_verifier(원본)를 들고 있다가
+    # 토큰 교환 때 같이 보내고, 인가 URL에는 그 해시(code_challenge)만 보낸다.
+    verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
+        .rstrip(b"=")
+        .decode()
+    )
+    return verifier, challenge
 
 
 class _CallbackHandler(BaseHTTPRequestHandler):
@@ -45,10 +60,12 @@ def main() -> None:
         print("사용법: python get_tiktok_token.py <client_key> <client_secret>")
         raise SystemExit(1)
     client_key, client_secret = sys.argv[1], sys.argv[2]
+    code_verifier, code_challenge = _pkce_pair()
 
     auth_url = (
         f"{AUTH_URL}?client_key={client_key}&scope={SCOPES}&response_type=code"
         f"&redirect_uri={REDIRECT_URI}&state=get_token"
+        f"&code_challenge={code_challenge}&code_challenge_method=S256"
     )
     print(f"브라우저가 안 열리면 이 주소를 직접 여세요:\n{auth_url}\n")
     webbrowser.open(auth_url)
@@ -68,6 +85,7 @@ def main() -> None:
             "code": _received_code,
             "grant_type": "authorization_code",
             "redirect_uri": REDIRECT_URI,
+            "code_verifier": code_verifier,
         },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=30,
