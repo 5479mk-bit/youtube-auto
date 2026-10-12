@@ -61,6 +61,16 @@ permissions:
   contents: read
   id-token: write
 
+# review-pending.yml 과 같은 텔레그램 봇 토큰으로 getUpdates 롱폴을 돈다. 텔레그램은
+# 같은 토큰에 동시에 한 프로세스만 호출해야 한다는 제약이 있다 — 둘이 겹치면 한쪽이
+# 받은 업데이트(승인 버튼 콜백)를 서버가 확인 처리해버려 다른 쪽은 다시 못 받는다.
+# 이게 "승인했는데도 반응이 없다"의 실제 원인이었다(2026-10-12 확인 — 9/30부터 쌓인
+# 대기 7건이 전부 15분 주기에 한 번도 안 걸렸다). 두 워크플로에 같은 concurrency
+# 그룹을 걸어 폴링 구간이 겹치지 않고 순서대로만 돌게 한다.
+concurrency:
+  group: telegram-review-poll
+  cancel-in-progress: false
+
 jobs:
   render:
     runs-on: ubuntu-latest

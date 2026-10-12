@@ -17,6 +17,14 @@ permissions:
   # 인스타그램 업로드가 GCS 공개 버킷에 접근하려면(WIF, 키 없는 인증) 필요하다.
   id-token: write
 
+# shorts.yml 과 같은 텔레그램 봇 토큰으로 getUpdates 롱폴을 돈다 — 동시에 돌면 한쪽이
+# 받은 승인 콜백을 서버가 확인 처리해버려 다른 쪽은 다시 못 받는다("승인했는데도 반응
+# 없음"의 실제 원인, 2026-10-12 확인). shorts.yml 과 같은 concurrency 그룹을 걸어
+# 렌더 중(최대 90분)에는 이 워크플로가 큐에서 기다렸다가 순서대로 돈다.
+concurrency:
+  group: telegram-review-poll
+  cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
