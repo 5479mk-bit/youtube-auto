@@ -17,6 +17,7 @@ from .datasource.datagokr import DataGoKrClient
 from .heritage import heritage_media
 from . import assets
 from . import disasters
+from .disasters import discovery as disaster_discovery
 from .models import PhotoCredit, RenderedPart, Script, ScriptPart, StoryCandidate, write_json
 from .motion.veo_budget import VeoBudget
 from .motion.veo_client import VeoClient
@@ -77,8 +78,23 @@ def select_topic(settings: Settings, ignore_history: bool = False) -> StoryCandi
     elif source == "disaster":
         # used 를 넘겨 이미 다룬 제목은 위키백과 호출 자체를 건너뛴다 — 목록 전체를
         # 매번 조회하다 429 로 한꺼번에 막히는 사고를 줄인다(run #51 참고).
+        discovered: list[str] = []
+        discover_cfg = settings.get("topics.disaster.discover", {}) or {}
+        if discover_cfg.get("enabled", False):
+            discovered = disaster_discovery.shuffled(
+                disaster_discovery.discover_titles(
+                    discover_cfg.get("roots", []),
+                    CACHE_DIR / "disaster_titles.json",
+                    discover_cfg.get("max_depth", 2),
+                    discover_cfg.get("max_titles", 400),
+                )
+            )
+            # 이미 쓴 제목은 위키백과 본문 호출 전에 걸러진다(collect_candidates).
         candidates = disasters.collect_candidates(
-            settings.get("topics.disaster.titles", []), used
+            settings.get("topics.disaster.titles", []),
+            used,
+            discovered,
+            discover_cfg.get("per_run_candidates", 6),
         )
         weights = settings.get("topics.disaster.weights", {})
     else:

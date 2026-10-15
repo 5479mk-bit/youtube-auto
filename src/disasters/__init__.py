@@ -1,7 +1,7 @@
 """전 세계 자연재해·해외 인재(人災) 소재 — 위키백과 기반.
 
-`src/sillok/` 과 같은 원칙이다: 전체 자동 발굴은 아직 없고, 사람이 고른 실제 사건
-제목 목록(config.yaml `topics.disaster.titles`)으로 시작한다.
+사람이 고른 제목 목록(config.yaml `topics.disaster.titles`)을 먼저 쓰고, 바닥나면
+`discovery.py` 가 위키백과 분류에서 자동으로 발굴한 제목으로 이어간다.
 
 **대한민국 내 인재는 원천 배제한다** — 세월호·천안함·삼풍백화점·성수대교·이태원 등.
 유가족이 계신 민감한 사안이라는 원칙(23단계에서도 같은 이유로 국내 인재를 뺐다)을
@@ -38,7 +38,23 @@ _BLOCKED_KR_TITLES = {
 }
 
 
-def collect_candidates(titles: list[str], used: set[str] = frozenset()) -> list[StoryCandidate]:
+# 발굴(discovery)한 제목은 사람이 확인하지 않았으니 본문 앞부분에 이 단어가 있으면 국내
+# 사건으로 보고 버린다(세월호 등 목록에 없는 변형까지 거르는 마지막 방어선).
+_KR_BODY_MARKERS = ("대한민국", "한국에서", "한국의 ", "서울특별시", "경상북도", "경상남도", "전라남도", "전라북도", "충청남도", "충청북도", "경기도", "강원도")
+_KR_BODY_SCAN_CHARS = 500
+
+
+def _looks_domestic(text: str) -> bool:
+    head = text[:_KR_BODY_SCAN_CHARS]
+    return any(marker in head for marker in _KR_BODY_MARKERS)
+
+
+def collect_candidates(
+    titles: list[str],
+    used: set[str] = frozenset(),
+    discovered: list[str] = (),
+    max_candidates: int | None = None,
+) -> list[StoryCandidate]:
     """`used`(이미 다룬 topic_key 집합)에 들어있는 제목은 위키백과 호출 자체를
     건너뛴다 — 목록이 길어질수록(지금 16개) 매 회차 전부를 순서대로 조회하다가
     위키미디어 429(Too Many Requests)에 한꺼번에 걸려 후보가 0개로 떨어진 사고가
@@ -46,7 +62,10 @@ def collect_candidates(titles: list[str], used: set[str] = frozenset()) -> list[
     남은 제목들 사이에도 0.3초를 둬 같은 초에 몰리지 않게 한다."""
     candidates = []
     first = True
-    for title in titles:
+    curated = set(titles)
+    for title in [*titles, *(t for t in discovered if t not in curated)]:
+        if max_candidates is not None and len(candidates) >= max_candidates:
+            break
         if title in _BLOCKED_KR_TITLES:
             logger.warning(f"[disasters] '{title}' 은 국내 인재라 후보에서 제외합니다")
             continue
@@ -60,6 +79,10 @@ def collect_candidates(titles: list[str], used: set[str] = frozenset()) -> list[
         text = wikipedia_enrich.fetch_full_text(title)
         if not text:
             logger.warning(f"[disasters] '{title}' 위키백과 본문을 가져오지 못했습니다")
+            continue
+
+        if title not in curated and _looks_domestic(text):
+            logger.warning(f"[disasters] '{title}' 은 국내 사건으로 보여 제외합니다")
             continue
 
         facts = [paragraph.strip() for paragraph in text.split("\n\n") if paragraph.strip()]
