@@ -156,6 +156,13 @@ class TelegramReviewer:
     def notify(self, text: str) -> None:
         self._call("sendMessage", {"chat_id": self.chat_id, "text": text})
 
+    def send_video(self, path: Path, caption: str = "") -> None:
+        """영상 한 편만 보낸다(검수 카드 없이). 실패해도 예외를 던지지 않는다."""
+        try:
+            self._send_video(path, caption)
+        except Exception as exc:
+            logger.warning(f"영상 전송 실패({path.name}): {exc}")
+
     def _send_video(self, path: Path, caption: str) -> None:
         send_path = path
         compressed: Path | None = None

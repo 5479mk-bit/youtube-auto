@@ -1279,3 +1279,65 @@ class TestReviewSummarySplitsInfoLines:
         ][0]
         assert "1부:" not in completion
         assert "https://www.youtube.com/watch?v=vid1" in completion
+
+
+class TestAutoPublish:
+    """2026-10-16: review.auto_publish 가 켜지면 승인 없이 바로 올리고, 텔레그램에는
+    '업로드 완료' → 영상 → 설명(+해시태그)만 보낸다."""
+
+    def _result(self, tmp_path):
+        return TestReviewSummarySplitsInfoLines()._make_result(tmp_path, [])
+
+    def _settings(self):
+        settings = MagicMock()
+        settings.secrets.telegram_bot_token = "x"
+        settings.secrets.telegram_chat_id = "y"
+        settings.get.side_effect = lambda key, default=None: (
+            True if key == "review.auto_publish" else default
+        )
+        return settings
+
+    def test_uploads_without_waiting_and_sends_only_notice_video_description(self, tmp_path):
+        result = self._result(tmp_path)
+
+        with patch.object(pipeline, "STATE_DB", tmp_path / "state.sqlite3"), patch(
+            "src.review.telegram_bot.TelegramReviewer"
+        ) as MockReviewer, patch(
+            "src.publish.youtube_uploader.get_service", return_value=object()
+        ), patch(
+            "src.publish.youtube_uploader.upload_series", return_value=["vid1"]
+        ), patch.object(pipeline, "_upload_to_extra_platforms", return_value=[]):
+            reviewer = MockReviewer.return_value
+            reviewer.enabled = True
+            ids = pipeline.review_and_publish(self._settings(), result, wait_seconds=1)
+
+        assert ids == ["vid1"]
+        reviewer.send_review.assert_not_called()
+        reviewer.wait_for_decision.assert_not_called()
+
+        notified = [call.args[0] for call in reviewer.notify.call_args_list]
+        assert len(notified) == 2
+        assert notified[0].startswith("업로드 완료") and "vid1" in notified[0]
+        assert "후킹 설명" in notified[1] and "#" in notified[1]  # 설명 + 해시태그
+        reviewer.send_video.assert_called_once()
+        assert history.list_actionable_reviews(tmp_path / "state.sqlite3") == []
+
+    def test_upload_failure_notifies_and_stays_retryable(self, tmp_path):
+        result = self._result(tmp_path)
+        db = tmp_path / "state.sqlite3"
+
+        with patch.object(pipeline, "STATE_DB", db), patch(
+            "src.review.telegram_bot.TelegramReviewer"
+        ) as MockReviewer, patch(
+            "src.publish.youtube_uploader.get_service", return_value=object()
+        ), patch(
+            "src.publish.youtube_uploader.upload_series", side_effect=RuntimeError("quota")
+        ):
+            reviewer = MockReviewer.return_value
+            reviewer.enabled = True
+            with pytest.raises(RuntimeError):
+                pipeline.review_and_publish(self._settings(), result, wait_seconds=1)
+
+        assert any("실패" in call.args[0] for call in reviewer.notify.call_args_list)
+        # 판정이 남아 있어 review-pending 이 같은 판정으로 업로드만 재시도한다.
+        assert [r["status"] for r in history.list_actionable_reviews(db)] == ["decided"]

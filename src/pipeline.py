@@ -756,6 +756,33 @@ def review_and_publish(
 
     first = result.parts[0].metadata
     titles = [first.title, *first.title_alternatives]
+
+    # 사용자 지시(2026-10-16): 텔레그램 승인 없이 바로 올리고, 텔레그램에는 "올렸다"는
+    # 알림과 영상, 설명(해시태그 포함)만 보낸다. 제목은 1순위 후보(titles[0])를 쓴다.
+    # `is True` — 설정 객체가 목(mock)이어도 켜진 것으로 오해하지 않게 한다.
+    if settings.get("review.auto_publish", False) is True:
+        from .review.telegram_bot import ReviewDecision
+
+        history.save_pending(
+            STATE_DB,
+            result.task_id,
+            {"topic_key": result.candidate.topic_key, "titles": titles},
+        )
+        # 판정부터 남긴다 — 업로드가 실패해도 review-pending 이 같은 판정으로 재시도한다.
+        decision = ReviewDecision(approved=True, title_index=0)
+        history.record_decision(STATE_DB, result.task_id, True, 0)
+        try:
+            return _finish_review(
+                settings, reviewer, result.task_id, result.script.is_sample,
+                result.parts, titles, decision, auto=True,
+            )
+        except Exception as exc:
+            try:
+                reviewer.notify(f"⚠️ 자동 업로드에 실패했습니다 ({result.task_id})\n{exc}")
+            except Exception:
+                logger.warning("자동 업로드 실패 알림도 보내지 못했습니다")
+            raise
+
     # 제목 후보(한국어 번역 포함)+승인 버튼을 한 말풍선으로, 비용은 별도
     # 말풍선으로 보낸다(사용자 지시, 2026-10-11) — 설명/캡션은 승인 "이후"에
     # 선택된 제목 기준으로 보낸다(아래 _finish_review).
@@ -902,6 +929,7 @@ def _finish_review(
     parts: list[RenderedPart],
     titles: list[str],
     decision,
+    auto: bool = False,
 ) -> list[str]:
     from .publish.youtube_uploader import SampleDataUploadBlocked, get_service, upload_series
 
@@ -934,11 +962,15 @@ def _finish_review(
 
     # 승인 접수 직후 바로 복붙용 캡션을 보낸다(사용자 지시, 2026-10-11) — 업로드
     # 성공 여부와 무관하게, 사람이 틱톡/인스타그램에 수동으로 붙여넣을 수 있게.
-    reviewer.notify(chosen)
     description = parts[0].metadata.hook_description or parts[0].metadata.description
+    caption_text = ""
     if description:
         hashtag_line = " ".join(seo_metadata.TELEGRAM_CAPTION_HASHTAGS)
-        reviewer.notify(f"{description}\n\n{hashtag_line}")
+        caption_text = f"{description}\n\n{hashtag_line}"
+    if not auto:
+        reviewer.notify(chosen)
+        if caption_text:
+            reviewer.notify(caption_text)
 
     service = get_service(
         settings.secrets.youtube_client_secret_file, settings.secrets.youtube_token_file
@@ -970,6 +1002,12 @@ def _finish_review(
     # 결과나 다른 플랫폼 결과에 영향을 주지 않는다(사용자 지시, 2026-10-11).
     extra_links = _upload_to_extra_platforms(settings, parts[0])
     reviewer.notify("업로드 완료\n" + "\n".join([body, *extra_links]))
+    if auto:
+        # 자동 업로드는 알림 → 영상 → 설명(+해시태그) 순으로, 그 외엔 보내지 않는다.
+        for part in parts:
+            reviewer.send_video(Path(part.video_path), caption=part.metadata.title)
+        if caption_text:
+            reviewer.notify(caption_text)
     return video_ids
 
 

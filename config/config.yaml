@@ -250,6 +250,12 @@ visuals:
     parallax_amount: 0.10   # 팬/시프트 시 최대 시차(화면 폭 대비)
     dolly_amount: 0.30       # 푸시인/풀아웃 시 깊이별 배율 차이
 
+review:
+  # 2026-10-16(사용자 지시): true 면 텔레그램 승인을 기다리지 않고 바로 업로드한다.
+  # 텔레그램에는 "업로드 완료" 알림, 영상, 설명(해시태그 포함)만 보낸다. 제목은 1순위 후보.
+  # false 로 되돌리면 예전처럼 제목 후보+승인 버튼을 보내고 승인 후에 올린다.
+  auto_publish: true
+
 publish:
   privacy_status: private
   category_id: "25"  # News & Politics
