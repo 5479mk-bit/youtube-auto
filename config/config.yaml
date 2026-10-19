@@ -257,7 +257,7 @@ review:
   auto_publish: true
 
 publish:
-  privacy_status: private
+  privacy_status: public   # 2026-10-19 사용자 지시: 자동 업로드를 바로 공개로
   category_id: "25"  # News & Politics
   # 업로드마다 자동으로 넣을 재생목록. 없으면 채널에 새로 만든다(사용자 지시).
   # 채널 언어를 스페인어로 전환(2026-09-30)하면서 재생목록 이름도 시청자에게
