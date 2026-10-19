@@ -1578,3 +1578,18 @@ def test_disasters_collect_candidates_fetches_all_when_used_empty():
 
     assert mock_fetch.call_count == 2
     assert len(candidates) == 2
+
+
+def test_veo_text_to_video_omits_start_image(tmp_path):
+    # 2026-10-19: "그림 자체가 크게 움직여야" — text_to_video 면 시작 이미지를 보내지 않는다.
+    from unittest.mock import MagicMock
+
+    from src.motion.veo_client import VeoClient
+
+    image = tmp_path / "frame.png"
+    image.write_bytes(b"fake")
+    t2v = VeoClient("k", MagicMock(), text_to_video=True)
+    i2v = VeoClient("k", MagicMock())
+
+    assert "image" not in t2v._instance(image, "p", "image/png")
+    assert "image" in i2v._instance(image, "p", "image/png")

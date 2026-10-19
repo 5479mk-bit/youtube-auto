@@ -196,11 +196,12 @@ def _official_video_clip(path: Path, scene: Scene, size: tuple[int, int]):
 
 
 VEO_MOTION_BOOST = (
-    ". Explosive, dynamic motion from the very first frame — no slow start, nothing static: "
-    "fast aggressive camera movement (rapid FPV drone dive, whip pan or sudden crash zoom), "
-    "violent real-time action filling the frame — debris flying toward the camera, water "
-    "surging, smoke and fire billowing, the structure shaking, cracking and collapsing, "
-    "heavy camera shake and motion blur"
+    ". The scene itself moves violently and massively from the very first frame — this is "
+    "the main point, not the camera: the structure visibly cracks, buckles and collapses, "
+    "huge chunks break off and fall, water floods in and sweeps things away, fire and smoke "
+    "erupt and spread, the ground splits and heaves, debris flies everywhere. Big, continuous, "
+    "large-scale physical motion across the whole frame, nothing stays still. A fast camera "
+    "move (FPV dive, whip pan or crash zoom) on top of that"
 )
 
 

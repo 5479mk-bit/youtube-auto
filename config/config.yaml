@@ -310,6 +310,9 @@ cloud:
   stop_when_exhausted: true
 
 veo:
+  # 2026-10-19: "그림 자체가 크게 움직여야" — 시작 이미지 없이 문장만으로 영상을 만든다.
+  # 움직임은 훨씬 커지지만 디오라마 스타일 일관성은 프롬프트 문구에만 의존한다.
+  text_to_video: true
   tier: lite            # lite | fast | standard — 단가가 8배까지 벌어진다
   # 1080p 는 Veo 3.1 에서 8초 클립만 지원해 4초 클립과 함께 쓸 수 없다(2026-10-19 검토).
   resolution: 720p

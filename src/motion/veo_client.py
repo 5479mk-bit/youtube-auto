@@ -59,8 +59,13 @@ class VeoClient:
         vertex: "VertexConfig | None" = None,
         auth: "VertexAuth | None" = None,
         spend_guard=None,
+        text_to_video: bool = False,
     ):
         self.api_key = api_key
+        # True 면 시작 이미지를 보내지 않는다(text-to-video). 이미지에서 출발하면 Veo 가
+        # 원본 그림을 거의 그대로 두어 "그림 자체가 크게 움직이지 않는" 문제가 있었다
+        # (2026-10-19 사용자 피드백). 이미지는 여전히 만들어 두어 실패 시 파랄랙스로 쓴다.
+        self.text_to_video = text_to_video
         self.budget = budget
         self.tier = tier
         self.resolution = resolution
@@ -99,6 +104,8 @@ class VeoClient:
             "durationSeconds": str(self.duration_seconds),
             "model": self.model,
         }
+        if self.text_to_video:
+            params["mode"] = "text_to_video"  # 캐시 키를 image-to-video 결과와 분리
         key = self.budget.cache_key(image_path, prompt, params)
 
         cached = self.budget.cached_clip(key)
@@ -139,6 +146,18 @@ class VeoClient:
         raw_path.unlink(missing_ok=True)
         return final_path
 
+    def _instance(self, image_path: Path, prompt: str, mime_type: str) -> dict:
+        instance: dict = {"prompt": prompt}
+        if not self.text_to_video:
+            # predictLongRunning 은 Gemini 생성 API 의 inlineData 형식을 안 받는다
+            # ("`inlineData` isn't supported by this model"). 이 엔드포인트는
+            # bytesBase64Encoded 를 쓴다.
+            instance["image"] = {
+                "bytesBase64Encoded": base64.b64encode(image_path.read_bytes()).decode("ascii"),
+                "mimeType": mime_type,
+            }
+        return instance
+
     def _generate_vertex(self, image_path: Path, prompt: str, params: dict, dest: Path) -> None:
         """Vertex 경로. 요청 → fetchPredictOperation 폴링 → base64 영상 저장.
 
@@ -149,15 +168,7 @@ class VeoClient:
         mime_type = mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
         payload = {
             "instances": [
-                {
-                    "prompt": prompt,
-                    "image": {
-                        "bytesBase64Encoded": base64.b64encode(image_path.read_bytes()).decode(
-                            "ascii"
-                        ),
-                        "mimeType": mime_type,
-                    },
-                }
+                self._instance(image_path, prompt, mime_type)
             ],
             "parameters": {
                 "aspectRatio": params["aspectRatio"],
@@ -227,18 +238,7 @@ class VeoClient:
         mime_type = mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
         payload = {
             "instances": [
-                {
-                    "prompt": prompt,
-                    # predictLongRunning 은 Gemini 생성 API 의 inlineData 형식을 안 받는다
-                    # ("`inlineData` isn't supported by this model"). 이 엔드포인트는
-                    # bytesBase64Encoded 를 쓴다.
-                    "image": {
-                        "bytesBase64Encoded": base64.b64encode(
-                            image_path.read_bytes()
-                        ).decode("ascii"),
-                        "mimeType": mime_type,
-                    },
-                }
+                self._instance(image_path, prompt, mime_type)
             ],
             "parameters": {
                 "aspectRatio": params["aspectRatio"],

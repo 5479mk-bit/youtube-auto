@@ -340,6 +340,7 @@ def build_veo_client(settings: Settings, spend_guard: SpendGuard | None = None) 
         vertex=vertex,
         auth=auth,
         spend_guard=spend_guard or build_spend_guard(settings),
+        text_to_video=settings.get("veo.text_to_video", False) is True,
     )
 
 

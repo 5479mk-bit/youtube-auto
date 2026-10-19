@@ -519,8 +519,10 @@ rápidos según la escena:
 - "fast whip pan across ..." (barrido brusco)
 - "sudden crash zoom into ..." (zoom de golpe)
 - "violent handheld shake as ..." (cámara temblando con el impacto)
-Y describe **acción grande y visible**: escombros volando hacia la cámara, agua irrumpiendo,
-fuego y humo estallando, la estructura temblando y desplomándose en tiempo real.
+**Lo más importante no es la cámara sino que la escena misma se mueva en grande**: describe
+una acción física enorme y continua — la estructura que se parte y se derrumba, bloques
+enormes cayendo, agua arrasando, fuego y humo extendiéndose, el suelo abriéndose, escombros
+volando. Si en la frase no pasa nada físico, elige el momento de la historia donde sí pase.
 
 **El principio de veracidad se mantiene igual.** Lo que cambia es "cómo se muestra", no "qué
 pasó". No dibujes escenas que no estén en el texto fuente.
