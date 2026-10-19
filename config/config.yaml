@@ -317,7 +317,9 @@ cloud:
   balance_adjust_krw: 33000
   credit_krw: 354417   # balance_krw 가 있으면 쓰지 않는다(예전 방식)
   reserve_krw: 20000
-  stop_when_exhausted: true
+  # 2026-10-19(사용자 지시): 장부 기반 지출 제한을 폐기한다. 잔액은 사용자가 직접 추적하고,
+  # 크레딧이 있는 다른 API 를 알려주면 그때 바꾼다. 다시 켜려면 true 로(위 balance_* 값부터 갱신).
+  stop_when_exhausted: false
 
 veo:
   # 2026-10-19: "그림 자체가 크게 움직여야" — 시작 이미지 없이 문장만으로 영상을 만든다.

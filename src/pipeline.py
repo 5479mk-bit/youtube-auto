@@ -1018,9 +1018,10 @@ def _finish_review(
         # 크레딧 장부가 어긋나지 않았는지 사람이 늘 볼 수 있게 같은 알림에 붙인다.
         try:
             guard = build_spend_guard(settings)
-            notice += f"\n\n💰 {guard.summary()}"
-            if guard.remaining_krw < 40_000:
-                notice += "\n⚠️ 크레딧이 얼마 안 남았습니다 — GCP 콘솔 잔액으로 장부를 다시 맞춰 주세요"
+            if guard.enabled:  # 장부 제한을 끄면(2026-10-19) 잔액 줄도 붙이지 않는다
+                notice += f"\n\n💰 {guard.summary()}"
+                if guard.remaining_krw < 40_000:
+                    notice += "\n⚠️ 크레딧이 얼마 안 남았습니다 — GCP 콘솔 잔액으로 장부를 다시 맞춰 주세요"
         except Exception as exc:
             logger.warning(f"크레딧 요약을 알림에 붙이지 못했습니다: {exc}")
     reviewer.notify(notice)
