@@ -288,9 +288,20 @@ def build_tts_engines(settings: Settings) -> list:
 
 def build_spend_guard(settings: Settings) -> SpendGuard:
     """크레딧 원장. 남은 금액이 모자라면 생성 호출 자체를 막는다."""
+    # 콘솔에서 읽은 실제 잔액(cloud.balance_krw)이 있으면 그걸 기준으로 삼고, 그 시각
+    # (cloud.balance_as_of) 이후의 원장 지출만 뺀다. balance_adjust_krw 는 원장에 기록되지
+    # 못한 지출(캐시 저장 버그 기간)을 보수적으로 미리 뺀 값이다 — 다시 맞출 때 0 으로.
+    balance = settings.get("cloud.balance_krw", None)
+    if isinstance(balance, (int, float)):
+        credit = int(balance) - int(settings.get("cloud.balance_adjust_krw", 0) or 0)
+        baseline_at = str(settings.get("cloud.balance_as_of", "") or "") or None
+    else:
+        credit = settings.get("cloud.credit_krw", 0)
+        baseline_at = None
     return SpendGuard(
         ledger_path=CACHE_DIR / "spend_ledger.json",
-        credit_krw=settings.get("cloud.credit_krw", 0),
+        baseline_at=baseline_at,
+        credit_krw=credit,
         reserve_krw=settings.get("cloud.reserve_krw", 20000),
         enabled=bool(settings.get("cloud.stop_when_exhausted", True)),
     )
@@ -1002,7 +1013,17 @@ def _finish_review(
     # 틱톡/인스타그램은 유튜브와 완전히 독립이다 — 하나가 실패해도 유튜브 업로드
     # 결과나 다른 플랫폼 결과에 영향을 주지 않는다(사용자 지시, 2026-10-11).
     extra_links = _upload_to_extra_platforms(settings, parts[0])
-    reviewer.notify("업로드 완료\n" + "\n".join([body, *extra_links]))
+    notice = "업로드 완료\n" + "\n".join([body, *extra_links])
+    if auto:
+        # 크레딧 장부가 어긋나지 않았는지 사람이 늘 볼 수 있게 같은 알림에 붙인다.
+        try:
+            guard = build_spend_guard(settings)
+            notice += f"\n\n💰 {guard.summary()}"
+            if guard.remaining_krw < 40_000:
+                notice += "\n⚠️ 크레딧이 얼마 안 남았습니다 — GCP 콘솔 잔액으로 장부를 다시 맞춰 주세요"
+        except Exception as exc:
+            logger.warning(f"크레딧 요약을 알림에 붙이지 못했습니다: {exc}")
+    reviewer.notify(notice)
     if auto:
         # 자동 업로드는 알림 → 영상 → 설명(+해시태그) 순으로, 그 외엔 보내지 않는다.
         for part in parts:

@@ -1341,3 +1341,44 @@ class TestAutoPublish:
         assert any("실패" in call.args[0] for call in reviewer.notify.call_args_list)
         # 판정이 남아 있어 review-pending 이 같은 판정으로 업로드만 재시도한다.
         assert [r["status"] for r in history.list_actionable_reviews(db)] == ["decided"]
+
+
+class TestSpendGuardBaseline:
+    """2026-10-19: 콘솔의 실제 잔액을 기준으로 장부를 다시 맞춘다."""
+
+    def test_baseline_counts_only_entries_after_it(self, tmp_path):
+        import json
+
+        from src.cloud.spend_guard import SpendGuard
+
+        ledger = tmp_path / "ledger.json"
+        ledger.write_text(json.dumps({
+            "total_krw": 150_000,
+            "entries": [
+                {"when": "2026-10-18T10:00:00", "kind": "veo", "krw": 100_000, "note": ""},
+                {"when": "2026-10-19T03:00:00", "kind": "veo", "krw": 10_000, "note": ""},
+                {"when": "2026-10-19T04:00:00", "kind": "veo", "krw": 40_000, "note": ""},
+            ],
+        }), encoding="utf-8")
+
+        guard = SpendGuard(ledger, credit_krw=91_000, reserve_krw=20_000,
+                           baseline_at="2026-10-19T00:00:00")
+        assert guard.spent_krw == 50_000          # 10/18 분은 콘솔 잔액에 이미 반영됨
+        assert guard.remaining_krw == 91_000 - 20_000 - 50_000
+
+        legacy = SpendGuard(ledger, credit_krw=354_417, reserve_krw=20_000)
+        assert legacy.spent_krw == 150_000        # baseline 없으면 예전처럼 누적 전체
+
+    def test_build_spend_guard_uses_console_balance_minus_adjustment(self):
+        settings = MagicMock()
+        values = {
+            "cloud.balance_krw": 124096, "cloud.balance_adjust_krw": 33000,
+            "cloud.balance_as_of": "2026-10-19T00:00:00", "cloud.reserve_krw": 20000,
+            "cloud.stop_when_exhausted": True, "cloud.credit_krw": 354417,
+        }
+        settings.get.side_effect = lambda key, default=None: values.get(key, default)
+
+        guard = pipeline.build_spend_guard(settings)
+
+        assert guard.credit_krw == 124096 - 33000
+        assert guard.baseline_at == "2026-10-19T00:00:00"

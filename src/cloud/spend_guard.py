@@ -40,16 +40,27 @@ class SpendGuard:
         credit_krw: int,
         reserve_krw: int = 5_000,
         enabled: bool = True,
+        baseline_at: str | None = None,
     ):
         self.ledger_path = ledger_path
         self.credit_krw = int(credit_krw)
         # 추정치가 실제보다 낮게 잡힐 수 있어 여유를 남긴다. 이 금액은 안 쓴다.
         self.reserve_krw = int(reserve_krw)
         self.enabled = enabled
+        # 콘솔에서 읽은 실제 잔액을 `credit_krw` 로 넣고, 그 시각(ISO) 이후에 원장에 쌓인
+        # 지출만 뺀다. 원장 전체 누적을 쓰면 원장이 빠뜨린 과거 지출과 어긋난다.
+        self.baseline_at = baseline_at
 
     @property
     def spent_krw(self) -> int:
-        return int(self._load().get("total_krw", 0))
+        data = self._load()
+        if self.baseline_at:
+            return sum(
+                int(entry.get("krw", 0))
+                for entry in data.get("entries", [])
+                if str(entry.get("when", "")) >= self.baseline_at
+            )
+        return int(data.get("total_krw", 0))
 
     @property
     def usable_krw(self) -> int:
