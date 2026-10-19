@@ -608,11 +608,13 @@ def test_disaster_prompt_is_formal_tone():
     assert '"overlay"' in GLOBAL_DISASTER_PROMPT_KO_UNUSED
 
 
-def test_disaster_prompt_is_spanish_and_formal():
+def test_disaster_prompt_is_spanish_and_intense():
+    # 2026-10-19 사용자 지시: 더 격정적이고 어그로 끌게 — "진지한 톤, 감탄사 금지"에서
+    # 긴박한 예고편 내레이터 톤으로 바꿨다.
     from src.script.script_writer import GLOBAL_DISASTER_PROMPT
 
     assert "en español" in GLOBAL_DISASTER_PROMPT
-    assert "tono informal" in GLOBAL_DISASTER_PROMPT
+    assert "Voz intensa, urgente y cinematográfica" in GLOBAL_DISASTER_PROMPT
     assert '"overlay"' in GLOBAL_DISASTER_PROMPT
     # 나레이션 문장은 스페인어지만, 이미지/영상 생성 프롬프트는 그대로 영어여야
     # 한다(모델이 영어만 이해한다) — 스타일 문구가 안 깨졌는지 확인.
@@ -1410,8 +1412,9 @@ def test_veo_clip_pads_instead_of_speed_scaling_when_close_to_scene_duration():
 def test_disaster_prompt_requires_minimum_veo_count():
     from src.script.script_writer import GLOBAL_DISASTER_PROMPT
 
-    assert "Mínimo 4 frases por parte" in GLOBAL_DISASTER_PROMPT
-    assert "mínimo 8 en total" in GLOBAL_DISASTER_PROMPT
+    # 2026-10-19: 영상 비율을 높이라는 지시로 부당 4→6 문장.
+    assert "Mínimo 6 frases por parte" in GLOBAL_DISASTER_PROMPT
+    assert "mínimo 12 en total" in GLOBAL_DISASTER_PROMPT
 
 
 def test_render_subtitle_returns_cropped_bbox_not_full_frame():

@@ -83,9 +83,11 @@ JSON 만 출력한다:
 # disaster 데이터셋 전용 스페인어판. 위 PROMPT/COMBINED_PROMPT(한국어, sillok/heritage
 # 용)는 지우지 않는다 — 다른 소재로 되돌릴 때를 위해 남겨둔다.
 _COMMON_RULES_ES = """Reglas:
-- El título es una sola línea que engancha. Máximo 28 caracteres, con el número o dato más
-  fuerte al principio; debe coincidir con el contenido real, sin ser clickbait engañoso.
-  Nada exagerado ni afirmaciones que no estén en los datos.
+- El título es una sola línea **que obliga a hacer clic**. Máximo 28 caracteres. Usa la
+  fórmula más agresiva que los datos permitan: el número más brutal al principio, una palabra
+  clave en MAYÚSCULAS, una brecha de curiosidad ("Nadie lo detuvo", "La orden que lo
+  mató todo"), o un contraste chocante. Los 3 candidatos deben usar ganchos distintos entre
+  sí. Todo lo que diga el título debe ser cierto según los datos — impactante sí, falso nunca.
 - Nunca uses el nombre de un canal ni ninguna marca en el título ni en la descripción.
 - El campo description tiene 2-3 líneas. La primera es una frase que engancha y deja
   curiosidad ("Este desastre todavía no tiene una causa del todo aclarada"); las siguientes

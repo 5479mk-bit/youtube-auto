@@ -456,10 +456,15 @@ Parte 2:
 [TONO — esto es lo más importante]
 - Español neutro, natural para toda Latinoamérica (evita modismos muy locales de un solo país
   y evita el "vosotros" de España).
-- Voz seria y confiable — nada de exclamaciones exageradas.
-- **Prohibido el tono informal/juvenil exagerado.** Nada de "¡wow!", "increíble",
-  "no lo vas a creer" — la sorpresa la transmiten los hechos y los números, no las
-  interjecciones.
+- **Voz intensa, urgente y cinematográfica** — como el narrador de un tráiler de catástrofe.
+  Cada frase empuja hacia la siguiente; nunca suena a clase ni a enciclopedia.
+- Usa recursos de tensión: hablarle directo al espectador ("Imagina estar ahí"), cuenta
+  regresiva de tiempo ("Les quedaban 40 segundos"), contrastes brutales ("Lo creían
+  indestructible. Duró 3 horas."), y preguntas que pican ("¿Quién firmó esa orden?").
+- Puedes usar exclamaciones cortas en los momentos de mayor impacto (máximo 2 por parte),
+  pero la fuerza principal viene de los hechos y números reales, dichos con crudeza.
+- Nada de relleno ni de frases neutras — si una frase no genera tensión, curiosidad o golpe
+  emocional, reescríbela o elimínala.
 - Cada frase: **entre 6 y 12 palabras** (unos 1.5-3 segundos al leerla en voz alta), corta y
   directa. Sin puntos suspensivos; como máximo una coma por frase.
 - Las frases se leen de corrido, sin cortes — conectores como "pero", "y entonces", "por eso"
@@ -475,13 +480,13 @@ sobre un piso de estudio gris con cuadrícula**, y cuando haga falta, se muestra
 transversal (cutaway)** del terreno, el casco o las paredes. Cada frase elige una de dos rutas
 (`scene_type`).
 
-- "VEO": video real en movimiento. **Mínimo 4 frases por parte (mínimo 8 en total en todo el
-  video)** — el video entero depende de que haya bastante movimiento real y no solo imágenes
-  fijas, así que este mínimo tiene prioridad alta. Alterna con AI_IMAGE cuando se pueda (que
-  VEO no se repita tres veces seguidas). La primera frase de la parte 1 siempre es VEO. Úsalo
-  en frases donde **el movimiento es la clave** — agua que fluye, gas que se acumula, la
-  estructura que se agrieta.
-- "AI_IMAGE": el resto. El movimiento de cámara se agrega automáticamente en el render.
+- "VEO": video real en movimiento. **Mínimo 6 frases por parte (mínimo 12 en total en todo el
+  video) — la mayoría de la pantalla debe ser video en movimiento, no imágenes fijas.** Este
+  mínimo tiene prioridad alta. VEO puede ir seguido varias veces. La primera frase de la
+  parte 1 y la frase de clímax de cada parte siempre son VEO. Úsalo sobre todo donde hay
+  acción — agua que irrumpe, fuego, explosión, gas que se acumula, la estructura que se parte.
+- "AI_IMAGE": solo las frases tranquilas de explicación que quedan. El movimiento de cámara se
+  agrega automáticamente en el render.
 
 La pantalla alterna entre **tres distancias**, sin repetir la misma tres veces seguidas.
 - Plano general: vista aérea de toda la maqueta ("aerial view of a miniature diorama of ...")

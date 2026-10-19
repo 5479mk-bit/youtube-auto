@@ -310,6 +310,7 @@ cloud:
 
 veo:
   tier: lite            # lite | fast | standard — 단가가 8배까지 벌어진다
+  # 1080p 는 Veo 3.1 에서 8초 클립만 지원해 4초 클립과 함께 쓸 수 없다(2026-10-19 검토).
   resolution: 720p
   # 레퍼런스는 컷 하나가 3~4초다. 8초 클립 하나 값으로 4초 클립 두 개를 만들어
   # 움직이는 컷 수를 두 배로 늘린다(Veo 는 초 단위 과금).
@@ -325,8 +326,9 @@ veo:
   min_scene_seconds: 4
   # lite 8초 기준 클립당 약 590원. 편당 4클립이면 약 2,400원, 하루 1편이면 월 약 7만원.
   # 부당 VEO 5~6문장(4초) × 2부.
-  max_clips_per_episode: 12
-  max_clips_per_day: 24
+  # 2026-10-19: 영상 비율을 높이며(부당 VEO 6문장 이상) 상한을 올렸다.
+  max_clips_per_episode: 14
+  max_clips_per_day: 28
 
 # 무료 경로. 깊이를 추정해 카메라가 장면 안으로 들어간다.
 parallax:
