@@ -511,14 +511,16 @@ del cierre anterior: "dramatic catastrophic collapse, structure disintegrating i
 debris, intense destruction". No lo uses en frases tranquilas de explicación — solo en el
 punto más alto de tensión de cada parte, para que el contraste con el resto se sienta.
 
-**[Movimiento de cámara para VEO]**
-En las frases VEO, agrega uno de estos movimientos de cámara según la escena (en inglés,
-dentro del prompt). La cámara se mueve suave, y **el movimiento lo generan el agua, el humo,
-los escombros o las burbujas dentro de la escena.**
-- "slow aerial drone push-in toward ..." (acercamiento lento desde el plano general)
-- "slow orbit around the diorama" (giro lento alrededor de la maqueta)
-- "smooth dolly along the cross-section" (deslizamiento lateral siguiendo el corte)
-- "slow push-in to macro detail" (acercamiento lento a un detalle)
+**[Movimiento de cámara para VEO — rápido y violento desde el primer fotograma]**
+En las frases VEO, la escena **ya está en plena acción desde el primer instante** — nada de
+arranques lentos ni cámara quieta. Agrega en el prompt (en inglés) uno de estos movimientos
+rápidos según la escena:
+- "rapid FPV drone dive straight into ..." (picada veloz hacia el centro del desastre)
+- "fast whip pan across ..." (barrido brusco)
+- "sudden crash zoom into ..." (zoom de golpe)
+- "violent handheld shake as ..." (cámara temblando con el impacto)
+Y describe **acción grande y visible**: escombros volando hacia la cámara, agua irrumpiendo,
+fuego y humo estallando, la estructura temblando y desplomándose en tiempo real.
 
 **El principio de veracidad se mantiene igual.** Lo que cambia es "cómo se muestra", no "qué
 pasó". No dibujes escenas que no estén en el texto fuente.

@@ -247,8 +247,9 @@ visuals:
   # 어긋나며 지나간다. 재난 소재는 사진 기본값(parallax.shift 0.06/parallax.dolly
   # 0.12)보다 더 세게 민다.
   ai_image_motion:
-    parallax_amount: 0.10   # 팬/시프트 시 최대 시차(화면 폭 대비)
-    dolly_amount: 0.30       # 푸시인/풀아웃 시 깊이별 배율 차이
+    # 2026-10-19: "움직임이 너무 제한적" 피드백으로 약 2배로 키웠다.
+    parallax_amount: 0.16   # 팬/시프트 시 최대 시차(화면 폭 대비)
+    dolly_amount: 0.55       # 푸시인/풀아웃 시 깊이별 배율 차이
 
 review:
   # 2026-10-16(사용자 지시): true 면 텔레그램 승인을 기다리지 않고 바로 업로드한다.

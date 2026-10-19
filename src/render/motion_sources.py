@@ -195,6 +195,15 @@ def _official_video_clip(path: Path, scene: Scene, size: tuple[int, int]):
     return _pad_to_duration(clip.resized(size), scene.duration)
 
 
+VEO_MOTION_BOOST = (
+    ". Explosive, dynamic motion from the very first frame — no slow start, nothing static: "
+    "fast aggressive camera movement (rapid FPV drone dive, whip pan or sudden crash zoom), "
+    "violent real-time action filling the frame — debris flying toward the camera, water "
+    "surging, smoke and fire billowing, the structure shaking, cracking and collapsing, "
+    "heavy camera shake and motion blur"
+)
+
+
 def _veo_clip(veo_client, image_path: Path, scene: Scene, size: tuple[int, int]):
     from ..motion.veo_client import VeoError
 
@@ -204,6 +213,11 @@ def _veo_clip(veo_client, image_path: Path, scene: Scene, size: tuple[int, int])
     prompt = scene.prompt or VEO_PROMPT.format(
         subject=scene.image_query_ko or scene.image_query_en
     )
+    if scene.prompt:
+        # 2026-10-19 사용자 피드백: "움직임이 너무 제한적이라 움직이는 것 같지 않다 —
+        # 처음부터 시원하게". 디오라마 정지 이미지에서 출발하는 image-to-video 라 Veo 가
+        # 장면을 거의 그대로 두는 경향이 있어, 대본이 뭘 쓰든 강한 움직임 지시를 덧붙인다.
+        prompt = f"{prompt}{VEO_MOTION_BOOST}"
     try:
         clip_path = veo_client.animate(image_path, prompt)
     except VeoError as exc:

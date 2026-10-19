@@ -110,6 +110,12 @@ def make_parallax_clip(
             camera, eased, xs, ys, depth, center_x, center_y, width, height, parallax, dolly
         )
 
+        # 이동량만큼 살짝 확대해서(오버스캔) 화면 밖을 덜 끌어온다 — 움직임을 키우면
+        # 가장자리 픽셀이 늘어나 번지는 게 보이기 때문이다(2026-10-19).
+        overscan = 1.0 + parallax
+        src_x = center_x + (src_x - center_x) / overscan
+        src_y = center_y + (src_y - center_y) / overscan
+
         # 역방향 샘플링이라 구멍이 거의 생기지 않는다. 가장자리는 잘라내지 않고 붙든다.
         xi = np.clip(src_x, 0, width - 1).astype(np.int32)
         yi = np.clip(src_y, 0, height - 1).astype(np.int32)
