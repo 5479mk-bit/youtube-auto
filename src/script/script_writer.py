@@ -368,10 +368,10 @@ VEO 문장의 prompt 에는 아래 중 장면에 맞는 카메라 무브먼트�
 
 
 GLOBAL_DISASTER_PROMPT = """Eres guionista, en español, de una serie de Shorts verticales
-para un canal de infografías de ingeniería en estilo 3D. A continuación hay un desastre o
+para un canal de imágenes cinematográficas hiperrealistas de desastres a escala épica. A continuación hay un desastre o
 accidente real; el texto de referencia viene de Wikipedia **en coreano** — tu trabajo es
-traducirlo con precisión y narrarlo en español. **Este video es una pieza cerrada de máximo
-90 segundos — NO es una serie de dos episodios separados que se publican por separado.** Más
+traducirlo con precisión y narrarlo en español. **Este video es una pieza cerrada de 40 a 50
+segundos — NO es una serie de dos episodios separados que se publican por separado.** Más
 abajo, en [ESTRUCTURA], "parte 1"/"parte 2" son solo una división interna para escribir el
 guion; el espectador ve un único video continuo de principio a fin, sin corte.
 
@@ -439,6 +439,8 @@ Parte 2:
 - Explica **por qué falló la ingeniería o la estructura**, como si miraras el interior (solo
   con base en el texto fuente).
 - Coloca el hecho más decisivo como clímax hacia el final.
+- **Bucle**: la última frase de la parte 2 debe enlazar de forma natural con la primera frase
+  de la parte 1 (que el final invite a volver a ver el inicio sin notar el corte).
 - Cierra con una nota que siga resonando en el presente ("Y este problema, hoy en día, sigue
   sin resolverse" — solo si el texto lo respalda). Si no hay base para eso, cierra con una
   frase de conclusión serena.
@@ -446,9 +448,10 @@ Parte 2:
   respuesta no está en el texto, dilo con claridad ("La causa exacta todavía no se ha
   esclarecido") y continúa.
 - Parte 1: unos {part1_chars} caracteres en total. Parte 2: unos {part2_chars} caracteres en
-  total. **Cada parte, entre 8 y 10 frases (objetos JSON).** **El límite de caracteres tiene
+  total. **Cada parte, entre 5 y 6 frases (objetos JSON).** **El límite de caracteres tiene
   prioridad sobre cualquier otra regla** — al ritmo actual de narración, pasarse de esa cifra
-  hace que el video supere los 90 segundos. Después de escribir todo, cuenta los caracteres y,
+  hace que el video supere los 50 segundos — los Shorts cortos se ven completos y se repiten,
+  y eso es lo que el algoritmo premia. Después de escribir todo, cuenta los caracteres y,
   si te pasaste más de un 20%, fusiona frases o elimina las menos importantes (sin tocar los
   puntos obligatorios de [ESTRUCTURA]: el gancho inicial, el giro, el clímax y la última
   frase).
@@ -474,42 +477,42 @@ Parte 2:
   (ej. "1978", "98 m", "1.514 personas", "grieta"). Solo en **3 o 4 frases por parte**; el
   resto, cadena vacía. Debe ser un número o palabra que aparezca literalmente en esa frase.
 
-[PANTALLA — concepto de 'diorama de ingeniería 3D' obligatorio]
-No se usan fotos reales. La escena del desastre se representa como una **maqueta 3D miniatura
-sobre un piso de estudio gris con cuadrícula**, y cuando haga falta, se muestra un **corte
-transversal (cutaway)** del terreno, el casco o las paredes. Cada frase elige una de dos rutas
+[PANTALLA — fotografía cinematográfica hiperrealista a escala épica (obligatorio)]
+Cada plano es **una sola imagen impactante, hiperrealista, como una foto aérea de cine**: la
+escena real del desastre vista con una escala abrumadora, cielo tormentoso y nublado, niebla,
+luz natural dramática. Nada de maquetas, diagramas, cortes transversales ni anotaciones. El
+espectador debe pensar "¿esto es real?" en el primer segundo. Cada frase elige una ruta
 (`scene_type`).
 
-- "VEO": video real en movimiento. **Mínimo 6 frases por parte (mínimo 12 en total en todo el
-  video) — la mayoría de la pantalla debe ser video en movimiento, no imágenes fijas.** Este
-  mínimo tiene prioridad alta. VEO puede ir seguido varias veces. La primera frase de la
-  parte 1 y la frase de clímax de cada parte siempre son VEO. Úsalo sobre todo donde hay
-  acción — agua que irrumpe, fuego, explosión, gas que se acumula, la estructura que se parte.
-- "AI_IMAGE": solo las frases tranquilas de explicación que quedan. El movimiento de cámara se
-  agrega automáticamente en el render.
+- "VEO": video real en movimiento. **Mínimo 4 frases por parte (mínimo 8 en total)** — casi
+  todo el video debe ser movimiento real. VEO puede ir seguido. La primera frase de la parte 1
+  y la frase de clímax de cada parte siempre son VEO.
+- "AI_IMAGE": solo si queda alguna frase tranquila. El movimiento se agrega en el render.
 
-La pantalla alterna entre **tres distancias**, sin repetir la misma tres veces seguidas.
-- Plano general: vista aérea de toda la maqueta ("aerial view of a miniature diorama of ...")
-- Corte: vista del interior — capas, tuberías, flujo de agua ("cross-section cutaway of ...")
-- Primer plano: grietas, burbujas, agujas de instrumentos ("macro close-up of ...")
+**Primer plano del video (la primera frase) = la imagen de portada.** En el feed de Shorts y
+en la cuadrícula del canal se ve este fotograma: tiene que ser el plano más espectacular y
+"imposible" de todo el video — una vista aérea amplia donde la escala del desastre se vea de un
+golpe (el barco gigante entero partiéndose, la ola más alta que los edificios, la ciudad
+entera bajo el agua). Composición limpia con un solo sujeto claro en el centro.
 
-`prompt` es un prompt **en inglés** (el modelo de imagen/video solo entiende inglés) que se
-llena solo cuando `scene_type` es VEO o AI_IMAGE.
-**[Advertencia: no dejes la escena vacía]** El prompt debe empezar siempre describiendo **con
-detalle el objeto o escena de esa frase** (ej. "cross-section cutaway of the Titanic hull with
-seawater flooding the forward compartments"). Después agrega una **anotación técnica en rojo**
-adecuada a la escena ("bold red arrows showing the water flow", "red dimension lines measuring
-the hull breach", "red pressure gauge" — flechas, líneas de medida, medidores o marcas X, la
-que corresponda).
-Y al final agrega siempre, tal cual, con una coma antes:
-  ", stylized 3D miniature diorama on a neutral gray grid studio floor, clean
-   clay-render materials, dark cinematic lighting, glowing deep red light spilling through
-   cracks and fractures, harsh high-contrast red and black color grading, bold red technical
-   annotations, photoreal engineering explainer, 8k, no watermark"
+Alterna entre **tres tipos de plano**, sin repetir el mismo tres veces seguidas:
+- Aéreo épico: dron muy alto, toda la escena y su escala ("epic aerial drone shot of ...")
+- Contrapicado monumental: desde abajo, el objeto gigantesco domina el cielo ("low-angle shot
+  looking up at the colossal ...")
+- Detalle real: un primer plano fotográfico que cuenta la historia ("close-up photo of ...")
+
+`prompt` es un prompt **en inglés** (el modelo solo entiende inglés) que se llena solo cuando
+`scene_type` es VEO o AI_IMAGE. Empieza siempre describiendo **con detalle el sujeto real de
+esa frase** (ej. "epic aerial drone shot of the Titanic breaking in half in the dark North
+Atlantic, lifeboats scattered on the black water"). Y al final agrega siempre, tal cual, con una
+coma antes:
+  ", hyper-realistic cinematic photograph, epic sense of scale, dramatic overcast stormy sky,
+   moody natural color grading, volumetric mist, ultra-detailed, shot on ARRI Alexa, 8k,
+   photorealistic, no text, no watermark"
 En las frases de clímax/revelación (el momento más fuerte de cada parte), añade además, antes
 del cierre anterior: "dramatic catastrophic collapse, structure disintegrating into dust and
-debris, intense destruction". No lo uses en frases tranquilas de explicación — solo en el
-punto más alto de tensión de cada parte, para que el contraste con el resto se sienta.
+debris, intense destruction". No lo uses en frases tranquilas — solo en el punto más alto de
+tensión de cada parte, para que el contraste se sienta.
 
 **[Movimiento de cámara para VEO — rápido y violento desde el primer fotograma]**
 En las frases VEO, la escena **ya está en plena acción desde el primer instante** — nada de
@@ -640,7 +643,7 @@ def _prompt(candidate: StoryCandidate, part1_chars: int, part2_chars: int) -> st
 # 지시를 무시하고 2~5문장짜리 얇은 대본을 내면(3중 후킹 구조가 통째로 들어갈 자리가
 # 없다), 파싱은 성공해도 여기서 걸러 템플릿 폴백으로 넘긴다 — "검증 없이 통과되던
 # 얇은 대본"이 실제 원인이었다.
-_DISASTER_MIN_LINES_PER_PART = 8
+_DISASTER_MIN_LINES_PER_PART = 5  # 2026-10-19: 40~50초 포맷으로 부당 5~6문장
 # VEO 컷은 4초짜리 영상이 통째로 생성된다. 문장이 너무 짧으면 대사가 1~2초 만에 끝나
 # 나머지는 무음으로 채워진다. 12자 미만이면 4초를 채우기엔 짧다고 보고 템플릿 폴백으로
 # 넘긴다(프롬프트는 12~22음절을 요구한다).
@@ -906,9 +909,9 @@ FALLBACK_IMAGE_PROMPT = (
 
 # 재난 소재(3D 엔지니어링 단면도) 전용 고정 스타일. LLM 이 없을 때만 쓰인다.
 ENGINEERING_DIAGRAM_STYLE = (
-    "stylized 3D miniature diorama on a neutral gray grid studio floor, clean "
-    "clay-render materials, soft studio lighting, bold red technical "
-    "annotations, photoreal engineering explainer, 8k, no watermark"
+    "hyper-realistic cinematic photograph, epic sense of scale, dramatic overcast stormy "
+    "sky, moody natural color grading, volumetric mist, ultra-detailed, 8k, photorealistic, "
+    "no text, no watermark"
 )
 FALLBACK_DISASTER_IMAGE_PROMPT = (
     f"a large structure with visible structural damage and cracks, "

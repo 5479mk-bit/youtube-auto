@@ -615,10 +615,13 @@ def test_disaster_prompt_is_spanish_and_intense():
 
     assert "en español" in GLOBAL_DISASTER_PROMPT
     assert "Voz intensa, urgente y cinematográfica" in GLOBAL_DISASTER_PROMPT
+    assert "40 a 50" in GLOBAL_DISASTER_PROMPT  # 2026-10-20: 짧은 포맷
     assert '"overlay"' in GLOBAL_DISASTER_PROMPT
     # 나레이션 문장은 스페인어지만, 이미지/영상 생성 프롬프트는 그대로 영어여야
     # 한다(모델이 영어만 이해한다) — 스타일 문구가 안 깨졌는지 확인.
-    assert "photoreal engineering explainer" in GLOBAL_DISASTER_PROMPT
+    # 2026-10-20: 디오라마 → 레퍼런스(15segundosmas) 같은 초실사 시네마틱 스타일.
+    assert "hyper-realistic cinematic photograph" in GLOBAL_DISASTER_PROMPT
+    assert "miniature diorama" not in GLOBAL_DISASTER_PROMPT
 
 
 def test_disaster_prompt_has_mystery_hook_and_high_contrast_destruction_style():
@@ -628,8 +631,7 @@ def test_disaster_prompt_has_mystery_hook_and_high_contrast_destruction_style():
     from src.script.script_writer import GLOBAL_DISASTER_PROMPT
 
     assert "no lo inventes" in GLOBAL_DISASTER_PROMPT  # 없는 음모론은 지어내지 않는다
-    assert "glowing deep red light" in GLOBAL_DISASTER_PROMPT
-    assert "high-contrast red and black" in GLOBAL_DISASTER_PROMPT
+    assert "dramatic overcast stormy sky" in GLOBAL_DISASTER_PROMPT
     assert "disintegrating into dust" in GLOBAL_DISASTER_PROMPT
 
 
@@ -1412,9 +1414,9 @@ def test_veo_clip_pads_instead_of_speed_scaling_when_close_to_scene_duration():
 def test_disaster_prompt_requires_minimum_veo_count():
     from src.script.script_writer import GLOBAL_DISASTER_PROMPT
 
-    # 2026-10-19: 영상 비율을 높이라는 지시로 부당 4→6 문장.
-    assert "Mínimo 6 frases por parte" in GLOBAL_DISASTER_PROMPT
-    assert "mínimo 12 en total" in GLOBAL_DISASTER_PROMPT
+    # 2026-10-20: 부당 5~6문장 포맷이라 VEO 최소 4문장(전체 8) — 거의 전부 영상.
+    assert "Mínimo 4 frases por parte" in GLOBAL_DISASTER_PROMPT
+    assert "mínimo 8 en total" in GLOBAL_DISASTER_PROMPT
 
 
 def test_render_subtitle_returns_cropped_bbox_not_full_frame():
@@ -1459,7 +1461,7 @@ def test_generate_retries_once_before_falling_back_to_template():
         def complete_json(self, prompt, temperature=0.9):
             calls["n"] += 1
             if calls["n"] == 1:
-                return _raw_script(part1_lines=7, part2_lines=7)  # 최소 미달
+                return _raw_script(part1_lines=4, part2_lines=4)  # 최소(5) 미달
             return _raw_script(part1_lines=10, part2_lines=10)  # 재시도는 통과
 
     script = script_writer.generate(candidate, FlakyProvider(), 420, 460, 0.9)
@@ -1479,7 +1481,7 @@ def test_generate_falls_back_to_template_after_two_failed_attempts():
 
     class AlwaysShortProvider:
         def complete_json(self, prompt, temperature=0.9):
-            return _raw_script(part1_lines=7, part2_lines=7)
+            return _raw_script(part1_lines=4, part2_lines=4)
 
     script = script_writer.generate(candidate, AlwaysShortProvider(), 420, 460, 0.9)
     # 템플릿 폴백 특유의 훅 문장("esto ocurrió de verdad")이 나오면 폴백이 맞다.
