@@ -66,6 +66,10 @@ def collect_candidates(
     for title in [*titles, *(t for t in discovered if t not in curated)]:
         if max_candidates is not None and len(candidates) >= max_candidates:
             break
+        # 사람이 고른 제목이 하나라도 후보가 됐으면 발굴 제목은 섞지 않는다 — 섞으면
+        # 점수(본문 길이)로 밀려 사람이 지정한 주제가 안 나올 수 있다(2026-10-20).
+        if title not in curated and candidates:
+            break
         if title in _BLOCKED_KR_TITLES:
             logger.warning(f"[disasters] '{title}' 은 국내 인재라 후보에서 제외합니다")
             continue

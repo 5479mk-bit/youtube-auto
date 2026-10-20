@@ -115,7 +115,8 @@ _COMMON_RULES_ES = """Reglas:
   automáticamente después — no los incluyas en description.
 - En el campo hashtags escribe exactamente 3 hashtags en español **específicos de este tema**
   (el nombre del suceso, el lugar o el tipo de desastre — ej. "#Titanic", "#naufragio",
-  "#AtlanticoNorte"), sin espacios, cada uno empezando con #. Nada genérico.
+  "#AtlanticoNorte"), sin espacios, cada uno empezando con #. Nada genérico. **Uno de los 3
+  debe ser siempre el país donde ocurrió** (ej. "#Francia", "#Japón", "#EstadosUnidos").
 - Además, en el campo description_ko escribe una traducción fiel al coreano del campo
   description (sin agregar ni quitar información, misma cantidad de líneas). Es solo para
   que el equipo (que no lee español) revise el contenido antes de publicar — nunca se sube
@@ -227,7 +228,8 @@ def _parse(
 
     if candidate.dataset == "disaster":
         # 사용자 지시: LLM 이 고르지 않는다 — 이 다섯 개로 고정한다.
-        tags = list(DISASTER_HASHTAGS)
+        # 주제 맞춤 해시태그(나라·사건명)를 유튜브 태그 앞에도 붙인다(2026-10-20).
+        tags = list(dict.fromkeys(hashtags + list(DISASTER_HASHTAGS)))
     else:
         tags = [str(tag).strip() for tag in raw.get("tags", []) if str(tag).strip()]
         tags = list(dict.fromkeys(tags + default_tags))[:15]
