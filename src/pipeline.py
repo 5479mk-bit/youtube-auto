@@ -977,7 +977,7 @@ def _finish_review(
     description = parts[0].metadata.hook_description or parts[0].metadata.description
     caption_text = ""
     if description:
-        hashtag_line = " ".join(seo_metadata.TELEGRAM_CAPTION_HASHTAGS)
+        hashtag_line = " ".join(seo_metadata.caption_hashtags(parts[0].metadata))
         caption_text = f"{description}\n\n{hashtag_line}"
     if not auto:
         reviewer.notify(chosen)

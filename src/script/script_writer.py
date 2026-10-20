@@ -370,7 +370,7 @@ VEO 문장의 prompt 에는 아래 중 장면에 맞는 카메라 무브먼트�
 GLOBAL_DISASTER_PROMPT = """Eres guionista, en español, de una serie de Shorts verticales
 para un canal de imágenes cinematográficas hiperrealistas de desastres a escala épica. A continuación hay un desastre o
 accidente real; el texto de referencia viene de Wikipedia **en coreano** — tu trabajo es
-traducirlo con precisión y narrarlo en español. **Este video es una pieza cerrada de 40 a 50
+traducirlo con precisión y narrarlo en español. **Este video es una pieza cerrada de 60 a 70
 segundos — NO es una serie de dos episodios separados que se publican por separado.** Más
 abajo, en [ESTRUCTURA], "parte 1"/"parte 2" son solo una división interna para escribir el
 guion; el espectador ve un único video continuo de principio a fin, sin corte.
@@ -448,9 +448,9 @@ Parte 2:
   respuesta no está en el texto, dilo con claridad ("La causa exacta todavía no se ha
   esclarecido") y continúa.
 - Parte 1: unos {part1_chars} caracteres en total. Parte 2: unos {part2_chars} caracteres en
-  total. **Cada parte, entre 5 y 6 frases (objetos JSON).** **El límite de caracteres tiene
+  total. **Cada parte, entre 7 y 8 frases (objetos JSON).** **El límite de caracteres tiene
   prioridad sobre cualquier otra regla** — al ritmo actual de narración, pasarse de esa cifra
-  hace que el video supere los 50 segundos — los Shorts cortos se ven completos y se repiten,
+  hace que el video supere los 70 segundos — los Shorts cortos se ven completos y se repiten,
   y eso es lo que el algoritmo premia. Después de escribir todo, cuenta los caracteres y,
   si te pasaste más de un 20%, fusiona frases o elimina las menos importantes (sin tocar los
   puntos obligatorios de [ESTRUCTURA]: el gancho inicial, el giro, el clímax y la última
@@ -484,7 +484,7 @@ luz natural dramática. Nada de maquetas, diagramas, cortes transversales ni ano
 espectador debe pensar "¿esto es real?" en el primer segundo. Cada frase elige una ruta
 (`scene_type`).
 
-- "VEO": video real en movimiento. **Mínimo 4 frases por parte (mínimo 8 en total)** — casi
+- "VEO": video real en movimiento. **Mínimo 5 frases por parte (mínimo 10 en total)** — casi
   todo el video debe ser movimiento real. VEO puede ir seguido. La primera frase de la parte 1
   y la frase de clímax de cada parte siempre son VEO.
 - "AI_IMAGE": solo si queda alguna frase tranquila. El movimiento se agrega en el render.
@@ -643,7 +643,7 @@ def _prompt(candidate: StoryCandidate, part1_chars: int, part2_chars: int) -> st
 # 지시를 무시하고 2~5문장짜리 얇은 대본을 내면(3중 후킹 구조가 통째로 들어갈 자리가
 # 없다), 파싱은 성공해도 여기서 걸러 템플릿 폴백으로 넘긴다 — "검증 없이 통과되던
 # 얇은 대본"이 실제 원인이었다.
-_DISASTER_MIN_LINES_PER_PART = 5  # 2026-10-19: 40~50초 포맷으로 부당 5~6문장
+_DISASTER_MIN_LINES_PER_PART = 6  # 2026-10-20: 60~70초 포맷으로 부당 7~8문장
 # VEO 컷은 4초짜리 영상이 통째로 생성된다. 문장이 너무 짧으면 대사가 1~2초 만에 끝나
 # 나머지는 무음으로 채워진다. 12자 미만이면 4초를 채우기엔 짧다고 보고 템플릿 폴백으로
 # 넘긴다(프롬프트는 12~22음절을 요구한다).

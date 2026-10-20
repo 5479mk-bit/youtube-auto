@@ -615,7 +615,7 @@ def test_disaster_prompt_is_spanish_and_intense():
 
     assert "en español" in GLOBAL_DISASTER_PROMPT
     assert "Voz intensa, urgente y cinematográfica" in GLOBAL_DISASTER_PROMPT
-    assert "40 a 50" in GLOBAL_DISASTER_PROMPT  # 2026-10-20: 짧은 포맷
+    assert "60 a 70" in GLOBAL_DISASTER_PROMPT  # 2026-10-20: 사용자 지시 60초 이상
     assert '"overlay"' in GLOBAL_DISASTER_PROMPT
     # 나레이션 문장은 스페인어지만, 이미지/영상 생성 프롬프트는 그대로 영어여야
     # 한다(모델이 영어만 이해한다) — 스타일 문구가 안 깨졌는지 확인.
@@ -1414,9 +1414,9 @@ def test_veo_clip_pads_instead_of_speed_scaling_when_close_to_scene_duration():
 def test_disaster_prompt_requires_minimum_veo_count():
     from src.script.script_writer import GLOBAL_DISASTER_PROMPT
 
-    # 2026-10-20: 부당 5~6문장 포맷이라 VEO 최소 4문장(전체 8) — 거의 전부 영상.
-    assert "Mínimo 4 frases por parte" in GLOBAL_DISASTER_PROMPT
-    assert "mínimo 8 en total" in GLOBAL_DISASTER_PROMPT
+    # 2026-10-20: 부당 7~8문장 포맷이라 VEO 최소 5문장(전체 10).
+    assert "Mínimo 5 frases por parte" in GLOBAL_DISASTER_PROMPT
+    assert "mínimo 10 en total" in GLOBAL_DISASTER_PROMPT
 
 
 def test_render_subtitle_returns_cropped_bbox_not_full_frame():
@@ -1595,3 +1595,23 @@ def test_veo_text_to_video_omits_start_image(tmp_path):
 
     assert "image" not in t2v._instance(image, "p", "image/png")
     assert "image" in i2v._instance(image, "p", "image/png")
+
+
+def test_caption_hashtags_topic_three_plus_fixed_two():
+    # 2026-10-20: 캡션 해시태그 5개 = 주제 맞춤 3개 + 고정 2개, 없으면 기존 5개.
+    from src.models import VideoMetadata
+    from src.publish import seo_metadata
+
+    meta = VideoMetadata(title="t", title_alternatives=[], description="d", tags=[],
+                         hashtags=["#Titanic", "#naufragio", "#AtlanticoNorte"])
+    assert seo_metadata.caption_hashtags(meta) == [
+        "#Titanic", "#naufragio", "#AtlanticoNorte", "#desastres", "#misterio"]
+    empty = VideoMetadata(title="t", title_alternatives=[], description="d", tags=[])
+    assert seo_metadata.caption_hashtags(empty) == seo_metadata.TELEGRAM_CAPTION_HASHTAGS
+
+
+def test_description_rules_forbid_spoilers():
+    from src.publish.seo_metadata import DISASTER_PROMPT_ES
+
+    assert "Prohibido el spoiler" in DISASTER_PROMPT_ES
+    assert '"hashtags"' in DISASTER_PROMPT_ES

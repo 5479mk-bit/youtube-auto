@@ -224,6 +224,8 @@ class VideoMetadata:
     # (사용자 지시, 2026-09-30). 유튜브 API 로 자동 댓글을 달지는 않는다 — 텔레그램
     # 으로 같이 보내 사람이 직접 고정한다.
     pinned_comment: str = ""
+    # 텔레그램 복붙 캡션용 주제 맞춤 해시태그(LLM 이 3개, 2026-10-20). 고정 2개와 합쳐 5개.
+    hashtags: list[str] = field(default_factory=list)
 
 
 @dataclass

@@ -39,6 +39,16 @@ DISASTER_HASHTAGS = [
 TELEGRAM_CAPTION_HASHTAGS = [
     "#historia", "#desastres", "#catastrofes", "#misterio", "#datoscuriosos",
 ]
+# 2026-10-20: 캡션 해시태그 5개 = 주제 맞춤 3개(LLM) + 넓은 고정 2개. 주제 태그가 검색·추천에
+# 걸리고, 고정 태그가 채널 카테고리를 묶는다. LLM 이 못 주면 위 5개로 돌아간다.
+TELEGRAM_CAPTION_FIXED_HASHTAGS = ["#desastres", "#misterio"]
+
+
+def caption_hashtags(metadata) -> list[str]:
+    topic = [tag for tag in getattr(metadata, "hashtags", []) or [] if tag not in TELEGRAM_CAPTION_FIXED_HASHTAGS]
+    if len(topic) < 3:
+        return list(TELEGRAM_CAPTION_HASHTAGS)
+    return topic[:3] + TELEGRAM_CAPTION_FIXED_HASHTAGS
 
 _COMMON_RULES = """규칙:
 - 제목은 후킹용 한 줄이다. 28자 이내, 숫자를 앞쪽에 배치하고, 낚시가 아니라 실제
@@ -89,13 +99,23 @@ _COMMON_RULES_ES = """Reglas:
   mató todo"), o un contraste chocante. Los 3 candidatos deben usar ganchos distintos entre
   sí. Todo lo que diga el título debe ser cierto según los datos — impactante sí, falso nunca.
 - Nunca uses el nombre de un canal ni ninguna marca en el título ni en la descripción.
-- El campo description tiene 2-3 líneas. La primera es una frase que engancha y deja
-  curiosidad ("Este desastre todavía no tiene una causa del todo aclarada"); las siguientes
-  añaden uno o dos elementos concretos de misterio o intriga que atraigan al espectador
-  (por ejemplo: "los expertos ni siquiera se ponen de acuerdo en qué pasó ese día",
-  "los testimonios de los sobrevivientes contradicen el informe oficial"). No inventes
-  hechos que no estén en el material. La fuente y los hashtags se agregan automáticamente
-  después — no los incluyas en description.
+- El campo description tiene 2-3 líneas cortas y **su único objetivo es que el espectador
+  vea el video completo** — nunca debe poder "entender la historia" leyendo solo la
+  descripción:
+  · **Prohibido el spoiler**: no digas el desenlace, la causa, el número de víctimas final ni
+    la respuesta a la pregunta del video. La descripción abre la pregunta; solo el video la
+    cierra.
+  · Línea 1: un detalle concreto e inquietante del inicio de la historia + una pregunta
+    directa ("Tenía 16 compartimentos estancos. ¿Por qué no sirvieron de nada?").
+  · Línea 2: anuncia que la clave está al final del video, apuntando a algo concreto que el
+    video sí muestra al final ("El detalle que lo cambia todo aparece en los últimos
+    segundos 👀", "Fíjate en lo que pasa al final"). Solo si es verdad según la narración.
+  · Opcional línea 3: una frase corta que invite a comentar ("¿Tú lo habrías visto venir?").
+  No inventes hechos que no estén en el material. La fuente y los hashtags se agregan
+  automáticamente después — no los incluyas en description.
+- En el campo hashtags escribe exactamente 3 hashtags en español **específicos de este tema**
+  (el nombre del suceso, el lugar o el tipo de desastre — ej. "#Titanic", "#naufragio",
+  "#AtlanticoNorte"), sin espacios, cada uno empezando con #. Nada genérico.
 - Además, en el campo description_ko escribe una traducción fiel al coreano del campo
   description (sin agregar ni quitar información, misma cantidad de líneas). Es solo para
   que el equipo (que no lee español) revise el contenido antes de publicar — nunca se sube
@@ -123,7 +143,7 @@ Narración: {narration}
 Responde solo con JSON. titles/description/pinned_comment en español, description_ko y
 titles_ko en coreano:
 {{"titles": ["", "", ""], "titles_ko": ["", "", ""], "description": "", "description_ko": "",
-  "pinned_comment": "", "tags": ["", ""]}}
+  "pinned_comment": "", "hashtags": ["#", "#", "#"], "tags": ["", ""]}}
 """
 
 # 합본(--combine-parts) 렌더용 — "parte"/"serie de 2 partes" 언급을 아예 뺀다.
@@ -140,7 +160,7 @@ Narración: {narration}
 Responde solo con JSON. titles/description/pinned_comment en español, description_ko y
 titles_ko en coreano:
 {{"titles": ["", "", ""], "titles_ko": ["", "", ""], "description": "", "description_ko": "",
-  "pinned_comment": "", "tags": ["", ""]}}
+  "pinned_comment": "", "hashtags": ["#", "#", "#"], "tags": ["", ""]}}
 """
 
 
@@ -194,6 +214,11 @@ def _parse(
     description = str(raw.get("description", "")).strip()
     description_ko = str(raw.get("description_ko", "")).strip()
     pinned_comment = str(raw.get("pinned_comment", "")).strip()
+    hashtags = [
+        "#" + str(tag).strip().lstrip("#").replace(" ", "")
+        for tag in raw.get("hashtags", []) or []
+        if str(tag).strip().lstrip("#")
+    ]
     if not titles or not description:
         return None
 
@@ -215,6 +240,7 @@ def _parse(
         title_ko=titles_ko[0] if titles_ko else "",
         title_alternatives_ko=titles_ko[1:],
         hook_description=description,
+        hashtags=hashtags,
         source_line=_source_line(script, candidate),
         description_ko=description_ko,
         pinned_comment=pinned_comment,
