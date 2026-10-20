@@ -240,6 +240,8 @@ jobs:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN || env.INSTAGRAM_ACCESS_TOKEN }}
           INSTAGRAM_BUSINESS_ACCOUNT_ID: ${{ secrets.INSTAGRAM_BUSINESS_ACCOUNT_ID || env.INSTAGRAM_BUSINESS_ACCOUNT_ID }}
           GCS_PUBLIC_BUCKET: ${{ secrets.GCS_PUBLIC_BUCKET || env.GCS_PUBLIC_BUCKET }}
+          # 이미지만 볼 때는 줄인 샘플을 로그에 base64 로 남긴다(아티팩트 용량과 무관하게 확인).
+          PRINT_SAMPLE_B64: ${{ inputs.image_only == true && '1' || '0' }}
         run: python main.py cloud-check --generate
 
       # 승인 대기 중 GitHub 이 끊기거나(타임아웃) 사람이 늦게 눌러도, 다음 실행이나

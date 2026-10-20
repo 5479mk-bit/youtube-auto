@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -259,11 +260,13 @@ def _cloud_check(settings, generate: bool) -> int:
         return 1
 
     logger.info("5) 이미지 1장을 실제로 만들어 봅니다…")
+    # 실제 대본과 같은 스타일 문구로 만든다 — 점검 이미지가 곧 그림체 샘플이다(2026-10-20).
+    from src.script.script_writer import ENGINEERING_DIAGRAM_STYLE
+
     path = client.generate(
-        "a large ship structure partially submerged with visible hull damage, "
-        "Semi-stylized 3D engineering diagram, isometric cutaway view, neutral "
-        "gray studio background, clean clay-render texture, glowing red "
-        "technical lines pointing to key parts, 8k resolution, no text, no watermark"
+        "epic aerial drone shot of a colossal ocean liner snapping in half in a stormy "
+        "grey North Atlantic, tiny lifeboats scattered on the dark waves, "
+        f"{ENGINEERING_DIAGRAM_STYLE}"
     )
     if path is None:
         logger.error(
@@ -278,8 +281,29 @@ def _cloud_check(settings, generate: bool) -> int:
     sample_copy = sample_dir / f"sample{path.suffix}"
     sample_copy.write_bytes(path.read_bytes())
     logger.info(f"5) 확인용 사본: {sample_copy}")
+    if os.environ.get("PRINT_SAMPLE_B64") == "1":
+        _print_sample_b64(sample_copy)
     logger.info(f"6) {guard.summary()}")
     return 0
+
+
+def _print_sample_b64(path: Path) -> None:
+    """아티팩트 저장소가 꽉 차도 샘플을 꺼내 볼 수 있게, 줄인 JPEG 를 로그에 base64 로 찍는다."""
+    import base64
+    import io
+
+    from PIL import Image
+
+    with Image.open(path) as image:
+        image = image.convert("RGB")
+        image.thumbnail((540, 960))
+        buffer = io.BytesIO()
+        image.save(buffer, "JPEG", quality=80)
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    print("SAMPLE_B64_BEGIN")
+    for start in range(0, len(encoded), 4000):
+        print(encoded[start : start + 4000])
+    print("SAMPLE_B64_END", flush=True)
 
 
 def _notify_failure(settings, reason: str) -> None:
