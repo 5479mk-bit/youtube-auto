@@ -38,6 +38,20 @@ VEO_PROMPT = (
 )
 
 
+# 한 회차 안에서의 상태(2026-10-25). 이미지 생성이 429 로 막히면 회색 대체 화면 대신
+# 앞서 성공한 그림을 다시 쓰고, 대체 화면이 몇 컷 들어갔는지 세어 자동 공개를 막는 데 쓴다.
+_RECENT_IMAGES: list[Path] = []
+_REUSE_COUNT = 0
+FALLBACK_SCENES = 0
+
+
+def reset_run_state() -> None:
+    global FALLBACK_SCENES, _REUSE_COUNT
+    _RECENT_IMAGES.clear()
+    FALLBACK_SCENES = 0
+    _REUSE_COUNT = 0
+
+
 def _pad_to_duration(clip, target_duration: float):
     """생성 영상이 목표 길이보다 짧으면 마지막 프레임을 정지시켜 채운다.
 
@@ -130,16 +144,47 @@ def _build_generated_clip(scene: Scene, veo_client, ai_client, size: tuple[int, 
             credit,
         )
 
-    # 여기부터는 생성 컷(AI_IMAGE / VEO). 먼저 그림 한 장을 만든다.
+    global FALLBACK_SCENES
+    t2v = (
+        veo_client is not None
+        and getattr(veo_client, "text_to_video", False) is True
+        and veo_client.enabled
+    )
+
+    # text-to-video 면 Veo 에 시작 이미지가 필요 없다 — 이미지를 먼저 만들고 그게 성공해야
+    # Veo 를 부르던 구조 때문에, 이미지 API 가 429 로 막히자 Veo 는 시도도 못 하고 15컷 중
+    # 12컷이 회색 대체 화면이 됐다(2026-10-25, run #80). 이미지는 Veo 가 실패할 때만 만든다.
+    if scene.engine == "veo" and t2v:
+        clip = _veo_clip(veo_client, None, scene, size)
+        if clip is not None:
+            return clip, PhotoCredit(query=scene.scene_type, source_name=_CREDIT_NAMES["veo"])
+        logger.warning("Veo(text-to-video)가 실패해 생성 이미지로 대체합니다")
+
+    # 여기부터는 생성 이미지 컷. 먼저 그림 한 장을 만든다.
     image_path = None
     if ai_client is not None and scene.prompt:
         image_path = ai_client.generate(scene.prompt)
 
-    if image_path is not None and scene.engine == "veo" and veo_client is not None and veo_client.enabled:
+    if image_path is None and scene.engine != "veo" and t2v:
+        # 이미지만 막혔으면 정지컷도 Veo 로 만든다(예산 상한 안에서).
+        clip = _veo_clip(veo_client, None, scene, size)
+        if clip is not None:
+            return clip, PhotoCredit(query=scene.scene_type, source_name=_CREDIT_NAMES["veo"])
+
+    if image_path is not None and not t2v and scene.engine == "veo" and veo_client is not None and veo_client.enabled:
         clip = _veo_clip(veo_client, image_path, scene, size)
         if clip is not None:
             return clip, PhotoCredit(query=scene.scene_type, source_name=_CREDIT_NAMES["veo"])
         logger.warning("Veo 클립을 만들지 못해 이 컷은 생성 이미지로 대체합니다")
+
+    if image_path is not None:
+        _RECENT_IMAGES.append(image_path)
+    elif _RECENT_IMAGES:
+        # 생성이 막혔으면 회색 화면 대신 앞에서 성공한 그림을 다른 카메라 무브로 다시 쓴다.
+        global _REUSE_COUNT
+        _REUSE_COUNT += 1
+        image_path = _RECENT_IMAGES[-(_REUSE_COUNT % len(_RECENT_IMAGES)) - 1]
+        logger.warning(f"생성이 막혀 앞 장면 그림을 재사용합니다 ({scene.scene_type})")
 
     if image_path is not None:
         # 정지화를 평평한 줌으로 흉내만 내지 않는다 — 사진 컷에 이미 쓰고 있는
@@ -158,6 +203,7 @@ def _build_generated_clip(scene: Scene, veo_client, ai_client, size: tuple[int, 
         )
         return clip, credit
 
+    FALLBACK_SCENES += 1
     logger.warning(f"생성이 막혀 대체 화면을 씁니다 ({scene.scene_type})")
     seed = scene.prompt or scene.image_query_ko or scene.scene_type
     return (

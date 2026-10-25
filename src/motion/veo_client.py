@@ -96,8 +96,11 @@ class VeoClient:
         """실제로 과금되는 등급. Vertex 는 lite 요청도 fast 로 나간다."""
         return "fast" if (self.backend == "vertex" and self.tier == "lite") else self.tier
 
-    def animate(self, image_path: Path, prompt: str) -> Path:
-        """사진을 움직이는 영상으로. 캐시에 있으면 호출하지 않는다."""
+    def animate(self, image_path: Path | None, prompt: str) -> Path:
+        """사진을 움직이는 영상으로(text_to_video 면 image_path 없이). 캐시에 있으면 호출하지 않는다."""
+        if image_path is None and not self.text_to_video:
+            raise VeoError("시작 이미지가 없어 image-to-video 를 호출할 수 없습니다")
+        label = image_path.name if image_path is not None else "text-to-video"
         params = {
             "aspectRatio": self.aspect_ratio,
             "resolution": self.resolution,
@@ -110,7 +113,7 @@ class VeoClient:
 
         cached = self.budget.cached_clip(key)
         if cached:
-            logger.info(f"Veo 캐시 적중: {image_path.name} (과금 없음)")
+            logger.info(f"Veo 캐시 적중: {label} (과금 없음)")
             return cached
 
         if not self.enabled:
@@ -127,7 +130,7 @@ class VeoClient:
             self.spend_guard.ensure_can_spend(cost.krw(), f"Veo {self.billed_tier} 1클립")
 
         logger.info(
-            f"Veo 생성 요청: {image_path.name} "
+            f"Veo 생성 요청: {label} "
             f"({self.backend}/{self.billed_tier}, {self.duration_seconds}초, 약 {cost.krw():,}원)"
         )
         raw_path = self.budget.clip_path(key).with_suffix(".raw.mp4")
@@ -165,7 +168,7 @@ class VeoClient:
         - 오퍼레이션을 GET 이 아니라 `:fetchPredictOperation` POST 로 조회한다.
         - 결과가 URI 가 아니라 base64 로 바로 온다(스토리지 버킷을 안 쓸 때).
         """
-        mime_type = mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
+        mime_type = (mimetypes.guess_type(image_path.name)[0] if image_path else None) or "image/jpeg"
         payload = {
             "instances": [
                 self._instance(image_path, prompt, mime_type)
@@ -235,7 +238,7 @@ class VeoClient:
         dest.write_bytes(response.content)
 
     def _start(self, image_path: Path, prompt: str, params: dict) -> str:
-        mime_type = mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
+        mime_type = (mimetypes.guess_type(image_path.name)[0] if image_path else None) or "image/jpeg"
         payload = {
             "instances": [
                 self._instance(image_path, prompt, mime_type)

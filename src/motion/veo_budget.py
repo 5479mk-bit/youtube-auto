@@ -64,9 +64,10 @@ class VeoBudget:
         self.clip_dir.mkdir(parents=True, exist_ok=True)
         self.episode_clips = 0
 
-    def cache_key(self, image_path: Path, prompt: str, params: dict) -> str:
+    def cache_key(self, image_path: Path | None, prompt: str, params: dict) -> str:
         digest = hashlib.sha256()
-        digest.update(image_path.read_bytes())
+        if image_path is not None:  # text-to-video 는 시작 이미지 없이 프롬프트만으로 만든다
+            digest.update(image_path.read_bytes())
         digest.update(prompt.encode("utf-8"))
         digest.update(json.dumps(params, sort_keys=True).encode("utf-8"))
         return digest.hexdigest()[:20]

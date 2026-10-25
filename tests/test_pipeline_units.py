@@ -1382,3 +1382,73 @@ class TestSpendGuardBaseline:
 
         assert guard.credit_krw == 124096 - 33000
         assert guard.baseline_at == "2026-10-19T00:00:00"
+
+
+class TestGeneratedClipFallbacks:
+    """2026-10-25 run #80: 이미지 API 429 로 15컷 중 12컷이 회색 대체 화면이 된 사고."""
+
+    def _scene(self, engine="veo"):
+        from src.models import Scene
+
+        return Scene(
+            start=0.0, duration=4.0, image_query_ko="", image_query_en="", camera="push_in",
+            engine=engine, scene_type="VEO" if engine == "veo" else "AI_IMAGE", prompt="p",
+        )
+
+    def test_text_to_video_calls_veo_without_image(self, tmp_path):
+        from src.render import motion_sources
+
+        motion_sources.reset_run_state()
+        veo = MagicMock(text_to_video=True, enabled=True)
+        ai = MagicMock()
+        ai.generate.return_value = None  # 이미지 API 가 막혀 있어도
+        with patch.object(motion_sources, "_veo_clip", return_value="CLIP") as veo_clip:
+            clip, _ = motion_sources._build_generated_clip(self._scene(), veo, ai, (1080, 1920))
+
+        assert clip == "CLIP"
+        assert veo_clip.call_args.args[1] is None  # 시작 이미지 없이 호출
+        ai.generate.assert_not_called()             # 이미지는 만들지도 않는다
+
+    def test_blocked_image_reuses_previous_picture_instead_of_gray_plate(self, tmp_path):
+        from src.render import motion_sources
+
+        motion_sources.reset_run_state()
+        good = tmp_path / "ok.png"
+        good.write_bytes(b"x")
+        ai = MagicMock()
+        ai.generate.side_effect = [good, None]
+        with patch.object(motion_sources, "make_parallax_clip", return_value="PARALLAX") as px:
+            motion_sources._build_generated_clip(self._scene("ai_image"), None, ai, (1080, 1920))
+            clip, _ = motion_sources._build_generated_clip(self._scene("ai_image"), None, ai, (1080, 1920))
+
+        assert clip == "PARALLAX"
+        assert px.call_args.args[0] == good
+        assert motion_sources.FALLBACK_SCENES == 0
+
+    def test_fallback_cuts_block_auto_publish(self, tmp_path):
+        from src.render import motion_sources
+
+        result = TestReviewSummarySplitsInfoLines()._make_result(tmp_path, [])
+        settings = MagicMock()
+        settings.secrets.telegram_bot_token = "x"
+        settings.secrets.telegram_chat_id = "y"
+        settings.get.side_effect = lambda key, default=None: (
+            True if key == "review.auto_publish" else default
+        )
+        motion_sources.reset_run_state()
+        motion_sources.FALLBACK_SCENES = 3
+
+        with patch.object(pipeline, "STATE_DB", tmp_path / "state.sqlite3"), patch(
+            "src.review.telegram_bot.TelegramReviewer"
+        ) as MockReviewer, patch("src.review.telegram_bot.build_summary", return_value="카드"), patch(
+            "src.publish.youtube_uploader.upload_series"
+        ) as upload:
+            reviewer = MockReviewer.return_value
+            reviewer.enabled = True
+            reviewer.wait_for_decision.return_value = None
+            pipeline.review_and_publish(settings, result, wait_seconds=1)
+
+        upload.assert_not_called()
+        reviewer.send_review.assert_called_once()  # 승인 카드로 넘어간다
+        assert "보류" in reviewer.notify.call_args_list[0].args[0]
+        motion_sources.reset_run_state()

@@ -439,6 +439,9 @@ def run(
     confirm_before_render: bool = False,
     preview_seconds: float | None = None,
 ) -> PipelineResult | None:
+    from .render import motion_sources
+
+    motion_sources.reset_run_state()
     candidate = select_topic(settings, ignore_history=reuse_topic)
     if candidate is None:
         logger.error("선정할 주제 후보가 없습니다")
@@ -772,7 +775,22 @@ def review_and_publish(
     # 사용자 지시(2026-10-16): 텔레그램 승인 없이 바로 올리고, 텔레그램에는 "올렸다"는
     # 알림과 영상, 설명(해시태그 포함)만 보낸다. 제목은 1순위 후보(titles[0])를 쓴다.
     # `is True` — 설정 객체가 목(mock)이어도 켜진 것으로 오해하지 않게 한다.
-    if settings.get("review.auto_publish", False) is True:
+    from .render import motion_sources
+
+    fallback_cuts = motion_sources.FALLBACK_SCENES
+    max_fallback = settings.get("review.max_fallback_cuts", 0)
+    max_fallback = max_fallback if isinstance(max_fallback, int) else 0
+    auto = settings.get("review.auto_publish", False) is True
+    if auto and fallback_cuts > max_fallback:
+        # 회색 대체 화면이 섞인 영상은 자동 공개하지 않는다(2026-10-25, run #80 사고).
+        # 예전 승인 카드로 보내 사람이 보고 올릴지 정하게 한다.
+        reviewer.notify(
+            f"⚠️ 대체 화면(빈 배경)이 {fallback_cuts}컷 들어가 자동 공개를 보류했습니다.\n"
+            "영상을 보고 올릴 거면 제목 버튼, 버릴 거면 거절을 눌러 주세요."
+        )
+        auto = False
+
+    if auto:
         from .review.telegram_bot import ReviewDecision
 
         history.save_pending(
