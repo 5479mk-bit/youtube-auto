@@ -99,6 +99,8 @@ _COMMON_RULES_ES = """Reglas:
   mató todo"), o un contraste chocante. Los 3 candidatos deben usar ganchos distintos entre
   sí. Todo lo que diga el título debe ser cierto según los datos — impactante sí, falso nunca.
 - Nunca uses el nombre de un canal ni ninguna marca en el título ni en la descripción.
+- Todo en **español latinoamericano neutro** (público de México a Argentina): "ustedes", nunca
+  "vosotros", ni expresiones propias de España ni de un solo país.
 - El campo description tiene 2-3 líneas cortas y **su único objetivo es que el espectador
   vea el video completo** — nunca debe poder "entender la historia" leyendo solo la
   descripción:

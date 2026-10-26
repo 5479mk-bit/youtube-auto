@@ -280,6 +280,16 @@ def _title_layers(
     if not part.hook_number:
         return []
 
+    # 2026-10-26: 첫 3초는 질문 문구를 화면 정중앙에 크게(이탈 방지), 그 뒤로는 상단 배너로.
+    # 같은 문구가 두 곳에 동시에 뜨지 않게 배너는 질문이 사라진 뒤에 나온다.
+    hook_seconds = min(float(settings.get("video.hook_question_seconds", 3.0) or 0), duration)
+    layers = []
+    if hook_seconds > 0:
+        question = overlays.render_hook_question(
+            part.hook_number, work_dir / f"hook_question_part{part.part}.png", size
+        )
+        layers.append(ImageClip(str(question)).with_start(0).with_duration(hook_seconds))
+
     path = overlays.render_title_banner(
         part.hook_number,
         work_dir / f"title_part{part.part}.png",
@@ -287,7 +297,11 @@ def _title_layers(
         color=settings.get("video.frame_title_color", "#FFFFFF"),
         accent_color=settings.get("subtitle.emphasis_color"),
     )
-    return [ImageClip(str(path)).with_start(0).with_duration(duration)]
+    if duration - hook_seconds > 0:
+        layers.append(
+            ImageClip(str(path)).with_start(hook_seconds).with_duration(duration - hook_seconds)
+        )
+    return layers
 
 
 def _overlay_pop_scale(t: float, pop_seconds: float = 0.25) -> float:

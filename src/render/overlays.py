@@ -204,6 +204,58 @@ def render_center_overlay(
     return out_path
 
 
+def render_hook_question(
+    text: str, out_path: Path, size: tuple[int, int], color: str = "#FFFFFF"
+) -> Path:
+    """첫 3초 화면 정중앙의 큰 질문 문구("¿Sabías esto?") — 2026-10-26 사용자 지시.
+
+    스페인어권 시청자는 짧고 직설적인 질문에 반응한다 — 첫 화면 한가운데 꽂아 이탈을 줄인다.
+    굵은 산세리프, 최대 두 줄, 세로 중앙.
+    """
+    width, height = size
+    image = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    font_size = int(width * 0.13)
+    font = _font(font_size)
+    lines = _wrap_lines(draw, text, font, width * 0.86)
+    while (
+        len(lines) > 1 and " ".join(lines) != text or any(
+            draw.textlength(line, font=font) > width * 0.86 for line in lines
+        )
+    ) and font_size > 48:
+        font_size = int(font_size * 0.9)
+        font = _font(font_size)
+        lines = _wrap_lines(draw, text, font, width * 0.86)
+
+    line_height = int(font_size * 1.15)
+    top = height * 0.5 - line_height * len(lines) / 2
+    for index, line in enumerate(lines):
+        line_width = draw.textlength(line, font=font)
+        _draw_text_with_shadow(
+            draw,
+            ((width - line_width) / 2, top + index * line_height),
+            line,
+            font,
+            color,
+            shadow_blur=14,
+            shadow_alpha=230,
+        )
+        # 밝은 하늘·파도 위에서도 읽히게 굵은 검은 테두리를 한 번 더 두른다.
+        draw.text(
+            ((width - line_width) / 2, top + index * line_height),
+            line,
+            font=font,
+            fill=color,
+            stroke_width=max(int(font_size * 0.07), 3),
+            stroke_fill=(0, 0, 0, 255),
+        )
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(out_path)
+    return out_path
+
+
 def _wrap_lines(draw: ImageDraw.ImageDraw, text: str, font, max_width: float) -> list[str]:
     """단어 단위로 최대 두 줄까지 접는다. 한국어는 공백이 성기니 어절 단위로 접어도
     자연스럽다."""

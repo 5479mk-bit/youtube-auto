@@ -416,9 +416,10 @@ caso, la primera frase debe lanzar el elemento más intrigante posible dentro de
 segundos.
 
 **Pregunta detonante (obligatoria)**: dentro de las primeras 2-3 frases de la parte 1, incluye
-una pregunta directa y provocadora que quede clavada (estilo "¿Por qué falló?", "¿Qué
-ocultaron?", "¿Cómo pasó esto sin que nadie lo notara?") — corta, de máximo 5-6 palabras, en
-español. Esta pregunta también debe ir (igual o casi igual) en `hook_number` de la parte 1, que
+una pregunta directa y provocadora que quede clavada (estilo "¿Sabías esto?", "¿Por qué
+falló?", "¿Qué ocultaron?", "¿Quién dio la orden?") — **máximo 4 palabras**, directa, sin
+rodeos, en español latinoamericano. Esta misma pregunta sale **en grande en el centro de la
+pantalla durante los 3 primeros segundos**, así que tiene que entenderse de un vistazo. Esta pregunta también debe ir (igual o casi igual) en `hook_number` de la parte 1, que
 se queda fijo en pantalla desde el segundo 0 — así el gancho está visible incluso antes de que
 la voz la diga. No hace falta responderla de inmediato; es la intriga que sostiene los primeros
 segundos.
@@ -457,8 +458,10 @@ Parte 2:
   frase).
 
 [TONO — esto es lo más importante]
-- Español neutro, natural para toda Latinoamérica (evita modismos muy locales de un solo país
-  y evita el "vosotros" de España).
+- **Español latinoamericano neutro** (el que entiende todo el público de México a Argentina):
+  usa "ustedes" (nunca "vosotros"), vocabulario panamericano ("carro"/"auto" no "coche",
+  "computadora" no "ordenador", "celular" no "móvil"), sin modismos de un solo país (nada de
+  "vale", "tío", "guay", "che", "güey") ni la conjugación de España.
 - **Voz intensa, urgente y cinematográfica** — como el narrador de un tráiler de catástrofe.
   Cada frase empuja hacia la siguiente; nunca suena a clase ni a enciclopedia.
 - Usa recursos de tensión: hablarle directo al espectador ("Imagina estar ahí"), cuenta
