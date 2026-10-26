@@ -67,6 +67,9 @@ python main.py review-pending --wait 30
   유튜브 태그는 주제 3개 + 고정 12개(태그는 노출에 큰 영향 없어 더 늘리지 않음).
 - 업로드: 공개(`publish.privacy_status: public`), 승인 없이 자동(`review.auto_publish: true`).
 - 정치·시위 같은 시사 주제는 광고 제한 위험으로 다루지 않는다.
+- 업로드 시각: 크론은 KST 09:00 그대로 둔다(2026-10-26 사용자 결정). GitHub 스케줄 지연으로 실제
+  업로드는 KST 12~13시경 = 멕시코·중남미 저녁 7~10시 — 주 시청층 골든타임. 스페인 저녁(KST 새벽)은 노리지 않는다.
+- 첫 3초: 4단어 이내 질문을 화면 정중앙에 크게(render_hook_question), 상단 배너는 3초 뒤부터.
 
 ## 비용·크레딧 (주의)
 - Vertex(GCP 크레딧) 사용. Vertex 에는 Veo lite 가 없어 fast 단가(4초 클립 약 882원)로 과금된다.
