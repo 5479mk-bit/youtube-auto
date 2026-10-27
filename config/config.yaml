@@ -116,6 +116,8 @@ audio:
   # bgm_hook_volume_db 도 -9 → -6(+3dB)으로 같이 올렸다. 기본 배경음(bgm_volume_db)
   # 은 내레이션을 덮지 않도록 소폭만(-13 → -11) 올린다.
   bgm_volume_db: -11
+  # 최종 음량(LUFS). 레퍼런스 틱톡들이 평균 -13dB 로 꽉 차 있다 — 피드에서 작게 들리면 약해 보인다.
+  loudness_lufs: -14
   bgm_hook_volume_db: -6
   sfx_volume_db: -2
   # 효과음이 터지는 동안 배경음을 이만큼 더 낮춘다("더킹") — 시네마틱 믹싱 기본기
@@ -318,11 +320,14 @@ topics:
         - 분류:기근
     # 2026-10-27: 기념일(당일·1~2일 전) > 스페인어권 인기도 > 본문 두께. freshness 는 늘 1.0 이라 뺐다.
     # audience_fit(2026-10-27 스튜디오 분석): 지진·멕시코·중남미·항공 사건 가산(disasters/popularity.py).
+    # intrigue(2026-10-27 레퍼런스 분석): 무시된 경고·책임자·이론·은폐가 많은 문서 가산
+    # (본문을 받은 상위 후보 사이에서만 작동 — disasters.intrigue_score).
     weights:
-      anniversary: 0.40
-      popularity: 0.30
+      anniversary: 0.35
+      popularity: 0.25
       audience_fit: 0.20
-      story_density: 0.10
+      intrigue: 0.15
+      story_density: 0.05
   sillok:
     # 샘플 단계라 기사를 사람이 지목한다. 왕대 전체 색인은 샘플을 보고 판단한다.
     article_ids:

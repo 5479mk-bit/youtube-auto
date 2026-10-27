@@ -460,6 +460,23 @@ por parte). La versión YouTube las quita; la de TikTok las incluye todas en su 
   puede referirse a algo que solo dice una frase extra.
 - Las frases extra siempre usan `scene_type` "AI_IMAGE" y `sfx` "none".
 
+[EL ÁNGULO — por qué los videos de este nicho llegan a millones]
+Los videos de misterio en español que pasan del millón (ej. "¿El hundimiento del Titanic fue
+realmente un accidente?": 600 mil vistas, 24 mil compartidos) no cuentan la historia que todos ya
+conocen: toman un suceso **que todos reconocen en medio segundo** y revelan **lo que casi nadie
+sabe**. Reconocer + descubrir = no se puede deslizar. Contar otra vez lo conocido = se desliza.
+1. Antes de escribir, elige el ángulo y escríbelo en `angulo`: "Todos creen que ___, pero casi
+   nadie sabe que ___". La segunda parte sale **del texto**: una advertencia ignorada, una
+   coincidencia inquietante, una decisión humana que lo causó, algo ocultado, una teoría (como
+   teoría), el detalle extraño de un sobreviviente.
+2. **Todo el video gira alrededor de ese ángulo**: la frase 1 lo plantea, el re-gancho lo
+   complica, el clímax lo revela, la pregunta final lo pone a votación.
+3. **Un responsable con nombre** si el texto lo da (empresa, gobierno, capitán, ingeniero jefe):
+   la indignación ("lo sabían y no hicieron nada") es lo que más se comparte. Solo hechos del texto.
+4. **Pregunta final de dos opciones**, que se responde con una palabra: "¿Accidente... o plan?",
+   "¿Negligencia o mala suerte?", "¿Tú habrías huido o te quedabas?". Más fácil de contestar =
+   más comentarios = más alcance.
+
 [MOTORES DE INTERÉS — obligatorios, el video aburrido es el enemigo]
 Usa **todos** los que el texto permita (sin inventar nada):
 1. **Una persona**: si el texto nombra a alguien (sobreviviente, capitán, ingeniero que avisó,
@@ -530,6 +547,7 @@ dos seguidas iguales; el resto "none".
 [FORMATO DE SALIDA] Responde solo con este JSON (textos en español; nombres de campo y valores de
 `scene_type`/`sfx` tal cual).
 {{
+  "angulo": "Todos creen que ___, pero casi nadie sabe que ___ (sale del texto).",
   "title_seed": "Una frase en español que resuma la historia (sin nombre de canal ni marcas).",
   "part1": {{"hook_number": "Pregunta de máximo 4 palabras para el centro de la pantalla.",
              "hook_stat": "CIFRA BRUTAL en máximo 3 palabras, o cadena vacía",
@@ -560,10 +578,11 @@ Pistas: {hints}
 [GUION ACTUAL (JSON)]
 {script_json}
 
-Paso 1 — Califica del 1 al 10, con dureza: gancho de la frase 1 (¿detiene el pulgar en medio
-segundo?), bucles abiertos, persona/emoción, dato sorprendente o misterio/teoría (siempre como
+Paso 1 — Califica del 1 al 10, con dureza: ángulo (¿es algo que casi nadie sabe de un suceso que
+todos reconocen, y todo el video gira alrededor de él?), gancho de la frase 1 (¿detiene el pulgar
+en medio segundo?), bucles abiertos, persona/emoción, dato sorprendente o misterio/teoría (siempre como
 teoría), ritmo (ninguna frase de relleno), pregunta final que provoque comentarios y enlace con la
-frase 1.
+frase 1 (mejor si es de dos opciones: "¿Accidente... o plan?").
 Paso 2 — Escribe 5 frases 1 alternativas (al menos 2 del tipo "¿Y si...?" si el material tiene
 una teoría o algo sin explicar; las demás, el momento más brutal en presente con un número) y elige
 la más fuerte (o la actual si es mejor).
@@ -576,7 +595,7 @@ ajusta su `prompt` en inglés para que la imagen muestre lo nuevo, con la misma 
 Cada `overlay` debe aparecer literalmente en su frase.
 
 Responde solo con JSON:
-{{"scores": {{"gancho": 0, "bucles": 0, "persona": 0, "dato": 0, "ritmo": 0, "giro": 0}},
+{{"scores": {{"angulo": 0, "gancho": 0, "bucles": 0, "persona": 0, "dato": 0, "ritmo": 0, "giro": 0}},
   "aperturas": ["", "", "", "", ""],
   "script": {{ ...el guion completo con el mismo formato que el GUION ACTUAL... }}}}
 """
@@ -629,6 +648,7 @@ def generate(
         script = _parse(raw, candidate)
         if script is not None:
             if candidate.dataset == "disaster":
+                logger.info(f"[script] 각도: {(raw or {}).get('angulo')}")
                 return _retention_pass(script, candidate, provider, raw)
             return script
         # 대본이 구조 요건(최소 문장 수 등)에 못 미쳐 거절됐을 수 있다 — 그렇다고

@@ -61,6 +61,18 @@ _MYSTERY_MARKERS = (
 _MYSTERY_MAX_CHARS = 1500
 
 
+def intrigue_score(text: str) -> float:
+    """의혹·경고·이론·은폐 이야기가 얼마나 많은 문서인가(0~1).
+
+    2026-10-27 레퍼런스 분석: 수백만 회 영상은 "모두 아는 사건 + 거의 아무도 모르는 것"이다.
+    같은 유명 사건이라도 무시된 경고·책임자·이론이 있는 쪽이 공유·댓글이 터진다. 문서 전체에서
+    그런 표지어가 몇 번 나오는지로 잰다(10번이면 만점).
+    """
+    lowered = text.lower()
+    hits = sum(lowered.count(marker) for marker in _MYSTERY_MARKERS)
+    return min(hits / 10, 1.0)
+
+
 def _mystery_appendix(text: str) -> str:
     head = text[:MAX_CONTEXT_CHARS]
     picked: list[str] = []
@@ -171,6 +183,7 @@ def collect_candidates(
             "popularity": popularity.get(entry.key, 0.0),
             "audience_fit": topic_rank.audience_fit(entry),
             "story_density": min(len(text) / 3000, 1.0),
+            "intrigue": intrigue_score(text),
             "freshness": 1.0,
         }
         hint = topic_rank.anniversary_hint(entry.when, today)

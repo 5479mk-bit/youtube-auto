@@ -35,7 +35,7 @@
 ## 로컬 실행·검증
 ```bash
 python -m pip install -r requirements.txt
-python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 261 passed, 1 skipped)
+python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 264 passed, 1 skipped)
 python main.py topics              # 주제 후보만 확인(과금 없음)
 python main.py cloud-check --generate   # Vertex 이미지 1장(약 30원)
 python main.py run --review --wait 1200 --combine-parts   # 한 회차 전체(과금 발생)
@@ -89,6 +89,12 @@ python main.py review-pending --wait 30
   정치·보건 음모론 금지), 문서 뒷부분 미스터리 문단 추출(`disasters._mystery_appendix`), 단어별 하이라이트
   자막(`subtitle.word_highlight/uppercase`), '다시 일어나면?' 주제(캐링턴·칙술루브·옐로스톤 등).
   실제 사진은 아직(재난 경로는 웹 이미지 검색을 일부러 끔 — 유가족·저작권 판단 필요).
+  **왜 수백만이 나오나(측정치)**: lazarus_404 는 영상 86개로 팔로워 72만·좋아요 2,280만(편당 약 26만).
+  타이타닉 영상은 공유율 4.0%(2.4만/60만)·좋아요 7.2%. 원리 = "모두 아는 사건(0.5초 인식) + 거의 아무도
+  모르는 것(호기심)" + 이름 있는 책임자(분노 → 공유) + 한 단어로 답하는 양자택일 질문(댓글). 첫 단어 0.12초,
+  0.6초 넘는 공백 거의 없음, 말 속도 175~190 wpm, 목소리 밑 음악 상시(-20dB 대), 전체 평균 -13dB.
+  반영: 프롬프트 [EL ÁNGULO](`angulo` 필드), `intrigue` 가중치(경고·이론·은폐 표지어 밀도), 양자택일 엔딩,
+  최종 음량 -14 LUFS(`audio.loudness_lufs`, video_builder._normalize_loudness).
 - 템포: VEO 문장 무음 패딩 제거(`veo.min_scene_seconds: 0`), `audio.tempo: 1.1`(atempo), 쉼 0.05~0.3초,
   TTS 스타일은 긴박한 예고편 내레이터. 대본 모델 `gemini-2.5-pro`.
 - 자막: 82px 굵은 흰 글씨 + 검은 외곽선 6, 강조어 노란색(`#FFD84D`), 한 줄 14자, 화면 중하단.

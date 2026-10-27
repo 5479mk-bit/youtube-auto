@@ -96,3 +96,48 @@ def test_subtitle_layers_keep_position_for_non_pop_cues(tmp_path):
     second = layers[1]
     x, y = second.pos(0.6)
     assert x > 50 and y > 1920 * 0.5  # 왼쪽 위(0,0)가 아니라 화면 아래쪽 가운데
+
+
+def test_prompt_requires_known_event_plus_secret_angle_and_binary_question():
+    prompt = script_writer._prompt(_candidate(), 260, 290)
+    assert '"angulo"' in prompt and "casi nadie sabe" in prompt
+    assert "Un responsable con nombre" in prompt
+    assert "¿Accidente... o plan?" in prompt
+    assert "angulo" in script_writer.RETENTION_EDITOR_PROMPT
+
+
+def test_intrigue_score_rewards_warnings_and_theories():
+    from src.disasters import intrigue_score
+
+    plain = "El terremoto destruyó la ciudad. Murieron muchas personas. " * 20
+    juicy = plain + ("Los ingenieros enviaron una advertencia que fue ignorada. Existen teorías "
+                     "de conspiración y nunca se explicó por qué se ocultó el informe. ") * 3
+    assert intrigue_score(plain) == 0.0
+    assert intrigue_score(juicy) > 0.9
+
+
+def test_loudness_normalization_brings_quiet_video_up(tmp_path):
+    import re
+    import subprocess
+
+    import imageio_ffmpeg
+
+    from src.render import video_builder
+
+    ff = imageio_ffmpeg.get_ffmpeg_exe()
+    video = tmp_path / "quiet.mp4"
+    subprocess.run([ff, "-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:d=4", "-f", "lavfi",
+                    "-i", "sine=frequency=300:duration=4", "-af", "volume=-30dB", "-shortest",
+                    "-c:v", "libx264", "-c:a", "aac", str(video)], check=True, capture_output=True)
+
+    def mean_volume(path):
+        out = subprocess.run([ff, "-i", str(path), "-af", "volumedetect", "-f", "null", "-"],
+                             capture_output=True, text=True).stderr
+        return float(re.search(r"mean_volume: (-?[\d.]+)", out).group(1))
+
+    before = mean_volume(video)
+    settings = type("S", (), {"get": staticmethod(lambda key, default=None: default)})()
+    video_builder._normalize_loudness(video, settings)
+    after = mean_volume(video)
+    assert after > before + 10
+    assert not (tmp_path / "quiet_loud.mp4").exists()

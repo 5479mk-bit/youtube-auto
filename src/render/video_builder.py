@@ -107,7 +107,43 @@ def build_part(
     )
     duration = float(video.duration)
     video.close()
+    _normalize_loudness(out_path, settings)
     return duration, credits
+
+
+def _normalize_loudness(path: Path, settings) -> None:
+    """최종 음량을 쇼츠·틱톡 기준(-14 LUFS)에 맞춘다(2026-10-27).
+
+    레퍼런스 영상들(틱톡 수십만~60만 회)은 평균 -13dB 로 꽉 차 있고 목소리 밑에 음악이 계속 깔려
+    있다. 피드에서 앞뒤 영상보다 소리가 작으면 그것만으로 약해 보인다. 영상 스트림은 그대로 복사하고
+    오디오만 다시 인코딩한다. 실패하면 원본을 그대로 둔다.
+    """
+    target = settings.get("audio.loudness_lufs", -14)
+    if not target:
+        return
+    import subprocess
+
+    import imageio_ffmpeg
+
+    tmp = path.with_name(f"{path.stem}_loud{path.suffix}")
+    try:
+        subprocess.run(
+            [
+                imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-i", str(path),
+                "-c:v", "copy",
+                "-af", f"loudnorm=I={float(target):.1f}:TP=-1.5:LRA=11",
+                "-ar", "44100",
+                "-c:a", "aac", "-b:a", str(settings.get("video.audio_bitrate", "128k")),
+                "-movflags", "+faststart",
+                str(tmp),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        tmp.replace(path)
+    except Exception as exc:
+        logger.warning(f"음량 정규화 실패 — 원본 음량 그대로 둡니다: {exc}")
+        tmp.unlink(missing_ok=True)
 
 
 def _build_background(
