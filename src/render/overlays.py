@@ -105,18 +105,47 @@ def _draw_line_with_emphasis(
     total = sum(draw.textlength(segment, font=font) for segment, _ in segments)
     x = (width - total) / 2
 
+    stroke = int(style.get("stroke_width", 0) or 0)
     for segment, highlighted in segments:
         color = style["emphasis_color"] if highlighted else style["font_color"]
-        # 외곽선은 쓰지 않는다 — 글자가 굵어지고 촌스러워진다. 대신 반투명 그림자로
-        # 어떤 배경 위에서도 읽히게 한다.
+        # 예전엔 외곽선 없이 그림자만 썼다(작은 자막엔 그게 깔끔했다). 2026-10-27부터 자막을
+        # 크게 키우면서 실사 영상(하늘·파도·불빛) 위에서도 읽히게 검은 외곽선을 두른다.
         _draw_text_with_shadow(
             draw, (x, y), segment, font, color, shadow_blur=style.get("shadow_blur", 6)
         )
+        if stroke > 0:
+            draw.text(
+                (x, y), segment, font=font, fill=color,
+                stroke_width=stroke, stroke_fill=(0, 0, 0, 255),
+            )
         x += draw.textlength(segment, font=font)
 
 
 def _split_emphasis(text: str, emphasis: list[str]) -> list[tuple[str, bool]]:
-    """강조 조각을 기준으로 문장을 (텍스트, 강조여부) 조각들로 나눈다."""
+    """강조 조각을 기준으로 문장을 (텍스트, 강조여부) 조각들로 나눈다.
+
+    자막이 2~3단어 묶음으로 잘게 나뉘면서(2026-10-27) 강조 구절이 묶음 경계에 걸려 통째로는
+    안 맞는 경우가 많다 — 그럴 땐 구절 안의 단어(4글자 이상) 단위로라도 칠한다.
+    """
+    phrases = [item for item in emphasis if item.strip()]
+    if phrases and not any(phrase in text for phrase in phrases):
+        words = {
+            word.strip(".,;:¿?¡!\"'").lower()
+            for phrase in phrases
+            for word in phrase.split()
+            if len(word.strip(".,;:¿?¡!\"'")) >= 4
+        }
+        tokens = text.split(" ")
+        out: list[tuple[str, bool]] = []
+        for index, token in enumerate(tokens):
+            piece = token + (" " if index < len(tokens) - 1 else "")
+            hit = token.strip(".,;:¿?¡!\"'").lower() in words
+            if out and out[-1][1] == hit:
+                out[-1] = (out[-1][0] + piece, hit)
+            else:
+                out.append((piece, hit))
+        return out or [(text, False)]
+
     segments: list[tuple[str, bool]] = [(text, False)]
     for phrase in sorted({item for item in emphasis if item.strip()}, key=len, reverse=True):
         next_segments: list[tuple[str, bool]] = []

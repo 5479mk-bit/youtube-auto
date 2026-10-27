@@ -22,7 +22,16 @@ TIMEOUT = 15
 MAX_EXCERPT_CHARS = 1200
 # 위키미디어는 User-Agent 없는 요청(파이썬 requests 기본값 포함)을 403 으로 막는다.
 # 이걸 빠뜨려서 wiki_excerpt 가 늘 비어 있었다 — 야사 콘텐츠의 재료가 통째로 없던 셈이다.
-HEADERS = {"User-Agent": "youtube-auto/0.2 (heritage documentary shorts)"}
+# 2026-10-27: 위키미디어 User-Agent 정책은 "연락 가능한 정보(URL/메일)"를 요구한다 — 그게 없는
+# 범용 UA 는 429 를 훨씬 자주 받는다(run #82: 분류 크롤링·본문 조회가 수십 번 429 로 막혀
+# 지정 주제가 전부 탈락했다). 저장소 주소를 연락처로 넣는다.
+HEADERS = {
+    "User-Agent": "SecretosDelColapsoBot/1.0 (https://github.com/5479mk-bit/youtube-auto)"
+}
+
+
+def api_url(lang: str = "ko") -> str:
+    return f"https://{lang}.wikipedia.org/w/api.php"
 
 # 이 이름이 붙은 섹션은 통째로 미스터리 후보다. 제목이 정확히 일치하지 않아도
 # 부분 일치로 잡는다 ("전설과 설화" 같은 변형 대응).
@@ -73,17 +82,17 @@ def fetch_mystery_excerpt(title: str) -> str:
     return excerpt[:MAX_EXCERPT_CHARS]
 
 
-def _fetch_plaintext(title: str) -> str:
+def _fetch_plaintext(title: str, lang: str = "ko") -> str:
     if not title:
         return ""
     # disasters.collect_candidates() 가 후보 목록 전체를 쉴 틈 없이 연속 호출하면
     # (run #51 실제로 6개 요청이 1초 안에 몰렸다) 위키미디어가 429 로 전부 거부해
     # "선정할 주제 후보가 없습니다"로 회차가 통째로 중단된다 — 제목 자체는 멀쩡해도
     # 그랬다. 429 만 짧게 재시도한다(그 외 오류는 재시도해도 같은 결과라 바로 포기).
-    for attempt in range(3):
+    for attempt in range(4):
         try:
             response = requests.get(
-                API_URL,
+                api_url(lang),
                 params={
                     "action": "query",
                     "prop": "extracts",
@@ -96,7 +105,7 @@ def _fetch_plaintext(title: str) -> str:
                 headers=HEADERS,
             )
             if response.status_code == 429:
-                wait = 1.5 * (attempt + 1)
+                wait = 3.0 * (attempt + 1)
                 logger.warning(
                     f"[wikipedia] '{title}' 요청이 429(Too Many Requests) — {wait:.1f}초 뒤 재시도"
                 )
@@ -115,7 +124,7 @@ def _fetch_plaintext(title: str) -> str:
             return str(page.get("extract") or "")
         return ""
 
-    logger.warning(f"[wikipedia] '{title}' 429 로 재시도 3회 모두 실패")
+    logger.warning(f"[wikipedia] '{title}' 429 로 재시도 4회 모두 실패")
     return ""
 
 
@@ -136,13 +145,13 @@ def _split_sections(text: str) -> list[tuple[str, str]]:
     return sections
 
 
-def fetch_full_text(title: str) -> str:
+def fetch_full_text(title: str, lang: str = "ko") -> str:
     """문서 전문(요약이 아니라 본문 전체)을 그대로 돌려준다.
 
     재난 소재처럼 "전설/설화" 필터 없이 본문 전체를 사실 재료로 쓰는 경우를 위한
     공개 진입점이다 — `_fetch_plaintext` 를 외부 모듈에서 직접 import하지 않도록 감싼다.
     """
-    return _fetch_plaintext(title)
+    return _fetch_plaintext(title, lang)
 
 
 def enrich(candidate: StoryCandidate) -> StoryCandidate:

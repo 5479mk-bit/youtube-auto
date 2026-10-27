@@ -318,15 +318,13 @@ def test_pad_to_duration_is_noop_when_already_long_enough():
     assert result is clip
 
 
-def test_veo_scene_default_floor_matches_full_generated_duration():
-    # config 기본값(veo.duration_seconds=8)과 min_scene_seconds 가 같은 값이어야
-    # "실제로 만든 8초를 다 쓴다"는 요구가 지켜진다.
+def test_veo_lines_are_not_padded_with_silence():
+    # 2026-10-27: 4초를 채우려 무음을 붙이던 게 말 끊김(이탈)의 원인 — 이제 0.
     from src.settings import load_settings
 
     settings = load_settings()
-    assert settings.get("veo.min_scene_seconds", None) == settings.get(
-        "veo.duration_seconds", None
-    )
+    assert settings.get("veo.min_scene_seconds", None) == 0
+    assert settings.get("audio.tempo", 1.0) > 1.0
 
 
 def test_ai_image_scene_uses_depth_parallax_not_flat_zoom():
@@ -615,7 +613,10 @@ def test_disaster_prompt_is_spanish_and_intense():
 
     assert "en español" in GLOBAL_DISASTER_PROMPT
     assert "Voz intensa, urgente y cinematográfica" in GLOBAL_DISASTER_PROMPT
-    assert "60 a 70" in GLOBAL_DISASTER_PROMPT  # 2026-10-20: 사용자 지시 60초 이상
+    # 2026-10-27 개편: 평균 조회수 300 → 35~45초, 콜드오픈(첫 문장 = 가장 잔혹한 순간).
+    assert "35 a 45" in GLOBAL_DISASTER_PROMPT
+    assert "cold open" in GLOBAL_DISASTER_PROMPT
+    assert "Aquí, en..." in GLOBAL_DISASTER_PROMPT  # 느린 도입은 금지 목록에 들어 있어야 한다
     assert '"overlay"' in GLOBAL_DISASTER_PROMPT
     # 나레이션 문장은 스페인어지만, 이미지/영상 생성 프롬프트는 그대로 영어여야
     # 한다(모델이 영어만 이해한다) — 스타일 문구가 안 깨졌는지 확인.
@@ -1414,9 +1415,9 @@ def test_veo_clip_pads_instead_of_speed_scaling_when_close_to_scene_duration():
 def test_disaster_prompt_requires_minimum_veo_count():
     from src.script.script_writer import GLOBAL_DISASTER_PROMPT
 
-    # 2026-10-20: 부당 7~8문장 포맷이라 VEO 최소 5문장(전체 10).
-    assert "Mínimo 5 frases por parte" in GLOBAL_DISASTER_PROMPT
-    assert "mínimo 10 en total" in GLOBAL_DISASTER_PROMPT
+    # 2026-10-27: 부당 6~7문장 포맷이라 VEO 최소 4문장(전체 8).
+    assert "Mínimo 4 frases por parte" in GLOBAL_DISASTER_PROMPT
+    assert "mínimo 8 en total" in GLOBAL_DISASTER_PROMPT
 
 
 def test_render_subtitle_returns_cropped_bbox_not_full_frame():
@@ -1563,7 +1564,7 @@ def test_disasters_collect_candidates_skips_already_used_titles():
             ["제목1", "제목2", "제목3"], used={"disaster:제목1", "disaster:제목2"}
         )
 
-    mock_fetch.assert_called_once_with("제목3")
+    mock_fetch.assert_called_once_with("제목3", "ko")
     assert len(candidates) == 1
     assert candidates[0].headline == "제목3"
 

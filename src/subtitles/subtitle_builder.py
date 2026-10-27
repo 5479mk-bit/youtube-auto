@@ -48,7 +48,7 @@ def _line_to_cues(
     text: str, emphasis: list[str], start: float, duration: float, max_chars_per_line: int
 ) -> list[SubtitleCue]:
     """한 문장을 화면 단위(최대 2줄) 묶음으로 쪼개고, 글자 수 비율로 시간을 나눈다."""
-    wrapped = wrap_text(text, max_chars_per_line)
+    wrapped = _rebalance_dangling(wrap_text(text, max_chars_per_line))
     chunks = [
         wrapped[i : i + MAX_SCREEN_LINES] for i in range(0, len(wrapped), MAX_SCREEN_LINES)
     ]
@@ -66,6 +66,24 @@ def _line_to_cues(
         cues.append(SubtitleCue(start=cursor, end=chunk_end, lines=chunk, emphasis=emphasis))
         cursor = chunk_end
     return cues
+
+
+# 스페인어 기능어 — 자막 묶음 끝에 홀로 남으면 "horas, el / barco" 처럼 어색하게 끊긴다.
+_DANGLING = {
+    "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "al", "a", "en",
+    "y", "o", "que", "por", "con", "se", "su", "sus", "lo", "para", "sin", "mi", "tu",
+}
+
+
+def _rebalance_dangling(lines: list[str]) -> list[str]:
+    """묶음 끝의 기능어를 다음 묶음 앞으로 넘긴다(2026-10-27, 2~3단어 자막용)."""
+    out = list(lines)
+    for index in range(len(out) - 1):
+        words = out[index].split()
+        if len(words) > 1 and words[-1].lower() in _DANGLING:
+            out[index] = " ".join(words[:-1])
+            out[index + 1] = f"{words[-1]} {out[index + 1]}"
+    return out
 
 
 def _key(text: str) -> str:

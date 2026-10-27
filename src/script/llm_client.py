@@ -14,7 +14,7 @@ from typing import Protocol
 import requests
 from loguru import logger
 
-TIMEOUT = 60
+TIMEOUT = 150  # 2026-10-27: gemini-2.5-pro 는 생각하는 시간이 있어 60초로는 빠듯하다
 # 키를 한 바퀴 도는 것을 몇 번 반복할지, 그 사이에 얼마나 쉴지.
 ROTATION_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = 4

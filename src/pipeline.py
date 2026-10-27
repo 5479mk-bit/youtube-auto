@@ -18,6 +18,7 @@ from .heritage import heritage_media
 from . import assets
 from . import disasters
 from .disasters import discovery as disaster_discovery
+from .disasters import popularity as topic_rank
 from .models import PhotoCredit, RenderedPart, Script, ScriptPart, StoryCandidate, write_json
 from .motion.veo_budget import VeoBudget
 from .motion.veo_client import VeoClient
@@ -63,6 +64,59 @@ class PipelineResult:
     cost_note: str = ""
 
 
+def _disaster_candidates(settings: Settings, used: set[str]) -> tuple[list[StoryCandidate], dict]:
+    """사람이 고른 목록 → (바닥나면) 자동 발굴 순서로 후보를 모은다.
+
+    2026-10-27 개편: 예전엔 매 회차 위키백과 분류 트리를 먼저 크롤링했다 — 지정 주제가 남아
+    있어도 그랬고, 그 크롤링이 429 를 줄줄이 맞아(run #82, 17분) 정작 지정 주제 본문까지
+    못 받아 탈락했다. 이제 발굴은 지정 목록이 바닥났을 때만 돈다. 두 경로 모두 기념일·
+    스페인어권 인기도로 순서를 정한다(disasters/popularity.py).
+    """
+    today = topic_rank.audience_today()
+    weights = settings.get("topics.disaster.weights", {}) or {}
+    discover_cfg = settings.get("topics.disaster.discover", {}) or {}
+    per_run = discover_cfg.get("per_run_candidates", 6)
+    cache_path = CACHE_DIR / "disaster_popularity.json"
+
+    titles = list(settings.get("topics.disaster.titles", []) or [])
+    fresh = [
+        entry
+        for entry in (topic_rank.parse_entry(item) for item in titles)
+        if entry.key and f"disaster:{entry.key}" not in used
+    ]
+    popularity = topic_rank.popularity_scores(fresh, cache_path, today) if fresh else {}
+    candidates = disasters.collect_candidates(
+        titles, used, (), per_run, today=today, popularity=popularity, weights=weights
+    )
+    if candidates or not discover_cfg.get("enabled", False):
+        return candidates, weights
+
+    logger.info("[topics] 지정 목록이 바닥나 위키백과 분류에서 자동 발굴합니다")
+    discovered = [
+        title
+        for title in disaster_discovery.shuffled(
+            disaster_discovery.discover_titles(
+                discover_cfg.get("roots", []),
+                CACHE_DIR / "disaster_titles.json",
+                discover_cfg.get("max_depth", 2),
+                discover_cfg.get("max_titles", 400),
+            )
+        )
+        if f"disaster:{title}" not in used
+    ][: discover_cfg.get("popularity_sample", 50)]
+    entries = [topic_rank.parse_entry(title) for title in discovered]
+    popularity = topic_rank.popularity_scores(entries, cache_path, today)
+    # 스페인어판이 있는 문서는 본문도 스페인어판에서 — 없는 문서는 인기도 0 이라 뒤로 밀린다.
+    raw = []
+    for title in discovered:
+        es_title = topic_rank.es_source_of(title, cache_path)
+        raw.append(f"{title} | es:{es_title}" if es_title else title)
+    candidates = disasters.collect_candidates(
+        [], used, raw, per_run, today=today, popularity=popularity, weights=weights
+    )
+    return candidates, weights
+
+
 def select_topic(settings: Settings, ignore_history: bool = False) -> StoryCandidate | None:
     """이번 회차 주제 하나. 소스는 `topics.source` 로 고른다.
 
@@ -76,27 +130,7 @@ def select_topic(settings: Settings, ignore_history: bool = False) -> StoryCandi
         candidates = sillok.collect_candidates(settings.get("topics.sillok.article_ids", []))
         weights = settings.get("topics.sillok.weights", {})
     elif source == "disaster":
-        # used 를 넘겨 이미 다룬 제목은 위키백과 호출 자체를 건너뛴다 — 목록 전체를
-        # 매번 조회하다 429 로 한꺼번에 막히는 사고를 줄인다(run #51 참고).
-        discovered: list[str] = []
-        discover_cfg = settings.get("topics.disaster.discover", {}) or {}
-        if discover_cfg.get("enabled", False):
-            discovered = disaster_discovery.shuffled(
-                disaster_discovery.discover_titles(
-                    discover_cfg.get("roots", []),
-                    CACHE_DIR / "disaster_titles.json",
-                    discover_cfg.get("max_depth", 2),
-                    discover_cfg.get("max_titles", 400),
-                )
-            )
-            # 이미 쓴 제목은 위키백과 본문 호출 전에 걸러진다(collect_candidates).
-        candidates = disasters.collect_candidates(
-            settings.get("topics.disaster.titles", []),
-            used,
-            discovered,
-            discover_cfg.get("per_run_candidates", 6),
-        )
-        weights = settings.get("topics.disaster.weights", {})
+        candidates, weights = _disaster_candidates(settings, used)
     else:
         client = DataGoKrClient(settings.secrets.data_go_kr_service_key)
         candidates = heritage.collect_candidates(
@@ -601,9 +635,9 @@ def _render_part(
         # 길이를 그대로 물려받으면 Veo 가 실제로 만든 8초짜리 영상도 그만큼만 잘려
         # 화면 대부분이 정지 이미지처럼 보인다. 무음을 더해 문장 길이를 실제 생성
         # 길이(veo.duration_seconds)만큼 맞춘다 — 돈 주고 만든 8초를 다 쓴다.
-        min_veo_line_duration=settings.get(
-            "veo.min_scene_seconds", settings.get("veo.duration_seconds", 8)
-        ),
+        # 2026-10-27: 기본값 0 — 무음으로 늘리면 말이 끊기는 빈 구간이 생겨 이탈한다.
+        min_veo_line_duration=settings.get("veo.min_scene_seconds", 0),
+        tempo=float(settings.get("audio.tempo", 1.0) or 1.0),
     )
 
     cues = subtitle_builder.build_cues(

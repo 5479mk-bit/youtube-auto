@@ -14,8 +14,9 @@ video:
   # 사용자 지시: "최소 63초 이상". 상한은 사실상 없다 — 대본 3중 후킹 구조를
   # 그대로 이어 붙인 자연 길이(보통 70~90초)를 그대로 쓴다.
   # 사용자 지시(2026-09-27): 최소 63초, 90초를 넘기지 않는다.
-  combined_duration_min: 63
-  combined_duration_max: 90
+  # 2026-10-27: 35~45초 포맷(로그 경고 기준). 쇼츠는 짧을수록 끝까지 보고 반복 재생된다.
+  combined_duration_min: 30
+  combined_duration_max: 50
   cut_duration_min: 2.5
   cut_duration_max: 3.0
   hook_duration: 3.0
@@ -39,13 +40,16 @@ video:
   camera_shake_margin: 1.05  # 배경을 이만큼 오버사이즈해서 흔들려도 가장자리가 안 보이게
 
 subtitle:
-  # 외곽선을 버리고 드롭 섀도우로 바꿨다. 글자가 얇아진 만큼 크기도 줄인다.
-  font_size: 46   # 레퍼런스처럼 작은 흰 글씨 한 줄
+  # 2026-10-27 개편: 작은 흰 글씨 한 줄(46px) → 쇼츠 표준인 큰 굵은 2~3단어 묶음.
+  # 소리 끄고 보는 시청자가 많아 자막이 곧 본문이다. 화면 중하단(위에서 64% 지점)에 크게,
+  # 강조어는 노란색, 실사 영상 위에서도 읽히게 검은 외곽선.
+  font_size: 82
   font_color: "#FFFFFF"
-  emphasis_color: "#FFFFFF"   # 레퍼런스처럼 강조색 없이 흰 글씨 하나로
-  shadow_blur: 6
-  bottom_ratio: 0.24          # 자막 블록 아래끝을 화면 하단 24% 지점에
-  max_chars_per_line: 18
+  emphasis_color: "#FFD84D"
+  shadow_blur: 8
+  stroke_width: 6
+  bottom_ratio: 0.36          # 자막 블록 아래끝을 화면 하단 36% 지점에(쇼츠 하단 UI 위)
+  max_chars_per_line: 14      # 한 화면에 2~3단어
   dynamic_pop: true           # 자막 큐마다 짧게 튀어오르는 팝인 애니메이션(사용자 지시, 2026-10-01)
 
 audio:
@@ -88,7 +92,10 @@ audio:
   gemini_model: gemini-2.5-pro-preview-tts
   # 채널 언어를 스페인어로 전환(사용자 지시, 2026-09-30)하면서 스타일 지시문도
   # 스페인어 대본 기준으로 다시 썼다.
-  gemini_style_prompt: "como un narrador confiable de documentales contando una historia real e interesante, en español neutro, siguiendo el guion tal cual, sin pausas largas entre frases, con un tono calmado que va subiendo la tensión poco a poco, sin sobreactuar, como una persona real"
+  # 2026-10-27: '차분한 다큐' → '재난 영화 예고편 내레이터'. 첫 마디부터 긴박하게, 쉼 없이.
+  gemini_style_prompt: "como el narrador de un tráiler de una película de catástrofes: voz grave, intensa y urgente, ritmo rápido y sin pausas entre frases, en español latinoamericano neutro, cada frase dicha con fuerza como si estuviera pasando ahora mismo, la primera frase con máximo impacto, siguiendo el guion palabra por palabra, como una persona real y no como un robot"
+  # 음높이를 유지한 채 말 속도를 올린다(ffmpeg atempo). 예전 청취 검증상 1.1배가 자연스러운 상한.
+  tempo: 1.1
   gemini_min_request_interval: 1.5
   edge_voice: es-MX-JorgeNeural   # 스페인어 남성 음성(require_quality_voice=false 일 때만 쓰임)
   edge_pitch: "-5Hz"
@@ -113,7 +120,9 @@ script:
   llm:
     # vertex_gemini = 같은 모델을 GCP 크레딧으로. AI Studio 선불 잔액은 0 이다(402).
     provider: vertex_gemini
-    model: gemini-3.6-flash
+    # 2026-10-27: 존재하지 않는 gemini-3.6-flash(매번 404 후 flash 로 폴백) → 대본 품질이 곧
+    # 조회수라 pro 로. 한 편에 몇십 원 수준이다. 없으면 자동으로 gemini-2.5-flash 로 내려간다.
+    model: gemini-2.5-pro
     temperature: 0.9
   # 부별 목표 글자 수.
   # 채널 언어를 스페인어로 전환(2026-09-30)하면서 이 값도 다시 잡아야 했다 —
@@ -125,8 +134,9 @@ script:
   # 영상 길이는 이번 스페인어 TTS(초당 몇 자인지 아직 모른다)로 첫 실제 렌더를
   # 돌려봐야 정확히 안다 — 그 결과로 다시 조정할 것.
   # 2026-10-20: 60~70초(사용자 지시 — 60초 이상). 예전 420/460자가 75~82초였다.
-  part1_target_chars: 350
-  part2_target_chars: 380
+  # 2026-10-27: 60~70초 → 35~45초(평균 조회수 300 개편). 1.1배속·무음 패딩 없음 기준 약 14자/초.
+  part1_target_chars: 260
+  part2_target_chars: 290
 
 topics:
   # sillok(조선왕조실록) | heritage(국가유산청 해설문) | disaster(해외 자연재해·인재).
@@ -140,39 +150,100 @@ topics:
     # 이력이 무시됨)와 겹쳐 3일 내내 타이타닉만 나온 사고가 있었다(2026-09-29).
     # 이제 reuse_topic 기본은 꺼짐이라 매일 다른 주제가 순서대로 빠지는데, 목록이
     # 짧으면 며칠 안에 다시 바닥나므로 여유를 둔다.
-    # 채널 언어를 스페인어로 전환(2026-09-30)했지만 이 제목들은 그대로 둔다 —
-    # src/disasters/collect_candidates() 가 여전히 한국어 위키백과 본문을 "사실
-    # 재료"로 가져오고(fetch_full_text 가 ko.wikipedia.org 고정), 대본 프롬프트
-    # (GLOBAL_DISASTER_PROMPT, 스페인어판)가 그 본문을 정확히 번역해 스페인어로
-    # 서술한다. 위키백과 API 호출 방식을 바꿀 필요가 없어 가장 안전한 경로다.
+    # 채널 언어를 스페인어로 전환(2026-09-30)한 뒤에도 한동안 한국어 위키백과 본문을 번역해 썼다.
+    # 2026-10-27 개편(평균 조회수 300): 중남미 시청자가 이미 아는 사건을 고르고, 본문도 가능하면
+    # 스페인어 위키백과에서 직접 가져온다. 형식(src/disasters/popularity.py):
+    #   `es:문서명 | YYYY-MM-DD`                — 스페인어 문서 + 사건 날짜(기념일 우선순위·"Hace N años")
+    #   `한국어 제목 | YYYY-MM-DD | es:문서명`  — 이력 키는 한국어 제목 그대로(이미 다룬 주제 재등장 방지)
+    #   `한국어 제목`                            — 예전 형식 그대로 동작
+    # 순서는 config 순서가 아니라 점수다: 기념일(당일·1~2일 전 최우선) + 스페인어 위키백과 최근 60일
+    # 조회수(이미 아는 사건일수록 첫 1초에 안 넘긴다). 스페인어 문서명은 2026-10-27 API 로 실존과
+    # 리다이렉트 대상(정식 문서명)을 확인했다 — 리다이렉트 이름을 쓰면 조회수가 0 에 가깝게 잡힌다.
+    # 한 회차는 한 문서만 사실 재료로 쓴다(다국어 혼용 금지 원칙은 그대로).
     titles:
-      # 2026-10-20 사용자 지정: 다음 회차들은 프랑스 재난부터(시위는 광고 제한 위험으로 제외).
-      # 1910년 파리 대홍수·몽블랑 터널 화재는 한국어 위키백과에 단독 문서가 없어 못 넣었다.
-      - 노트르담 대성당 화재
-      - 말파세댐 붕괴 사고   # 문서 존재 미확인(위키 429) — 없으면 경고 후 다음 제목으로 넘어간다
-      - 타이타닉호
-      - 체르노빌 원자력 발전소 사고
-      - 리스본 대지진
-      - 후쿠시마 제1원자력 발전소 사고
-      - 폼페이
-      - 허리케인 카트리나
-      - 2004년 인도양 지진해일
-      - 1906년 샌프란시스코 지진
-      - 라나 플라자 붕괴 사고
-      - 2011년 동일본 대지진
-      - 보팔 가스 누출 사고
-      - 2010년 아이티 지진
-      - 1976년 탕산 대지진
-      - 1985년 멕시코시티 지진
-      - 2005년 카슈미르 지진
-      - 2008년 쓰촨 대지진
+      # 2026-10-20 사용자 지정: 프랑스 재난(시위는 광고 제한 위험으로 제외). 2026-10-27 부터는
+      # 기념일·인기도 순서를 따른다 — 맨 위라고 먼저 나오지 않는다.
+      - 노트르담 대성당 화재 | 2019-04-15
+      - 말파세댐 붕괴 사고 | 1959-12-02   # 한국어 문서 존재 미확인 — 없으면 경고 후 건너뛴다
+      - 타이타닉호 | 1912-04-15 | es:Hundimiento del RMS Titanic
+      - 체르노빌 원자력 발전소 사고 | 1986-04-26 | es:Accidente de Chernóbil
+      - 리스본 대지진 | 1755-11-01 | es:Terremoto de Lisboa de 1755
+      - 후쿠시마 제1원자력 발전소 사고 | 2011-03-11 | es:Accidente nuclear de Fukushima I
+      - 폼페이 | es:Erupción del Vesubio en 79   # 날짜는 학설이 갈려 비워 둔다
+      - 허리케인 카트리나 | 2005-08-29 | es:Huracán Katrina
+      - 2004년 인도양 지진해일 | 2004-12-26 | es:Terremoto y tsunami del océano Índico de 2004
+      - 1906년 샌프란시스코 지진 | 1906-04-18
+      - 라나 플라자 붕괴 사고 | 2013-04-24
+      - 2011년 동일본 대지진 | 2011-03-11 | es:Terremoto y tsunami de Japón de 2011
+      - 보팔 가스 누출 사고 | 1984-12-03 | es:Desastre de Bhopal
+      - 2010년 아이티 지진 | 2010-01-12 | es:Terremoto de Haití de 2010
+      - 1976년 탕산 대지진 | 1976-07-28 | es:Terremoto de Tangshan
+      - 1985년 멕시코시티 지진 | 1985-09-19 | es:Terremoto de México de 1985
+      - 2005년 카슈미르 지진 | 2005-10-08
+      - 2008년 쓰촨 대지진 | 2008-05-12
       - 1931년 중국 대홍수
-      - 1970년 페루 지진
-      - 1970년 볼라 사이클론
-      - 퉁구스카 폭발사건
-      - 간토 대지진
-      - 챌린저 우주왕복선 폭발 사고
-      - 컬럼비아 우주왕복선 공중분해 사고
+      - 1970년 페루 지진 | 1970-05-31 | es:Terremoto de Áncash de 1970
+      - 1970년 볼라 사이클론 | 1970-11-12
+      - 퉁구스카 폭발사건 | 1908-06-30 | es:Bólido de Tunguska
+      - 간토 대지진 | 1923-09-01
+      - 챌린저 우주왕복선 폭발 사고 | 1986-01-28 | es:Accidente del transbordador espacial Challenger
+      - 컬럼비아 우주왕복선 공중분해 사고 | 2003-02-01 | es:Accidente del transbordador espacial Columbia
+      # 2026-10-27: 중남미가 아는(또는 중남미에서 일어난) 사건 위주로 추가 — 스페인어 문서 직접.
+      - "es:Huracán Mitch | 1998-10-29"
+      - "es:Tragedia de Armero | 1985-11-13"
+      - "es:ARA San Juan (S-42) | 2017-11-15"
+      - "es:Explosiones de San Juan Ixhuatepec de 1984 | 1984-11-19"
+      - "es:Vuelo 2933 de LaMia | 2016-11-28"
+      - "es:Explosión de Halifax | 1917-12-06"
+      - "es:Tragedia de Vargas | 1999-12-15"
+      - "es:Terremoto de Managua de 1972 | 1972-12-23"
+      - "es:Tragedia de Cromañón | 2004-12-30"
+      - "es:Accidente del Costa Concordia | 2012-01-13"
+      - "es:Tragedia de la discoteca Kiss | 2013-01-27"
+      - "es:Apolo 1 | 1967-01-27"
+      - "es:Rotura de la presa de Brumadinho | 2019-01-25"
+      - "es:Wilhelm Gustloff | 1945-01-30"
+      - "es:Incendio del Edificio Joelma | 1974-02-01"
+      - "es:Incidente del paso Diátlov | 1959-02-02"
+      - "es:Terremoto de Guatemala de 1976 | 1976-02-04"
+      - "es:Terremotos de Turquía y Siria de 2023 | 2023-02-06"
+      - "es:Desastre minero de Pasta de Conchos | 2006-02-19"
+      - "es:Terremoto de Chile de 2010 | 2010-02-27"
+      - "es:Vuelo 370 de Malaysia Airlines | 2014-03-08"
+      - "es:Desastre aéreo de Tenerife | 1977-03-27"
+      - "es:Accidente de Three Mile Island | 1979-03-28"
+      - "es:Tragedia de Mocoa | 2017-04-01"
+      - "es:Tragedia de Hillsborough | 1989-04-15"
+      - "es:Terremoto de Ecuador de 2016 | 2016-04-16"
+      - "es:Explosiones de Guadalajara de 1992 | 1992-04-22"
+      - "es:Terremoto de Nepal de 2015 | 2015-04-25"
+      - "es:Accidente del Hindenburg | 1937-05-06"
+      - "es:Hundimiento del RMS Lusitania | 1915-05-07"
+      - "es:Erupción del monte Pelée de 1902 | 1902-05-08"
+      - "es:Erupción del monte Santa Helena de 1980 | 1980-05-18"
+      - "es:Terremoto de Valdivia de 1960 | 1960-05-22"
+      - "es:Inundación de Johnstown | 1889-05-31"
+      - "es:Vuelo 447 de Air France | 2009-06-01"
+      - "es:Erupción del volcán de Fuego de 2018 | 2018-06-03"
+      - "es:Incendio de la Torre Grenfell | 2017-06-14"
+      - "es:Desastre de Seveso | 1976-07-10"
+      - "es:Vuelo 3054 de TAM Linhas Aéreas | 2007-07-17"
+      - "es:Accidente ferroviario de Santiago de Compostela | 2013-07-24"
+      - "es:Vuelo 4590 de Air France | 2000-07-25"
+      - "es:Explosiones en el puerto de Beirut de 2020 | 2020-08-04"
+      - "es:Rescate de la mina San José | 2010-08-05"
+      - "es:Colapso de la presa Banqiao | 1975-08-08"
+      - "es:K-141 Kursk | 2000-08-12"
+      - "es:Terremoto del Perú de 2007 | 2007-08-15"
+      - "es:Catástrofe del lago Nyos | 1986-08-21"
+      - "es:Erupción del Krakatoa de 1883 | 1883-08-27"
+      - "es:Accidente radiológico de Goiânia | 1987-09-13"
+      - "es:Terremoto de Puebla de 2017 | 2017-09-19"
+      - "es:Huracán María | 2017-09-20"
+      - "es:Presa del Vajont | 1963-10-09"
+      - "es:Vuelo 571 de la Fuerza Aérea Uruguaya | 1972-10-13"
+      - "es:Catástrofe de Aberfan | 1966-10-21"
+      - "es:Huracán Otis | 2023-10-25"
       # 2026-10-09: 6일 연속(run #53~#58) 자동 스케줄이 "선정할 주제 후보가
       # 없습니다"로 중단됐다 — 16개가 전부 소진된 뒤 아무도 체크인을 못 봤다.
       # API로 실존을 확인한 7개를 추가해 23개로 늘렸다. 이 사고로 느낀 것:
@@ -217,9 +288,11 @@ topics:
         - 분류:건설 사고
         - 분류:광산 사고
         - 분류:기근
+    # 2026-10-27: 기념일(당일·1~2일 전) > 스페인어권 인기도 > 본문 두께. freshness 는 늘 1.0 이라 뺐다.
     weights:
-      story_density: 0.5
-      freshness: 0.5
+      anniversary: 0.45
+      popularity: 0.40
+      story_density: 0.15
   sillok:
     # 샘플 단계라 기사를 사람이 지목한다. 왕대 전체 색인은 샘플을 보고 판단한다.
     article_ids:
@@ -344,7 +417,9 @@ veo:
   # 보인다("맨처음+중간 2번은 움직여야" 피드백의 원인). "실제로 8초를 만들었으면
   # 8초를 다 써야지 아깝게" — duration_seconds 와 같은 값으로 맞춰 생성된 영상을
   # 끝까지 쓴다(짧게 잡아 일부러 잘라내지 않는다).
-  min_scene_seconds: 4
+  # 2026-10-27: 0 으로. 4초를 채우려고 내레이션 뒤에 무음을 붙이던 게 말이 끊기는 빈 구간을
+  # 만들어 이탈을 불렀다. 이제 Veo 클립은 문장 길이에 맞춰 잘라 쓴다(일부 버리더라도 템포 우선).
+  min_scene_seconds: 0
   # lite 8초 기준 클립당 약 590원. 편당 4클립이면 약 2,400원, 하루 1편이면 월 약 7만원.
   # 부당 VEO 5~6문장(4초) × 2부.
   # 2026-10-19: 영상 비율을 높이며(부당 VEO 6문장 이상) 상한을 올렸다.

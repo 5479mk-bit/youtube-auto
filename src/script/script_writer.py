@@ -367,207 +367,126 @@ VEO 문장의 prompt 에는 아래 중 장면에 맞는 카메라 무브먼트�
 """
 
 
-GLOBAL_DISASTER_PROMPT = """Eres guionista, en español, de una serie de Shorts verticales
-para un canal de imágenes cinematográficas hiperrealistas de desastres a escala épica. A continuación hay un desastre o
-accidente real; el texto de referencia viene de Wikipedia **en coreano** — tu trabajo es
-traducirlo con precisión y narrarlo en español. **Este video es una pieza cerrada de 60 a 70
-segundos — NO es una serie de dos episodios separados que se publican por separado.** Más
-abajo, en [ESTRUCTURA], "parte 1"/"parte 2" son solo una división interna para escribir el
-guion; el espectador ve un único video continuo de principio a fin, sin corte.
+GLOBAL_DISASTER_PROMPT = """Eres el guionista principal de "Secretos del Colapso", un canal de Shorts
+verticales en español latinoamericano sobre desastres reales. Tu único objetivo: que nadie deslice
+en el primer segundo, que lo vean entero y que lo vuelvan a ver. Escribes para alguien que va
+pasando videos con el pulgar y te da medio segundo.
 
-**REGLA ABSOLUTA**: en ninguna frase generada uses expresiones como "parte 1", "parte 2",
-"en la próxima parte", "continuará", "sigue en la parte 2", "primera/segunda entrega" — nada
-que sugiera que el video está dividido en varias publicaciones. La "última frase de la parte 1
-corta en el punto de mayor intriga" del [ESTRUCTURA] significa que la frase deja una pregunta
-en el aire, no que anuncie una continuación en otro video (la respuesta llega en la frase
-siguiente, dentro del mismo video).
-
-El tono es "documental calmado pero imposible de dejar de ver". No es un amigo emocionado
-hablando rápido — es un narrador confiable que va acumulando hechos con calma y, de vez en
-cuando, da un giro.
+El video dura **35 a 45 segundos** y es una sola pieza continua. Abajo, "parte 1"/"parte 2" son
+solo una división interna del guion — **nunca** escribas "parte 1", "parte 2", "continuará",
+"en el próximo video" ni nada que sugiera otra entrega.
 
 [MATERIAL]
 Título: {headline}
-Texto de Wikipedia en coreano (única fuente de hechos — tradúcelo con exactitud, no inventes
-nada que no esté ahí):
+Pistas: {hints}
+Texto de Wikipedia (puede estar en español o en coreano; si está en coreano, tradúcelo con
+exactitud). Es la **única** fuente de hechos:
 {context}
 
-[REGLAS DE VERACIDAD — cumplir siempre]
-- No inventes hechos que no estén en el texto fuente. No cambies fechas, lugares, nombres ni
-  cifras al traducir — tradúcelos con precisión.
-- Los números concretos del texto (víctimas, altura, peso, longitud) son el material más
-  fuerte. Ponlos por delante y, si es posible, añade una comparación que se sienta cercana
-  ("más alto que un edificio de 30 pisos"). Usa solo referencias de sentido común para esas
-  comparaciones (un piso ≈ 3 metros, etc.).
-- **Nunca trates un desastre o accidente ocurrido dentro de Corea del Sur.** Solo desastres
-  naturales globales o fracasos históricos de ingeniería fuera de Corea. Si el material es en
-  realidad un incidente doméstico coreano, rechaza el prompt y no generes nada.
+[REGLAS DE VERACIDAD — no negociables]
+- No inventes nada que no esté en el texto. Fechas, lugares, nombres y cifras, exactos.
+- Los números concretos (muertos, minutos, metros, toneladas) son tu arma más fuerte. Si puedes,
+  hazlos sentir con una comparación de sentido común ("más alto que un edificio de 30 pisos").
+- Si el texto menciona una advertencia ignorada, un error humano, algo ocultado o una pregunta
+  sin respuesta, es tu mejor material. Si no lo menciona, no lo inventes: usa la ironía de los
+  hechos reales (lo que creían seguro y no lo era).
+- **Nunca trates un desastre ocurrido dentro de Corea del Sur.** Si el material lo es, no
+  generes nada.
 
-[ESTRUCTURA — sigue el ritmo del canal de referencia]
-**Gancho de misterio/conspiración (busca esto en el texto fuente antes de escribir)**: revisa
-si el material menciona alguna de estas cosas — una advertencia ignorada, un informe ocultado
-o publicado tarde, un ingeniero o inspector que alertó del riesgo antes de morir o ser
-silenciado, una negligencia de una autoridad o empresa, una investigación que nunca dio
-respuestas completas. Si SÍ aparece en el texto, es tu material más fuerte — enmárcalo como
-"lo que casi nadie sabe", "la advertencia que nadie quiso escuchar", "lo que las autoridades
-tardaron años en admitir". Si el texto NO tiene nada de esto, no lo inventes — usa en su lugar
-la ironía de los hechos reales (algo se creía perfectamente seguro y no lo era). En cualquier
-caso, la primera frase debe lanzar el elemento más intrigante posible dentro de los primeros
-segundos.
+[ESTRUCTURA — apertura en caliente (cold open), siempre así]
+1. **Frase 1 (segundo 0): el momento más brutal de la historia, en presente y sin contexto.**
+   Empieza en plena catástrofe con un número o una imagen imposible de ignorar. 6 a 10 palabras.
+   Ejemplos del tono: "En 18 horas, una ciudad entera queda sepultada viva." / "El barco
+   'imposible de hundir' tiene dos horas de vida." **Prohibido** empezar con contexto, fechas
+   de calendario, "Aquí, en...", "Hubo una vez", "En este video", saludos o preguntas genéricas.
+   Si en Pistas hay un aniversario, úsalo en la frase 2 o 3 con la cifra exacta de la pista
+   ("Hace 41 años, este volcán...") — nunca "hoy" ni "un día como hoy" (cada quien lo ve un día
+   distinto).
+2. **Frase 2: la brecha de curiosidad.** Algo que obligue a quedarse: "Y lo peor: pudo
+   evitarse." / "Pero nadie escuchó la advertencia." / la pregunta corta del gancho.
+3. **Rebobina** ("Horas antes...", "Todo empezó con...") y cuenta en orden, en **presente
+   histórico**, cada frase subiendo la tensión. Detalles concretos y sensoriales: lo que se ve,
+   se oye, la hora exacta.
+4. **A mitad del video, re-gancho** para frenar el abandono: "Pero eso no fue lo peor." / "Y
+   aquí todo cambia."
+5. **Clímax**: el hecho más decisivo, con su número.
+6. **Última frase: golpe final que enlaza con la frase 1** — que al volver a empezar el video
+   la primera frase suene como la continuación (bucle). Nada de despedidas, "suscríbete" ni
+   moralejas largas.
 
-**Pregunta detonante (obligatoria)**: dentro de las primeras 2-3 frases de la parte 1, incluye
-una pregunta directa y provocadora que quede clavada (estilo "¿Sabías esto?", "¿Por qué
-falló?", "¿Qué ocultaron?", "¿Quién dio la orden?") — **máximo 4 palabras**, directa, sin
-rodeos, en español latinoamericano. Esta misma pregunta sale **en grande en el centro de la
-pantalla durante los 3 primeros segundos**, así que tiene que entenderse de un vistazo. Esta pregunta también debe ir (igual o casi igual) en `hook_number` de la parte 1, que
-se queda fijo en pantalla desde el segundo 0 — así el gancho está visible incluso antes de que
-la voz la diga. No hace falta responderla de inmediato; es la intriga que sostiene los primeros
-segundos.
-Parte 1:
-- **Primera frase**: presenta la escena tal como era (o justo antes del desastre), sin
-  explicaciones de fondo — algo como "Aquí, en ○○, hubo una vez algo que...". Si hay un
-  ángulo de misterio/advertencia ignorada real en el texto, ábrela aquí mismo o en la frase
-  siguiente ("Lo que nadie contó es que...").
-- **Segunda y tercera frase**: da la vuelta — "Pero esto, en realidad, no era...", un hecho
-  que contradice lo que el espectador esperaba.
-- Después, **haz sentir un número concreto** y fija el eje de la historia con **un resumen de
-  una línea** ("El problema de este desastre se resume en una sola frase").
-- Sigue en orden cronológico cómo se llegó hasta ahí. A mitad de camino, incluye una vez una
-  **cadena de problemas** ("Y entonces pasó otra cosa...").
-- La última frase de la parte 1 no da la respuesta — corta en el punto de mayor intriga.
-Parte 2:
-- La primera frase retoma en una línea la pregunta de la parte 1 y va directo al grano.
-- Explica **por qué falló la ingeniería o la estructura**, como si miraras el interior (solo
-  con base en el texto fuente).
-- Coloca el hecho más decisivo como clímax hacia el final.
-- **Bucle**: la última frase de la parte 2 debe enlazar de forma natural con la primera frase
-  de la parte 1 (que el final invite a volver a ver el inicio sin notar el corte).
-- Cierra con una nota que siga resonando en el presente ("Y este problema, hoy en día, sigue
-  sin resolverse" — solo si el texto lo respalda). Si no hay base para eso, cierra con una
-  frase de conclusión serena.
-- **La parte 2 debe responder directamente a la pregunta que dejó la parte 1.** Si la
-  respuesta no está en el texto, dilo con claridad ("La causa exacta todavía no se ha
-  esclarecido") y continúa.
-- Parte 1: unos {part1_chars} caracteres en total. Parte 2: unos {part2_chars} caracteres en
-  total. **Cada parte, entre 7 y 8 frases (objetos JSON).** **El límite de caracteres tiene
-  prioridad sobre cualquier otra regla** — al ritmo actual de narración, pasarse de esa cifra
-  hace que el video supere los 70 segundos — los Shorts cortos se ven completos y se repiten,
-  y eso es lo que el algoritmo premia. Después de escribir todo, cuenta los caracteres y,
-  si te pasaste más de un 20%, fusiona frases o elimina las menos importantes (sin tocar los
-  puntos obligatorios de [ESTRUCTURA]: el gancho inicial, el giro, el clímax y la última
-  frase).
+**Gancho en pantalla (`hook_number` de la parte 1)**: una pregunta de **máximo 4 palabras** que
+sale en grande en el centro durante los 3 primeros segundos y luego queda arriba. Debe picar
+sin explicar: "¿Por qué nadie huyó?", "¿Quién dio la orden?", "¿Sabías esto?". En español
+latinoamericano, directa.
 
-[TONO — esto es lo más importante]
-- **Español latinoamericano neutro** (el que entiende todo el público de México a Argentina):
-  usa "ustedes" (nunca "vosotros"), vocabulario panamericano ("carro"/"auto" no "coche",
-  "computadora" no "ordenador", "celular" no "móvil"), sin modismos de un solo país (nada de
-  "vale", "tío", "guay", "che", "güey") ni la conjugación de España.
-- **Voz intensa, urgente y cinematográfica** — como el narrador de un tráiler de catástrofe.
-  Cada frase empuja hacia la siguiente; nunca suena a clase ni a enciclopedia.
-- Usa recursos de tensión: hablarle directo al espectador ("Imagina estar ahí"), cuenta
-  regresiva de tiempo ("Les quedaban 40 segundos"), contrastes brutales ("Lo creían
-  indestructible. Duró 3 horas."), y preguntas que pican ("¿Quién firmó esa orden?").
-- Puedes usar exclamaciones cortas en los momentos de mayor impacto (máximo 2 por parte),
-  pero la fuerza principal viene de los hechos y números reales, dichos con crudeza.
-- Nada de relleno ni de frases neutras — si una frase no genera tensión, curiosidad o golpe
-  emocional, reescríbela o elimínala.
-- Cada frase: **entre 6 y 12 palabras** (unos 1.5-3 segundos al leerla en voz alta), corta y
-  directa. Sin puntos suspensivos; como máximo una coma por frase.
-- Las frases se leen de corrido, sin cortes — conectores como "pero", "y entonces", "por eso"
-  al inicio de la frase siguiente están bien (una palabra de conexión, no una interjección).
-- En `emphasis` va solo el fragmento corto que se resalta en el subtítulo.
-- En `overlay` va el número o palabra corta que se muestra en grande al centro de la pantalla
-  (ej. "1978", "98 m", "1.514 personas", "grieta"). Solo en **3 o 4 frases por parte**; el
-  resto, cadena vacía. Debe ser un número o palabra que aparezca literalmente en esa frase.
+Longitud: parte 1 unos {part1_chars} caracteres, parte 2 unos {part2_chars} caracteres.
+**Cada parte, entre 6 y 7 frases (objetos JSON).** El límite de caracteres manda sobre todo lo
+demás: si te pasas más de un 15%, fusiona o elimina frases (nunca la frase 1, el re-gancho, el
+clímax ni la última).
 
-[PANTALLA — fotografía cinematográfica hiperrealista a escala épica (obligatorio)]
-Cada plano es **una sola imagen impactante, hiperrealista, como una foto aérea de cine**: la
-escena real del desastre vista con una escala abrumadora, cielo tormentoso y nublado, niebla,
-luz natural dramática. Nada de maquetas, diagramas, cortes transversales ni anotaciones. El
-espectador debe pensar "¿esto es real?" en el primer segundo. Cada frase elige una ruta
-(`scene_type`).
+[TONO]
+- **Español latinoamericano neutro** (de México a Argentina): "ustedes", nunca "vosotros";
+  "carro"/"auto", "computadora", "celular"; nada de "vale", "tío", "guay", "che", "güey".
+- **Voz intensa, urgente y cinematográfica**, como el narrador de un tráiler de catástrofe.
+  Nunca suena a clase ni a enciclopedia.
+- Habla al espectador ("Imagina estar ahí"), usa cuentas regresivas ("Les quedan 40 segundos"),
+  contrastes brutales ("Lo creían indestructible. Duró 3 horas.").
+- Cada frase: **entre 6 y 10 palabras**, una idea, máximo una coma, sin puntos suspensivos.
+  Máximo 2 exclamaciones en todo el video.
+- Prohibido el relleno y las muletillas de IA ("en un giro inesperado", "cabe destacar",
+  "sin embargo", "a lo largo de la historia"). Si una frase no da tensión, curiosidad o un
+  dato que golpea, bórrala.
+- En `emphasis` va la palabra o número clave de la frase (se pinta en amarillo en el subtítulo).
+- En `overlay` va un número o palabra corta que aparece **literalmente** en esa frase y se muestra
+  enorme en el centro ("1985", "98 m", "23.000"). Solo en 2 o 3 frases por parte; el resto vacío.
 
-- "VEO": video real en movimiento. **Mínimo 5 frases por parte (mínimo 10 en total)** — casi
-  todo el video debe ser movimiento real. VEO puede ir seguido. La primera frase de la parte 1
+[PANTALLA — fotografía cinematográfica hiperrealista a escala épica]
+Cada plano es una imagen hiperrealista, como una toma aérea de cine del desastre real: escala
+abrumadora, cielo tormentoso, niebla, luz dramática. Nada de maquetas, diagramas ni texto.
+
+- "VEO": video real en movimiento. **Mínimo 4 frases por parte (mínimo 8 en total).** La frase 1
   y la frase de clímax de cada parte siempre son VEO.
-- "AI_IMAGE": solo si queda alguna frase tranquila. El movimiento se agrega en el render.
+- "AI_IMAGE": el resto (se le agrega movimiento de cámara en el render).
 
-**Primer plano del video (la primera frase) = la imagen de portada.** En el feed de Shorts y
-en la cuadrícula del canal se ve este fotograma: tiene que ser el plano más espectacular y
-"imposible" de todo el video — una vista aérea amplia donde la escala del desastre se vea de un
-golpe (el barco gigante entero partiéndose, la ola más alta que los edificios, la ciudad
-entera bajo el agua). Composición limpia con un solo sujeto claro en el centro.
+**La frase 1 es la portada**: el plano más espectacular e "imposible" del video, una vista amplia
+donde la escala del desastre se entienda de un golpe, con un solo sujeto claro en el centro.
 
-Alterna entre **tres tipos de plano**, sin repetir el mismo tres veces seguidas:
-- Aéreo épico: dron muy alto, toda la escena y su escala ("epic aerial drone shot of ...")
-- Contrapicado monumental: desde abajo, el objeto gigantesco domina el cielo ("low-angle shot
-  looking up at the colossal ...")
-- Detalle real: un primer plano fotográfico que cuenta la historia ("close-up photo of ...")
+Alterna tres tipos de plano, sin repetir el mismo tres veces seguidas: aéreo épico ("epic aerial
+drone shot of ..."), contrapicado monumental ("low-angle shot looking up at the colossal ..."),
+detalle real ("close-up photo of ...").
 
-`prompt` es un prompt **en inglés** (el modelo solo entiende inglés) que se llena solo cuando
-`scene_type` es VEO o AI_IMAGE. Empieza siempre describiendo **con detalle el sujeto real de
-esa frase** (ej. "epic aerial drone shot of the Titanic breaking in half in the dark North
-Atlantic, lifeboats scattered on the black water"). Y al final agrega siempre, tal cual, con una
-coma antes:
+`prompt` va **en inglés** y solo cuando `scene_type` es VEO o AI_IMAGE. Empieza describiendo con
+detalle el sujeto real de esa frase (ej. "epic aerial drone shot of the Titanic breaking in half
+in the dark North Atlantic, lifeboats scattered on the black water") y termina siempre, tal cual:
   ", hyper-realistic cinematic photograph, epic sense of scale, dramatic overcast stormy sky,
    moody natural color grading, volumetric mist, ultra-detailed, shot on ARRI Alexa, 8k,
    photorealistic, no text, no watermark"
-En las frases de clímax/revelación (el momento más fuerte de cada parte), añade además, antes
-del cierre anterior: "dramatic catastrophic collapse, structure disintegrating into dust and
-debris, intense destruction". No lo uses en frases tranquilas — solo en el punto más alto de
-tensión de cada parte, para que el contraste se sienta.
+En la frase de clímax de cada parte añade antes del cierre: "dramatic catastrophic collapse,
+structure disintegrating into dust and debris, intense destruction".
+En las frases VEO, la escena **ya está en plena acción desde el primer fotograma** y lo que se
+mueve en grande es la escena misma (la estructura que se parte, el agua que arrasa, el fuego que
+se extiende); añade un movimiento de cámara rápido ("rapid FPV drone dive into ...", "fast whip
+pan across ...", "sudden crash zoom into ..."). Muestra solo lo que dice el texto.
 
-**[Movimiento de cámara para VEO — rápido y violento desde el primer fotograma]**
-En las frases VEO, la escena **ya está en plena acción desde el primer instante** — nada de
-arranques lentos ni cámara quieta. Agrega en el prompt (en inglés) uno de estos movimientos
-rápidos según la escena:
-- "rapid FPV drone dive straight into ..." (picada veloz hacia el centro del desastre)
-- "fast whip pan across ..." (barrido brusco)
-- "sudden crash zoom into ..." (zoom de golpe)
-- "violent handheld shake as ..." (cámara temblando con el impacto)
-**Lo más importante no es la cámara sino que la escena misma se mueva en grande**: describe
-una acción física enorme y continua — la estructura que se parte y se derrumba, bloques
-enormes cayendo, agua arrasando, fuego y humo extendiéndose, el suelo abriéndose, escombros
-volando. Si en la frase no pasa nada físico, elige el momento de la historia donde sí pase.
+`sfx` suena al empezar la frase. Úsalo en 2 o 3 frases por parte (giro, número, clímax), nunca
+dos seguidas iguales; el resto "none".
+- "sub_boom": revelación o número que golpea. "crack": algo se rompe. "whoosh": agua, gas,
+  escombros o transición. "alarm": el momento más tenso, una sola vez. "braam": el clímax.
 
-**El principio de veracidad se mantiene igual.** Lo que cambia es "cómo se muestra", no "qué
-pasó". No dibujes escenas que no estén en el texto fuente.
-
-`sfx` es el sonido que se dispara al comenzar esa frase (corte). **Hubo quejas de que los
-efectos de sonido eran excesivos** — no los pongas en cada corte, pero el volumen ya se subió
-bastante (sonido más presente y contundente), así que úsalos con intención en los momentos que
-más lo necesitan. En **3 o 4 frases por parte**, elegidas para las escenas más fuertes (giro,
-revelación de un número, clímax, colapso), y **nunca dos frases seguidas con el mismo sonido**
-(deja al menos una frase "none" entre medio). Las frases tranquilas de explicación no llevan
-sonido — el resto debe ser "none", y eso es lo normal.
-- "sub_boom": revelación de un hecho o número impactante, gran cambio de escena — el golpe
-  grave que se siente en el pecho.
-- "crack": el instante en que la estructura se agrieta, se parte o se hace pedazos.
-- "whoosh": agua, gas o escombros en movimiento, o transición de cámara.
-- "alarm": alarma, señal de peligro, evacuación — resérvalo para el momento más tenso e
-  inminente (justo antes del colapso o la revelación clave), no lo repitas.
-- "braam": el cliffhanger final de la parte 1, y también sirve para el clímax de la parte 2
-  si la escena es lo bastante grande.
-- "none": todo lo demás (la mayoría de las frases deben estar aquí).
-
-[FORMATO DE SALIDA] Responde únicamente con este JSON (los valores de texto, en español;
-los nombres de campo y los valores de `scene_type`/`sfx`, tal cual se listan aquí).
+[FORMATO DE SALIDA] Responde solo con este JSON (textos en español; nombres de campo y valores de
+`scene_type`/`sfx` tal cual).
 {{
-  "title_seed": "Una frase en español que resuma la historia en una línea. Nunca uses el
-            nombre de un canal ni ninguna marca.",
-  "part1": {{"hook_number": "Título corto y llamativo para mostrar arriba en pantalla, en
-             español. Sin año, fecha ni número de episodio. Nunca uses marcas como
-             '(1)'/'(2)'/'parte 1'/'parte 2' — el video se publica como una sola pieza.",
+  "title_seed": "Una frase en español que resuma la historia (sin nombre de canal ni marcas).",
+  "part1": {{"hook_number": "Pregunta de máximo 4 palabras para el centro de la pantalla.",
              "lines": [
-    {{"text": "Una frase de narración en español (6-12 palabras)",
+    {{"text": "Frase de narración en español (6-10 palabras)",
      "scene_type": "VEO | AI_IMAGE",
      "prompt": "prompt en inglés que termina con la frase de estilo de arriba",
      "sfx": "sub_boom | crack | whoosh | alarm | braam | none",
-     "overlay": "número/palabra para mostrar en el centro de la pantalla, o cadena vacía",
-     "emphasis": ["fragmento a resaltar en el subtítulo"]}}
+     "overlay": "número/palabra para el centro de la pantalla, o cadena vacía",
+     "emphasis": ["palabra clave"]}}
   ]}},
-  "part2": {{"hook_number": "Candidato de título para el mismo lugar que part1 (en la práctica
-              solo se usa el de part1). También sin año, fecha ni marca de episodio.",
+  "part2": {{"hook_number": "Otra pregunta corta (solo se usa la de part1).",
               "lines": [ ...misma estructura... ]}}
 }}
 """
@@ -624,6 +543,8 @@ def _prompt(candidate: StoryCandidate, part1_chars: int, part2_chars: int) -> st
     if candidate.dataset == "disaster":
         return GLOBAL_DISASTER_PROMPT.format(
             headline=candidate.headline,
+            # 주제 엔진이 붙인 힌트(오늘이 기념일인지 등). 없으면 "ninguna".
+            hints="; ".join(candidate.topic_tags) or "ninguna",
             context=candidate.context,
             part1_chars=part1_chars,
             part2_chars=part2_chars,
@@ -646,7 +567,7 @@ def _prompt(candidate: StoryCandidate, part1_chars: int, part2_chars: int) -> st
 # 지시를 무시하고 2~5문장짜리 얇은 대본을 내면(3중 후킹 구조가 통째로 들어갈 자리가
 # 없다), 파싱은 성공해도 여기서 걸러 템플릿 폴백으로 넘긴다 — "검증 없이 통과되던
 # 얇은 대본"이 실제 원인이었다.
-_DISASTER_MIN_LINES_PER_PART = 6  # 2026-10-20: 60~70초 포맷으로 부당 7~8문장
+_DISASTER_MIN_LINES_PER_PART = 5  # 2026-10-27: 35~45초 포맷으로 부당 6~7문장
 # VEO 컷은 4초짜리 영상이 통째로 생성된다. 문장이 너무 짧으면 대사가 1~2초 만에 끝나
 # 나머지는 무음으로 채워진다. 12자 미만이면 4초를 채우기엔 짧다고 보고 템플릿 폴백으로
 # 넘긴다(프롬프트는 12~22음절을 요구한다).

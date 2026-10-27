@@ -1452,3 +1452,12 @@ class TestGeneratedClipFallbacks:
         reviewer.send_review.assert_called_once()  # 승인 카드로 넘어간다
         assert "보류" in reviewer.notify.call_args_list[0].args[0]
         motion_sources.reset_run_state()
+
+
+def test_subtitle_chunks_do_not_end_with_spanish_function_word():
+    # 2026-10-27: 2~3단어 자막에서 "horas, el / barco" 같은 끊김 방지.
+    from src.subtitles.subtitle_builder import _rebalance_dangling, wrap_text
+
+    lines = _rebalance_dangling(wrap_text("En solo 2 horas, el barco imposible de hundir", 14))
+    assert all(line.split()[-1].lower() not in {"el", "la", "de", "en"} for line in lines[:-1])
+    assert " ".join(lines) == "En solo 2 horas, el barco imposible de hundir"

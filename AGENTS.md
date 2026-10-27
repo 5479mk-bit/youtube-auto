@@ -4,7 +4,8 @@
 사람용 상세 설명은 `README.md`, 설정 값의 이유는 `config/config.yaml` 주석에 있다.
 
 ## 한 줄 요약
-해외 재난·인재(人災) 사건을 위키백과(한국어판) 본문을 사실 재료로 삼아 **스페인어 쇼츠(60~70초)**로
+해외 재난·인재(人災) 사건을 위키백과(스페인어판 우선, 일부 한국어판) 본문을 사실 재료로 삼아
+**스페인어 쇼츠(35~45초)**로
 자동 제작하고, **텔레그램 승인 없이 바로 유튜브에 공개 업로드**(+틱톡 초안함)한다. 텔레그램에는
 "업로드 완료 + 링크 + 크레딧 요약", 영상, 설명(+해시태그 5개)만 보낸다.
 
@@ -34,7 +35,7 @@
 ## 로컬 실행·검증
 ```bash
 python -m pip install -r requirements.txt
-python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 215 passed, 1 skipped)
+python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 233 passed, 1 skipped)
 python main.py topics              # 주제 후보만 확인(과금 없음)
 python main.py cloud-check --generate   # Vertex 이미지 1장(약 30원)
 python main.py run --review --wait 1200 --combine-parts   # 한 회차 전체(과금 발생)
@@ -45,8 +46,13 @@ python main.py review-pending --wait 30
 ## 파이프라인 구조 (src/)
 - `pipeline.py` — 전체 흐름: 주제 선정 → 대본 → 장면 계획 → TTS → 자막 → 렌더 → 업로드.
   `review_and_publish()` 가 `review.auto_publish` 에 따라 자동 업로드/승인 대기를 가른다.
-- `disasters/` — 재난 후보. `config topics.disaster.titles`(사람이 지정)를 **먼저** 쓰고, 안 쓴 게
-  없으면 `discovery.py` 가 위키백과 분류(`topics.disaster.discover.roots`)에서 자동 발굴한다.
+- `disasters/` — 재난 후보. `config topics.disaster.titles`(사람이 지정, 80개)를 **먼저** 쓰고, 안 쓴
+  게 없을 때만 `discovery.py` 가 위키백과 분류(`topics.disaster.discover.roots`)에서 자동 발굴한다
+  (2026-10-27 전에는 매 회차 크롤링부터 해서 429 로 지정 주제까지 탈락했다).
+  `popularity.py` 가 순서를 정한다: 기념일(중남미 날짜 기준 당일·1~2일 전 최우선) + 스페인어
+  위키백과 최근 60일 조회수(14일 캐시 `.cache/disaster_popularity.json`) + 본문 두께.
+  항목 형식: `es:문서명 | YYYY-MM-DD`, `한국어 제목 | YYYY-MM-DD | es:문서명`(이력 키는 한국어 제목),
+  `한국어 제목`. 스페인어 문서명은 **리다이렉트가 아닌 정식 문서명**으로 적을 것(조회수가 0 으로 잡힘).
   한국 국내 사건은 제목·분류·본문 3단계로 막는다(절대 다루지 않는 원칙).
 - `script/script_writer.py` — 대본 프롬프트(`GLOBAL_DISASTER_PROMPT`, 스페인어). 그림체·길이·톤·
   VEO 비율·루프 구조가 여기 있다.
@@ -59,7 +65,18 @@ python main.py review-pending --wait 30
 - 채널 언어 스페인어(중남미 중립). 사실은 위키백과 원문만 — 지어내지 않는다.
 - 그림체: **초실사 시네마틱 항공샷**(레퍼런스: 인스타 15segundosmas). 흐린 폭풍 하늘, 압도적 규모.
   미니어처 디오라마·빨간 주석은 폐기됨. 첫 문장 = 썸네일 프레임(가장 압도적인 와이드 한 컷).
-- 길이 60~70초(사용자 지시: 60초 이상). 부당 350/380자, 7~8문장, VEO 부당 최소 5.
+- **2026-10-27 전면 개편**(한 달 평균 조회수 300 → 목표 3만): 근거는 쇼츠 랭킹 신호(첫 0.4초
+  스와이프 여부, 시청 지속률, 반복 재생). 되돌릴 때는 아래 값만 바꾸면 된다.
+- 길이 **35~45초**(이전 60~70초는 사용자 지시였으나 지속률·루프 근거로 변경, 사용자에게 보고함).
+  `script.part1/part2_target_chars` 260/290, 부당 6~7문장, VEO 부당 최소 4. 60초로 되돌리려면
+  350/380 + 프롬프트 "35 a 45" 문구 + `video.combined_duration_min/max`.
+- 구조: **콜드 오픈**(1문장 = 가장 처참한 순간, 현재형 6~10단어, "Aquí, en..."·"Hubo una vez" 금지)
+  → 호기심 갭 → 되감기(역사적 현재) → 중간 재후킹 → 클라이맥스 숫자 → 첫 문장으로 이어지는 루프.
+  기념일이면 "Hace N años"(절대 "hoy" 아님 — 시청 날짜가 제각각).
+- 템포: VEO 문장 무음 패딩 제거(`veo.min_scene_seconds: 0`), `audio.tempo: 1.1`(atempo), 쉼 0.05~0.3초,
+  TTS 스타일은 긴박한 예고편 내레이터. 대본 모델 `gemini-2.5-pro`.
+- 자막: 82px 굵은 흰 글씨 + 검은 외곽선 6, 강조어 노란색(`#FFD84D`), 한 줄 14자, 화면 중하단.
+- 제목: 40~65자, 앞 35자 안에 알아보는 사건·장소명. 암호형 숫자 제목("494 KM: El RUGIDO") 금지.
 - 톤: 긴박한 재난 예고편 내레이터, 어그로 제목(사실 기반). 마지막 문장이 첫 문장으로 이어지는 루프.
 - 움직임: Veo text-to-video + "장면 자체가 크게 움직이게" 모션 부스트.
 - 설명: 스포일러 금지(결말·원인·최종 숫자 X), "핵심은 영상 마지막에" 예고.
@@ -86,6 +103,8 @@ python main.py review-pending --wait 30
 - `review-pending` 스케줄이 실제로는 몇 시간 간격으로만 돈다(GitHub 스케줄 지연).
 - 1080p 는 Veo 3.1 이 8초 클립에서만 지원 — 지금(4초 클립)은 720p.
 - 승인 방식 시절 대기 회차 6건(9/30~10/9)은 자동 업로드하지 않고 남겨 둠.
+- 조회수·지속률 데이터를 자동으로 못 본다 — YouTube Analytics 는 `yt-analytics.readonly` 스코프가
+  필요(위 재로그인 때 같이). 에이전트 샌드박스 IP 는 YouTube·위키미디어가 막는 경우가 많다.
 
 ## 작업 규칙
 - 변경은 테스트로 고정하고(`tests/`), 커밋 전 `pytest` 전부 통과.

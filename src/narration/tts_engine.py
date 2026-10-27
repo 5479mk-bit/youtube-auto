@@ -57,8 +57,12 @@ def synthesize_part(
     out_dir: Path,
     require_quality: bool = True,
     min_veo_line_duration: float = 0.0,
+    tempo: float = 1.0,
 ) -> ScriptPart:
     """부 하나를 한 엔진으로 끝까지 읽힌다.
+
+    `tempo` 는 음높이를 유지한 채 말 속도를 올린다(ffmpeg atempo). Gemini TTS 는 문장별
+    배속 지시를 받지 않아 전체 속도를 여기서 맞춘다(2026-10-27, 1.15배 — 쇼츠 내레이터 속도).
 
     엔진을 문장마다 갈아타면 한 편 안에서 목소리가 바뀐다. 그래서 폴백은 문장이 아니라
     **부 단위**로 한다. 앞 엔진이 한 문장이라도 실패하면 그 부 전체를 다음 엔진으로 다시
@@ -79,7 +83,7 @@ def synthesize_part(
             continue
         paths = _synthesize_all(engine, part, out_dir)
         if paths is not None:
-            _finish(part, paths, min_veo_line_duration)
+            _finish(part, paths, min_veo_line_duration, tempo)
             logger.info(f"{part.part}부 내레이션: {engine.name}")
             return part
         logger.warning(f"{engine.name} 로는 {part.part}부를 끝까지 읽지 못했습니다 — 다음 엔진")
@@ -253,7 +257,9 @@ def _write_breath_silence(out_path: Path, duration: float) -> None:
     )
 
 
-def _finish(part: ScriptPart, paths: list[Path], min_veo_line_duration: float = 0.0) -> None:
+def _finish(
+    part: ScriptPart, paths: list[Path], min_veo_line_duration: float = 0.0, tempo: float = 1.0
+) -> None:
     """문장마다 앞뒤 무음을 정리하고 설계한 쉼을 붙인 뒤 길이를 잰다.
 
     VEO 문장은 화면(생성 영상) 길이가 이 최종 길이를 그대로 물려받으므로, 목표 하한
@@ -266,7 +272,7 @@ def _finish(part: ScriptPart, paths: list[Path], min_veo_line_duration: float = 
     있었다.
     """
     for line, path in zip(part.lines, paths):
-        new_path = _trim_and_pad(path, line.pause_after)
+        new_path = _trim_and_pad(path, line.pause_after, tempo)
         duration = _measure_duration(new_path) or _estimate_duration(line.narration)
 
         if line.scene_type == "VEO" and min_veo_line_duration > 0:
@@ -284,7 +290,7 @@ def _estimate_duration(text: str) -> float:
     return max(len(text) / CHARS_PER_SECOND, MIN_DURATION)
 
 
-def _trim_and_pad(audio_path: Path, pause: float) -> Path:
+def _trim_and_pad(audio_path: Path, pause: float, tempo: float = 1.0) -> Path:
     """문장 앞뒤의 무음을 걷어낸 뒤 설계한 만큼만 쉼을 붙인다.
 
     TTS 엔진은 문장마다 앞뒤로 제멋대로 무음을 붙여 보낸다. 그 위에 쉼을 더하면
@@ -303,6 +309,9 @@ def _trim_and_pad(audio_path: Path, pause: float) -> Path:
         f":start_silence={KEEP_SILENCE}:detection=peak"
     )
     filters = f"{trim},areverse,{trim},areverse"
+    if abs(tempo - 1.0) > 0.01:
+        # atempo 는 0.5~2.0 범위에서 음높이를 유지한다. 쉼(apad)은 배속 뒤에 붙여 설계값 그대로.
+        filters += f",atempo={min(max(tempo, 0.5), 2.0):.3f}"
     if pause > 0:
         filters += f",apad=pad_dur={pause:.3f}"
 

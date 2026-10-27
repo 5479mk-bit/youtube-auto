@@ -26,11 +26,11 @@ from ..text_ko import particle
 #   #datoscuriosos #curiosidades #documental
 # - 소재 직결 핵심 검색어(전부 스페인어): #historia #desastres #catastrofes
 #   #misterio #ciencia #ingenieria #terror
+# 2026-10-27: "#viral #fyp"(틱톡식, 유튜브에선 의미 없음)·"#terror"(공포물 시청층으로 잘못
+# 분류될 위험)를 뺐다. 설명란에는 주제 맞춤 해시태그(#Pompeya #Italia 등)가 이 앞에 붙는다.
 DISASTER_HASHTAGS = [
-    "#shorts", "#viral", "#fyp",
-    "#historia", "#desastres", "#catastrofes", "#misterio",
-    "#datoscuriosos", "#curiosidades", "#documental",
-    "#ciencia", "#ingenieria", "#terror",
+    "#shorts", "#historia", "#desastres", "#catastrofes", "#misterio",
+    "#datoscuriosos", "#curiosidades", "#documental", "#ciencia", "#ingenieria",
 ]
 
 # 텔레그램 복붙용 캡션 전용 — DISASTER_HASHTAGS(유튜브 메타데이터, 12개)와는
@@ -93,11 +93,19 @@ JSON 만 출력한다:
 # disaster 데이터셋 전용 스페인어판. 위 PROMPT/COMBINED_PROMPT(한국어, sillok/heritage
 # 용)는 지우지 않는다 — 다른 소재로 되돌릴 때를 위해 남겨둔다.
 _COMMON_RULES_ES = """Reglas:
-- El título es una sola línea **que obliga a hacer clic**. Máximo 28 caracteres. Usa la
-  fórmula más agresiva que los datos permitan: el número más brutal al principio, una palabra
-  clave en MAYÚSCULAS, una brecha de curiosidad ("Nadie lo detuvo", "La orden que lo
-  mató todo"), o un contraste chocante. Los 3 candidatos deben usar ganchos distintos entre
-  sí. Todo lo que diga el título debe ser cierto según los datos — impactante sí, falso nunca.
+- **Título (2026-10-27)**: de 40 a 65 caracteres, y en los primeros ~35 caracteres tiene que
+  aparecer **el nombre reconocible** del suceso, lugar u objeto (Titanic, Pompeya, Chernóbil,
+  Armero, los Andes...). Quien lo ve pasar debe entender en un vistazo de qué trata **y** sentir
+  que le falta algo. Los 3 candidatos usan fórmulas distintas:
+  · "[Nombre]: [hecho concreto que impacta]" — "Pompeya: 2.000 personas que nunca intentaron huir"
+  · "Por qué / Cómo [pregunta que pica]" — "Por qué nadie escapó de Pompeya a tiempo"
+  · "El día que [lo que pasó, dicho con fuerza]" — "El día que el Titanic se partió en dos"
+  **Prohibido**: títulos crípticos que empiezan con un número sin contexto ("61.2 m/s: El
+  RÉCORD EFÍMERO", "494 KM: El RUGIDO"), más de una palabra en MAYÚSCULAS, hashtags o emojis.
+  Todo lo que diga el título debe ser cierto según los datos — impactante sí, falso nunca.
+  Si en Pistas hay un aniversario, **uno** de los 3 títulos lo usa con la cifra exacta de la
+  pista ("Hace 41 años, Armero desapareció en una sola noche") — la gente busca estos sucesos
+  en su aniversario. Nunca "hoy" ni "un día como hoy".
 - Nunca uses el nombre de un canal ni ninguna marca en el título ni en la descripción.
 - Todo en **español latinoamericano neutro** (público de México a Argentina): "ustedes", nunca
   "vosotros", ni expresiones propias de España ni de un solo país.
@@ -138,6 +146,7 @@ este Short.
 Tema: {title_seed}
 Texto en pantalla: {hook_number}
 Sujeto: {subject}
+Pistas: {hints}
 Parte: {part} (de una serie de 2 partes)
 Narración: {narration}
 
@@ -156,6 +165,7 @@ para este Short.
 Tema: {title_seed}
 Texto en pantalla: {hook_number}
 Sujeto: {subject}
+Pistas: {hints}
 Narración: {narration}
 
 """ + _COMMON_RULES_ES + """
@@ -192,6 +202,7 @@ def generate(
                 subject=candidate.subject,
                 part=part.part,
                 narration=narration,
+                hints="; ".join(candidate.topic_tags) or "ninguna",
             ),
             temperature=0.8,
         )
@@ -239,7 +250,7 @@ def _parse(
     return VideoMetadata(
         title=titles[0],
         title_alternatives=titles[1:],
-        description=_with_source(description, script, candidate),
+        description=_with_source(description, script, candidate, hashtags),
         tags=tags,
         title_ko=titles_ko[0] if titles_ko else "",
         title_alternatives_ko=titles_ko[1:],
@@ -313,7 +324,9 @@ def _source_line(script: Script, candidate: StoryCandidate) -> str:
     return f"출처: {candidate.source_name}"
 
 
-def _with_source(description: str, script: Script, candidate: StoryCandidate) -> str:
+def _with_source(
+    description: str, script: Script, candidate: StoryCandidate, hashtags: list[str] | None = None
+) -> str:
     lines = [description, "", _source_line(script, candidate)]
     if candidate.source_url:
         lines.append(candidate.source_url)
@@ -321,7 +334,8 @@ def _with_source(description: str, script: Script, candidate: StoryCandidate) ->
         # 화면에 보이는 해시태그 줄(유튜브가 설명 상단 최대 3개를 클릭 가능한
         # 태그로 띄워준다) — DISASTER_HASHTAGS 와 순서·내용을 그대로 맞춘다.
         lines.append("")
-        lines.append(" ".join(DISASTER_HASHTAGS))
+        # 주제 맞춤 해시태그를 앞에 — 유튜브는 설명의 첫 해시태그 3개를 제목 위에 띄운다.
+        lines.append(" ".join(dict.fromkeys([*(hashtags or [])[:3], *DISASTER_HASHTAGS])))
     if script.is_sample:
         lines.insert(0, "[샘플 데이터로 만든 테스트 영상입니다. 실제 해설문이 아닙니다.]")
     return "\n".join(lines)

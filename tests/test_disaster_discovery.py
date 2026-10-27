@@ -74,7 +74,7 @@ def test_collect_candidates_uses_discovered_after_curated_and_caps_calls():
     texts = {"큐레이션 사고": "본문 " * 50, "발굴1 사고": "본문 " * 50, "발굴2 사고": "본문 " * 50}
     fetched = []
 
-    def fake_fetch(title):
+    def fake_fetch(title, lang="ko"):
         fetched.append(title)
         return texts[title]
 
