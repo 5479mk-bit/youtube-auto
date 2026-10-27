@@ -1466,7 +1466,9 @@ def test_generate_retries_once_before_falling_back_to_template():
             return _raw_script(part1_lines=10, part2_lines=10)  # 재시도는 통과
 
     script = script_writer.generate(candidate, FlakyProvider(), 420, 460, 0.9)
-    assert calls["n"] == 2
+    # 대본 2번(실패 → 재시도) + 지속률 편집 1번(2026-10-27). 편집 응답이 형식에 안 맞으면
+    # 재시도로 받은 초안을 그대로 쓴다.
+    assert calls["n"] == 3
     assert len(script.part1.lines) == 10
 
 

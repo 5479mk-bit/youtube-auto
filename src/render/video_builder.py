@@ -71,6 +71,7 @@ def build_part(
     total_duration = max(background.duration - 1e-3, 0.1)
     background = _apply_camera_shake(background, scenes, size, settings)
     layers = [background.with_duration(total_duration)]
+    layers.extend(_impact_flash_layers(scenes, size, total_duration, settings))
     layers.extend(_title_layers(part, work_dir, size, settings, background.duration))
     layers.extend(_overlay_layers(part, work_dir, size, total_duration, settings))
     layers.extend(_subtitle_layers(cues, work_dir, part.part, size, settings, box=None))
@@ -172,6 +173,32 @@ def _apply_camera_shake(clip, scenes: list[Scene], size: tuple[int, int], settin
         return (base_x, base_y)
 
     return clip.resized(margin).with_position(_position)
+
+
+_FLASH_SFX = {"crack", "braam"}
+
+
+def _impact_flash_layers(scenes: list[Scene], size: tuple[int, int], total: float, settings):
+    """무너지는 순간(crack/braam)에 흰 플래시를 아주 짧게 친다(2026-10-27).
+
+    쇼츠는 1~2초마다 '패턴 인터럽트'(화면이 확 바뀌는 순간)가 있어야 손가락이 멈춘다.
+    흔들림(_apply_camera_shake)과 같은 순간에 겹쳐 충격을 키운다. 너무 잦으면 피로하니
+    붕괴·클라이맥스 효과음에만.
+    """
+    if not settings.get("video.impact_flash", True):
+        return []
+    seconds = settings.get("video.impact_flash_seconds", 0.12)
+    opacity = settings.get("video.impact_flash_opacity", 0.55)
+    layers = []
+    for scene in scenes:
+        if scene.sfx in _FLASH_SFX and scene.start < total - seconds:
+            layers.append(
+                ColorClip(size=size, color=(255, 255, 255))
+                .with_duration(seconds)
+                .with_start(scene.start)
+                .with_opacity(opacity)
+            )
+    return layers
 
 
 def _hex_to_rgb(value: str) -> tuple[int, int, int]:

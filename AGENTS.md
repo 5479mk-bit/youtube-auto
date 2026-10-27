@@ -35,7 +35,7 @@
 ## 로컬 실행·검증
 ```bash
 python -m pip install -r requirements.txt
-python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 242 passed, 1 skipped)
+python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 247 passed, 1 skipped)
 python main.py topics              # 주제 후보만 확인(과금 없음)
 python main.py cloud-check --generate   # Vertex 이미지 1장(약 30원)
 python main.py run --review --wait 1200 --combine-parts   # 한 회차 전체(과금 발생)
@@ -78,6 +78,9 @@ python main.py review-pending --wait 30
   1.1배속, 틱톡판은 전부 넣고 1.0배속으로 따로 렌더(`output/<id>/tiktok/`). 61.5초 미만이면 배속을
   0.9까지 낮추고 끝 여백 최대 6초. Veo·이미지 캐시를 같이 써서 추가 비용은 거의 없다.
   설정 `publish.tiktok.extended/tempo/min_seconds`. 틱톡 초안함 업로드가 실패하면 확장판 파일을 텔레그램으로 보낸다.
+- 재미 장치(2026-10-27): 프롬프트 `[MOTORES DE INTERÉS]`(실명 인물·열린 질문 2개·시계·숨은 사실·
+  대비·"Imagina"·마지막 반전) + `RETENTION_EDITOR_PROMPT` 2차 패스(점수 매겨 9점 미만 문장만 고침,
+  첫 문장 후보 5개 중 선택, 실패하면 초안 사용) + crack/braam 순간 흰 플래시(`video.impact_flash`).
 - 템포: VEO 문장 무음 패딩 제거(`veo.min_scene_seconds: 0`), `audio.tempo: 1.1`(atempo), 쉼 0.05~0.3초,
   TTS 스타일은 긴박한 예고편 내레이터. 대본 모델 `gemini-2.5-pro`.
 - 자막: 82px 굵은 흰 글씨 + 검은 외곽선 6, 강조어 노란색(`#FFD84D`), 한 줄 14자, 화면 중하단.

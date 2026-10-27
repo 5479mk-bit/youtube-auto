@@ -436,6 +436,24 @@ por parte). La versión YouTube las quita; la de TikTok las incluye todas en su 
   puede referirse a algo que solo dice una frase extra.
 - Las frases extra siempre usan `scene_type` "AI_IMAGE" y `sfx` "none".
 
+[MOTORES DE INTERÉS — obligatorios, el video aburrido es el enemigo]
+Usa **todos** los que el texto permita (sin inventar nada):
+1. **Una persona**: si el texto nombra a alguien (sobreviviente, capitán, ingeniero que avisó,
+   víctima, rescatista), ponle nombre y haz que el espectador sienta lo que vivió. La gente se
+   queda por personas, no por edificios.
+2. **Dos bucles abiertos**: la frase 2 abre una pregunta que solo se responde en el clímax; a
+   mitad del video abre una segunda ("Pero lo más extraño aún no había pasado.").
+3. **El reloj**: horas, minutos y cuentas regresivas exactas del texto ("A las 23:40...",
+   "Les quedan 160 minutos.").
+4. **El dato que casi nadie conoce**: el hecho más sorprendente y poco conocido del texto,
+   guardado como premio después de la mitad.
+5. **Contraste brutal / ironía**: lo que creían seguro contra lo que pasó.
+6. **Ponte ahí**: una sola vez, mete al espectador en la escena ("Imagina oír ese crujido bajo
+   tus pies.").
+7. **Giro final**: la última frase cambia el sentido de la primera y obliga a volver a verla.
+Regla de oro: **cada frase tiene que hacer que quieran oír la siguiente.** Si una frase solo da
+contexto, reescríbela como tensión o bórrala.
+
 [TONO]
 - **Español latinoamericano neutro** (de México a Argentina): "ustedes", nunca "vosotros";
   "carro"/"auto", "computadora", "celular"; nada de "vale", "tío", "guay", "che", "güey".
@@ -505,6 +523,72 @@ dos seguidas iguales; el resto "none".
 """
 
 
+RETENTION_EDITOR_PROMPT = """Eres el editor de retención de un canal de Shorts de desastres en español
+latinoamericano. El 90% de los videos de este nicho mueren porque son aburridos. Tu trabajo: que
+este guion no se pueda dejar de ver.
+
+[MATERIAL — única fuente de hechos; no agregues nada que no esté aquí]
+Título: {headline}
+Pistas: {hints}
+{context}
+
+[GUION ACTUAL (JSON)]
+{script_json}
+
+Paso 1 — Califica del 1 al 10, con dureza: gancho de la frase 1 (¿detiene el pulgar en medio
+segundo?), bucles abiertos, persona/emoción, dato sorprendente, ritmo (ninguna frase de relleno),
+giro final que enlaza con la frase 1.
+Paso 2 — Escribe 5 frases 1 alternativas (6 a 10 palabras, presente, el momento más brutal o
+la imagen más imposible, con un número si hay) y elige la más fuerte (o la actual si es mejor).
+Paso 3 — Reescribe **solo lo que esté por debajo de 9**: frases planas, de contexto, repetidas o
+con muletillas. Mantén exactamente la estructura JSON, la cantidad aproximada de caracteres, los
+campos (scene_type, prompt, sfx, overlay, emphasis, solo_tiktok) y todas las reglas del guion
+original (35 a 45 segundos en la versión YouTube, frases de 6 a 10 palabras, español latino
+neutro, nunca "hoy", nada de "parte 1/2" ni "suscríbete"). Si cambias el sentido de una frase,
+ajusta su `prompt` en inglés para que la imagen muestre lo nuevo, con la misma frase de estilo final.
+Cada `overlay` debe aparecer literalmente en su frase.
+
+Responde solo con JSON:
+{{"scores": {{"gancho": 0, "bucles": 0, "persona": 0, "dato": 0, "ritmo": 0, "giro": 0}},
+  "aperturas": ["", "", "", "", ""],
+  "script": {{ ...el guion completo con el mismo formato que el GUION ACTUAL... }}}}
+"""
+
+
+def _retention_pass(
+    script: Script, candidate: StoryCandidate, provider: LLMProvider, raw: dict
+) -> Script:
+    """초안을 '시청 지속률 편집자' 관점에서 한 번 더 고친다(2026-10-27, 평균 조회수 300 개편).
+
+    한 번에 쓴 대본은 문장 몇 개가 늘 맥이 빠진다. 점수를 매기고 9점 미만만 고치게 한다.
+    고친 대본이 구조 검사(_parse)를 통과하지 못하면 초안을 그대로 쓴다 — 편집이 대본을
+    망가뜨리는 일은 없어야 한다.
+    """
+    import json
+
+    try:
+        edited = provider.complete_json(
+            RETENTION_EDITOR_PROMPT.format(
+                headline=candidate.headline,
+                hints="; ".join(candidate.topic_tags) or "ninguna",
+                context=candidate.context,
+                script_json=json.dumps(raw, ensure_ascii=False),
+            ),
+            0.7,
+        )
+    except Exception as exc:
+        logger.warning(f"[script] 지속률 편집 호출 실패 — 초안을 씁니다: {exc}")
+        return script
+    if not isinstance(edited, dict):
+        return script
+    logger.info(f"[script] 지속률 편집 점수: {edited.get('scores')}")
+    improved = _parse(edited.get("script") if isinstance(edited.get("script"), dict) else None, candidate)
+    if improved is None:
+        logger.warning("[script] 편집본이 구조 검사를 통과하지 못해 초안을 씁니다")
+        return script
+    return improved
+
+
 def generate(
     candidate: StoryCandidate,
     provider: LLMProvider | None,
@@ -517,6 +601,8 @@ def generate(
         raw = provider.complete_json(prompt, temperature)
         script = _parse(raw, candidate)
         if script is not None:
+            if candidate.dataset == "disaster":
+                return _retention_pass(script, candidate, provider, raw)
             return script
         # 대본이 구조 요건(최소 문장 수 등)에 못 미쳐 거절됐을 수 있다 — 그렇다고
         # 바로 템플릿 폴백으로 넘기면 너무 비싸다: 폴백(특히 disaster)은 번역 없이
@@ -528,6 +614,8 @@ def generate(
         raw = provider.complete_json(prompt, temperature)
         script = _parse(raw, candidate)
         if script is not None:
+            if candidate.dataset == "disaster":
+                return _retention_pass(script, candidate, provider, raw)
             return script
 
     if candidate.dataset == "sillok":
