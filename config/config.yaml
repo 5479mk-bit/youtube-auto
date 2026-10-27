@@ -347,6 +347,14 @@ topics:
     freshness: 0.15
 
 visuals:
+  # 2026-10-27 사용자 결정("실제 사진 추가, 공용 사진만"): 재난 문서에 실린 위키미디어 공용 사진 중
+  # 퍼블릭 도메인·CC0·CC BY·CC BY-SA 만, 희생자·시신·장례·부상 사진은 낱말로 걸러 버린다.
+  # 대본 AI 가 2~4컷을 "FOTO" 로 지정(첫 문장 제외), 출처는 설명란·화면 끝에 표기.
+  archive_photos:
+    enabled: true
+    max: 8          # 대본 작가에게 보여줄 사진 수
+    parallax: 0.02  # 실제 사진은 과하게 일그러지면 가짜처럼 보인다
+    dolly: 0.16
   # 장면 생성 모델. 빈 값이면 기본값(gemini-2.5-flash-image).
   ai_image_model: ""
   allowed_licenses:

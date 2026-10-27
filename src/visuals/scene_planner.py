@@ -213,6 +213,8 @@ def plan_typed_scenes(part: ScriptPart, freeze_last: bool) -> list[Scene]:
                 map_region=line.map_region,
                 map_spots=list(line.map_spots),
                 sfx=line.sfx,
+                photo_url=line.photo_url,
+                photo_credit=line.photo_credit,
             )
         )
         cursor += duration

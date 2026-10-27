@@ -466,6 +466,23 @@ def _merge_parts(script: Script) -> ScriptPart:
     )
 
 
+def _attach_archive_photos(settings: Settings, candidate: StoryCandidate) -> None:
+    """고른 주제의 문서에 실린 위키미디어 공용 사진(자유 라이선스만)을 대본 작가에게 넘긴다.
+
+    2026-10-27 사용자 결정("실제 사진 추가, 공용 사진만"). 실패해도 사진 없이 그대로 진행한다.
+    """
+    if candidate.dataset != "disaster" or not settings.get("visuals.archive_photos.enabled", False):
+        return
+    from .disasters import commons_photos
+
+    source = commons_photos.source_of(candidate.source_url)
+    if source is None:
+        return
+    candidate.archive_photos = commons_photos.fetch_article_photos(
+        *source, limit=int(settings.get("visuals.archive_photos.max", 8) or 8)
+    )
+
+
 def _youtube_cut(part: ScriptPart) -> ScriptPart:
     """틱톡 전용 문장을 뺀 유튜브판(35~45초). 같은 ScriptLine 객체를 그대로 쓴다 — 음성·
     길이가 이미 채워져 있어 다시 합성하지 않는다."""
@@ -506,6 +523,7 @@ def run(
     task_id = f"{datetime.now():%Y%m%d-%H%M%S}"
     work_dir = OUTPUT_DIR / task_id
     work_dir.mkdir(parents=True, exist_ok=True)
+    _attach_archive_photos(settings, candidate)
     write_json(work_dir / "topic.json", candidate)
 
     script = write_script(settings, candidate)
@@ -764,7 +782,9 @@ def _render_part(
 
 def _has_scene_types(part: ScriptPart) -> bool:
     """문장에 화면 종류가 실려 있나. 문화재 경로는 전부 기본값(AI_IMAGE)이 아니다."""
-    return any(line.scene_type in ("HISTORICAL_DOC", "MAP_MOTION", "VEO") for line in part.lines)
+    return any(
+        line.scene_type in ("HISTORICAL_DOC", "MAP_MOTION", "VEO", "FOTO") for line in part.lines
+    )
 
 
 def _finish_part(

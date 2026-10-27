@@ -91,6 +91,13 @@ def build_scene_clip(
     검색하면 현대 우체국·카페 사진이 끌려 들어오기 때문이다. 문화재 경로(파랄랙스/공식
     영상)는 지금까지처럼 사진을 쓴다.
     """
+    if scene.engine == "archive_photo":
+        clip = _archive_photo_clip(scene, size, settings)
+        if clip is not None:
+            return clip, PhotoCredit(query="FOTO", source_name=scene.photo_credit)
+        logger.warning("공용 사진을 쓰지 못해 이 컷은 생성 그림으로 대체합니다")
+        scene.engine = "ai_image"
+
     if scene.engine in ("historical_doc", "map_motion", "ai_image", "veo"):
         return _build_generated_clip(scene, veo_client, ai_client, size, settings)
 
@@ -210,6 +217,35 @@ def _build_generated_clip(scene: Scene, veo_client, ai_client, size: tuple[int, 
         scene_renderers.render_fallback_plate(scene.duration, size, seed, scene.camera),
         PhotoCredit(query=scene.scene_type, source_name=_CREDIT_NAMES["fallback"]),
     )
+
+
+def _archive_photo_clip(scene: Scene, size: tuple[int, int], settings=None):
+    """위키미디어 공용 실제 사진 컷(2026-10-27). 가로 사진은 흐린 배경 위에 통째로 얹고(잘리지
+    않게), 깊이 파랄랙스는 아주 약하게 — 실제 사진은 과하게 일그러지면 가짜처럼 보인다."""
+    from ..disasters import commons_photos
+    from ..settings import CACHE_DIR
+
+    if not scene.photo_url:
+        return None
+    try:
+        source = commons_photos.download(scene.photo_url, CACHE_DIR / "archive_photos")
+        if source is None:
+            return None
+        framed = commons_photos.compose_vertical(
+            source, source.with_name(f"{source.stem}_{size[0]}x{size[1]}.jpg"), size
+        )
+        s = settings.get if settings is not None else (lambda key, default: default)
+        return make_parallax_clip(
+            framed,
+            scene.duration,
+            scene.camera if scene.camera != "freeze" else "push_in",
+            size,
+            parallax=s("visuals.archive_photos.parallax", 0.02),
+            dolly=s("visuals.archive_photos.dolly", 0.16),
+        )
+    except Exception as exc:
+        logger.warning(f"[photos] 사진 컷을 만들지 못했습니다: {exc}")
+        return None
 
 
 def _official_video_clip(path: Path, scene: Scene, size: tuple[int, int]):

@@ -458,7 +458,7 @@ por parte). La versión YouTube las quita; la de TikTok las incluye todas en su 
 - **Nunca** son la frase 1, la 2, el re-gancho, el clímax ni la última frase.
 - Las frases normales deben entenderse perfectamente **sin** las extra: ninguna frase normal
   puede referirse a algo que solo dice una frase extra.
-- Las frases extra siempre usan `scene_type` "AI_IMAGE" y `sfx` "none".
+- Las frases extra usan `scene_type` "AI_IMAGE" o "FOTO" (nunca "VEO") y `sfx` "none".
 
 [EL ÁNGULO — por qué los videos de este nicho llegan a millones]
 Los videos de misterio en español que pasan del millón (ej. "¿El hundimiento del Titanic fue
@@ -518,6 +518,15 @@ abrumadora, cielo tormentoso, niebla, luz dramática. Nada de maquetas, diagrama
 - "VEO": video real en movimiento. **Mínimo 4 frases por parte (mínimo 8 en total).** La frase 1
   y la frase de clímax de cada parte siempre son VEO.
 - "AI_IMAGE": el resto (se le agrega movimiento de cámara en el render).
+- "FOTO": una **foto real** de la lista [FOTOS REALES] de abajo, con `"foto": número`.
+
+[FOTOS REALES — Wikimedia Commons, libres]
+{photos}
+Las fotos reales hacen sentir "esto pasó de verdad" (los canales grandes de misterio mezclan
+fotos de época e inventadas). Usa **2 a 4 frases "FOTO"** cuando la lista no esté vacía, y **solo**
+en la frase que habla exactamente de lo que muestra la foto: la persona que nombras, el barco o el
+lugar antes del desastre, un mapa, un documento. Nunca en la frase 1. Escribe igual su `prompt`
+(respaldo por si la foto falla). Si la lista dice "ninguna", no uses "FOTO".
 
 **La frase 1 es la portada**: el plano más espectacular e "imposible" del video, una vista amplia
 donde la escala del desastre se entienda de un golpe, con un solo sujeto claro en el centro.
@@ -553,7 +562,8 @@ dos seguidas iguales; el resto "none".
              "hook_stat": "CIFRA BRUTAL en máximo 3 palabras, o cadena vacía",
              "lines": [
     {{"text": "Frase de narración en español (6-10 palabras)",
-     "scene_type": "VEO | AI_IMAGE",
+     "scene_type": "VEO | AI_IMAGE | FOTO",
+     "foto": 0,
      "prompt": "prompt en inglés que termina con la frase de estilo de arriba",
      "sfx": "sub_boom | crack | whoosh | alarm | braam | none",
      "overlay": "número/palabra para el centro de la pantalla, o cadena vacía",
@@ -698,6 +708,7 @@ def _prompt(candidate: StoryCandidate, part1_chars: int, part2_chars: int) -> st
             part2_chars=part2_chars,
             extra_lines=TIKTOK_EXTRA_LINES_PER_PART,
             extra_chars=TIKTOK_EXTRA_CHARS_PER_PART,
+            photos=_photo_menu(candidate),
         )
 
     return HERITAGE_PROMPT.format(
@@ -785,12 +796,23 @@ def _parse(raw: dict | None, candidate: StoryCandidate) -> Script | None:
     )
 
 
+def _photo_menu(candidate: StoryCandidate) -> str:
+    photos = getattr(candidate, "archive_photos", None) or []
+    if not photos:
+        return "ninguna"
+    return "\n".join(f"{index}. {photo.description}" for index, photo in enumerate(photos, start=1))
+
+
 def _sanitize_tiktok_only(part1: ScriptPart, part2: ScriptPart) -> None:
     """틱톡 전용 문장 규칙을 코드로도 지킨다 — 첫 두 문장·각 부의 마지막 문장(클리프행어,
     루프)은 유튜브판에 꼭 있어야 하고, 전용 문장은 Veo 클립을 더 쓰지 않게 정지컷으로."""
     for index in (0, 1):
         if index < len(part1.lines):
             part1.lines[index].tiktok_only = False
+    # 첫 문장은 표지(가장 압도적인 생성 영상)다 — 실제 사진이 오면 Veo 로 되돌린다.
+    if part1.lines and part1.lines[0].scene_type == "FOTO":
+        part1.lines[0].scene_type = "VEO"
+        part1.lines[0].photo_url = part1.lines[0].photo_credit = ""
     for part in (part1, part2):
         if part.lines:
             part.lines[-1].tiktok_only = False
@@ -855,6 +877,20 @@ def _parse_line(raw: dict, candidate: StoryCandidate) -> ScriptLine:
     if scene_type == "VEO" and sfx == "none":
         sfx = "sub_boom"
 
+    # 실제 사진은 후보에 실린 목록(번호)에서만 — 목록에 없는 번호면 생성 그림으로.
+    photo_url = photo_credit = ""
+    if scene_type == "FOTO":
+        photos = getattr(candidate, "archive_photos", None) or []
+        try:
+            index = int(raw.get("foto") or 0)
+        except (TypeError, ValueError):
+            index = 0
+        if 1 <= index <= len(photos):
+            photo_url = photos[index - 1].url
+            photo_credit = photos[index - 1].credit()
+        else:
+            scene_type = "AI_IMAGE"
+
     return ScriptLine(
         text=text,
         visual_query_ko=str(raw.get("visual_query_ko") or _first(candidate.image_queries_ko)),
@@ -873,6 +909,8 @@ def _parse_line(raw: dict, candidate: StoryCandidate) -> ScriptLine:
         sfx=sfx,
         overlay=_overlay(raw.get("overlay"), text),
         tiktok_only=str(raw.get("solo_tiktok")).strip().lower() == "true",
+        photo_url=photo_url,
+        photo_credit=photo_credit,
     )
 
 

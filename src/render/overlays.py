@@ -480,10 +480,23 @@ def render_banner(
     draw = ImageDraw.Draw(image)
     font = _font(font_size)
 
-    text_width = draw.textlength(text, font=font)
-    _draw_text_with_shadow(
-        draw, ((width - text_width) / 2, height * y_ratio), text, font, color, shadow_blur=5
-    )
+    # 출처 줄(공용 사진 작가·라이선스까지, 2026-10-27)은 길어서 한 줄이면 화면 밖으로 잘린다 —
+    # 화면 폭 92% 안으로 단어 단위로 접는다.
+    lines: list[str] = []
+    for word in text.split():
+        candidate = f"{lines[-1]} {word}" if lines else word
+        if lines and draw.textlength(candidate, font=font) <= width * 0.92:
+            lines[-1] = candidate
+        else:
+            lines.append(word)
+    line_height = int(font_size * 1.3)
+    for index, line in enumerate(lines or [text]):
+        text_width = draw.textlength(line, font=font)
+        _draw_text_with_shadow(
+            draw,
+            ((width - text_width) / 2, height * y_ratio + index * line_height),
+            line, font, color, shadow_blur=5,
+        )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     image.save(out_path)

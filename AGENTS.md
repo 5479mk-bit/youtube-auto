@@ -35,7 +35,7 @@
 ## 로컬 실행·검증
 ```bash
 python -m pip install -r requirements.txt
-python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 264 passed, 1 skipped)
+python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 273 passed, 1 skipped)
 python main.py topics              # 주제 후보만 확인(과금 없음)
 python main.py cloud-check --generate   # Vertex 이미지 1장(약 30원)
 python main.py run --review --wait 1200 --combine-parts   # 한 회차 전체(과금 발생)
@@ -88,7 +88,11 @@ python main.py review-pending --wait 30
   컷 3.5~5초에 줌 모션, 95~124초(틱톡). 반영: 프롬프트 오프닝 A/B·[TEORÍAS Y MISTERIOS](이론은 이론으로만,
   정치·보건 음모론 금지), 문서 뒷부분 미스터리 문단 추출(`disasters._mystery_appendix`), 단어별 하이라이트
   자막(`subtitle.word_highlight/uppercase`), '다시 일어나면?' 주제(캐링턴·칙술루브·옐로스톤 등).
-  실제 사진은 아직(재난 경로는 웹 이미지 검색을 일부러 끔 — 유가족·저작권 판단 필요).
+  **실제 사진(2026-10-27 사용자 결정: 공용 사진만)**: `disasters/commons_photos.py` — 고른 문서에 실제로
+  실린 위키미디어 공용(Commons) 사진 중 퍼블릭 도메인·CC0·CC BY·CC BY-SA 만(로컬 파일·NC·ND·GFDL 단독 제외),
+  희생자·시신·장례·부상 낱말이 있으면 버림. 대본 AI 가 2~4컷을 `"FOTO"`(+`"foto": 번호`)로 지정(첫 문장 제외),
+  가로 사진은 흐린 배경 위에 통째로(화면 32% 높이). 실패하면 그 컷은 생성 그림. 출처(작가·라이선스)는
+  설명란 "Fotos:" 와 영상 끝 배너에 표기. 설정 `visuals.archive_photos`. 웹 검색은 여전히 안 한다.
   **왜 수백만이 나오나(측정치)**: lazarus_404 는 영상 86개로 팔로워 72만·좋아요 2,280만(편당 약 26만).
   타이타닉 영상은 공유율 4.0%(2.4만/60만)·좋아요 7.2%. 원리 = "모두 아는 사건(0.5초 인식) + 거의 아무도
   모르는 것(호기심)" + 이름 있는 책임자(분노 → 공유) + 한 단어로 답하는 양자택일 질문(댓글). 첫 단어 0.12초,

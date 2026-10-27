@@ -516,7 +516,9 @@ def _badge_layers(
             ImageClip(str(path)).with_start(max(duration - tail, 0)).with_duration(tail)
         )
 
-        photo_note = photo_credit_line(credits)
+        # 스페인어 채널(재난)에 한국어 "사진:" 이 찍히던 것 — 출처 문구 언어를 따라간다.
+        prefix = "Fotos: " if script.source_note.startswith("Fuente") else "사진: "
+        photo_note = photo_credit_line(credits, prefix=prefix)
         if photo_note:
             photo_path = overlays.render_banner(
                 photo_note, work_dir / "banner_photo.png", size, 26, 0.72, "#C3C2B7"

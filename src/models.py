@@ -10,7 +10,9 @@ from typing import Any, Literal
 CameraMove = Literal["push_in", "pull_out", "pan_lr", "pan_rl", "pan_tb", "freeze"]
 # 컷을 움직이는 방식. veo 는 생성 영상, parallax 는 깊이 기반 2.5D 카메라 이동,
 # official_video 는 국가유산청이 항목별로 제공하는 공식 영상(비용 없이 실사 영상을 쓴다).
-MotionEngine = Literal["veo", "parallax", "official_video", "ai_image", "historical_doc", "map_motion"]
+MotionEngine = Literal[
+    "veo", "parallax", "official_video", "ai_image", "historical_doc", "map_motion", "archive_photo"
+]
 
 # 대본이 문장마다 지정하는 화면 종류. 조선 사건에는 사진이 존재하지 않아서, 실사 검색
 # 대신 이 네 갈래로 화면을 만든다.
@@ -18,14 +20,16 @@ MotionEngine = Literal["veo", "parallax", "official_video", "ai_image", "histori
 #   AI_IMAGE       생성 정지화 + 시네마틱 무빙 (사건·상황 묘사)
 #   HISTORICAL_DOC 한지 위에 실록 원문을 얹고 붉은 먹줄을 긋는다 (사료 인용)
 #   MAP_MOTION     대동여지도를 파고들며 고을에 핏빛 잉크가 번진다 (위치 언급)
-SceneType = Literal["VEO", "AI_IMAGE", "HISTORICAL_DOC", "MAP_MOTION"]
-SCENE_TYPES: tuple[str, ...] = ("VEO", "AI_IMAGE", "HISTORICAL_DOC", "MAP_MOTION")
+#   FOTO           위키미디어 공용(Commons)의 자유 라이선스 실제 사진(재난 경로, 2026-10-27)
+SceneType = Literal["VEO", "AI_IMAGE", "HISTORICAL_DOC", "MAP_MOTION", "FOTO"]
+SCENE_TYPES: tuple[str, ...] = ("VEO", "AI_IMAGE", "HISTORICAL_DOC", "MAP_MOTION", "FOTO")
 # 씬 종류를 실제 렌더 엔진으로 옮기는 표.
 SCENE_TYPE_ENGINE: dict[str, str] = {
     "VEO": "veo",
     "AI_IMAGE": "ai_image",
     "HISTORICAL_DOC": "historical_doc",
     "MAP_MOTION": "map_motion",
+    "FOTO": "archive_photo",
 }
 # 충격적 사실·전환에 때리는 효과음.
 SfxName = Literal["sub_boom", "braam", "paper_rustle", "none"]
@@ -36,7 +40,23 @@ ENGINE_NAMES: tuple[str, ...] = (
     "ai_image",
     "historical_doc",
     "map_motion",
+    "archive_photo",
 )
+
+
+@dataclass
+class ArchivePhoto:
+    """위키백과 문서에 실린 위키미디어 공용 사진 한 장(자유 라이선스만)."""
+
+    title: str  # "File:Californian.jpg"
+    url: str  # 1080px 썸네일
+    description: str  # 대본 작가에게 보여줄 설명(무엇이 찍혔나)
+    author: str
+    license: str  # "Public domain", "CC BY-SA 3.0" …
+    license_url: str = ""
+
+    def credit(self) -> str:
+        return f"{self.author or 'Autor desconocido'}, {self.license} (Wikimedia Commons)"
 
 
 @dataclass
@@ -81,6 +101,8 @@ class StoryCandidate:
     score: float = 0.0
     # 픽스처(샘플) 데이터로 만들어진 후보. 실제 해설문이 아니므로 업로드가 차단된다.
     is_sample: bool = False
+    # 재난 경로: 문서에 실린 위키미디어 공용 사진(자유 라이선스·희생자 사진 제외, 2026-10-27).
+    archive_photos: list[ArchivePhoto] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -103,6 +125,9 @@ class ScriptLine:
     tiktok_only: bool = False
     # 배속·쉼을 입히기 전 TTS 원본 — 틱톡판을 다른 배속으로 다시 다듬을 때 쓴다.
     raw_audio_path: str = ""
+    # scene_type == "FOTO" 일 때: 위키미디어 공용 사진 주소와 출처 표기.
+    photo_url: str = ""
+    photo_credit: str = ""
     camera: CameraMove = "push_in"
     # 이 문장을 어떤 화면으로 만들지. 대본 LLM 이 문장마다 직접 정한다.
     scene_type: str = "AI_IMAGE"
@@ -207,6 +232,8 @@ class Scene:
     map_region: str = ""
     map_spots: list[str] = field(default_factory=list)
     sfx: str = "none"
+    photo_url: str = ""
+    photo_credit: str = ""
 
 
 @dataclass
