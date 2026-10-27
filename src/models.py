@@ -132,6 +132,9 @@ class ScriptPart:
     part: int
     hook_number: str
     lines: list[ScriptLine]
+    # 첫 화면에 질문 위로 크게 박는 숫자(예: "200.000 MUERTOS") — 2026-10-27, 스튜디오에서
+    # 숫자로 시작한 영상들이 '계속 시청' 64% 로 채널 평균(52%)보다 높았다.
+    hook_stat: str = ""
 
     @property
     def duration(self) -> float:
@@ -157,6 +160,7 @@ class Script:
                 part=raw["part"],
                 hook_number=raw["hook_number"],
                 lines=[ScriptLine(**line) for line in raw["lines"]],
+                hook_stat=raw.get("hook_stat", ""),
             )
 
         return cls(

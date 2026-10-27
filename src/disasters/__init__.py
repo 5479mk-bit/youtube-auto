@@ -138,6 +138,7 @@ def collect_candidates(
         candidate.features = {
             "anniversary": topic_rank.anniversary_score(entry.when, today),
             "popularity": popularity.get(entry.key, 0.0),
+            "audience_fit": topic_rank.audience_fit(entry),
             "story_density": min(len(text) / 3000, 1.0),
             "freshness": 1.0,
         }

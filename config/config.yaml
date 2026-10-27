@@ -93,9 +93,11 @@ audio:
   # 채널 언어를 스페인어로 전환(사용자 지시, 2026-09-30)하면서 스타일 지시문도
   # 스페인어 대본 기준으로 다시 썼다.
   # 2026-10-27: '차분한 다큐' → '재난 영화 예고편 내레이터'. 첫 마디부터 긴박하게, 쉼 없이.
-  gemini_style_prompt: "como el narrador de un tráiler de una película de catástrofes: voz grave, intensa y urgente, ritmo rápido y sin pausas entre frases, en español latinoamericano neutro, cada frase dicha con fuerza como si estuviera pasando ahora mismo, la primera frase con máximo impacto, siguiendo el guion palabra por palabra, como una persona real y no como un robot"
+  # 2026-10-27 스튜디오: 시청자 55세 이상 61%(65+ 31%) — 긴박하되 또박또박. 빨라서 못 알아들으면 넘긴다.
+  gemini_style_prompt: "como el narrador de un tráiler de una película de catástrofes: voz grave, intensa y urgente, en español latinoamericano neutro (acento mexicano suave), cada palabra muy clara y bien articulada, sin pausas largas entre frases, cada frase dicha con fuerza como si estuviera pasando ahora mismo, los números dichos con peso, la primera frase con máximo impacto, siguiendo el guion palabra por palabra, como una persona real y no como un robot"
   # 음높이를 유지한 채 말 속도를 올린다(ffmpeg atempo). 예전 청취 검증상 1.1배가 자연스러운 상한.
-  tempo: 1.1
+  # 2026-10-27: 1.1 → 1.05 — 주 시청층이 55세 이상이라 명료함을 조금 더 챙긴다(무음 패딩은 계속 없음).
+  tempo: 1.05
   gemini_min_request_interval: 1.5
   edge_voice: es-MX-JorgeNeural   # 스페인어 남성 음성(require_quality_voice=false 일 때만 쓰임)
   edge_pitch: "-5Hz"
@@ -244,6 +246,19 @@ topics:
       - "es:Vuelo 571 de la Fuerza Aérea Uruguaya | 1972-10-13"
       - "es:Catástrofe de Aberfan | 1966-10-21"
       - "es:Huracán Otis | 2023-10-25"
+      # 2026-10-27 스튜디오 분석: 시청자 35% 멕시코(+미국 17% 대부분 히스패닉), 상위 영상이 지진,
+      # 검색어 "temblor"·"terremoto". 멕시코 사건을 더 넣었다(문서명은 API 로 실존 확인).
+      - "es:Terremoto de Chiapas de 2017 | 2017-09-07"
+      - "es:Terremoto de Michoacán de 2022 | 2022-09-19"
+      - "es:Terremoto de Guerrero de 2021 | 2021-09-07"
+      - "es:Terremoto de Oaxaca de 2020 | 2020-06-23"
+      - "es:Terremoto de Colima de 2003 | 2003-01-21"
+      - "es:Paricutín | 1943-02-20"
+      - "es:El Chichón | 1982-03-28"
+      - "es:Huracán Patricia | 2015-10-23"
+      - "es:Huracán Gilbert | 1988-09-14"
+      - "es:Huracán Wilma | 2005-10-21"
+      - "es:Huracán Pauline | 1997-10-09"
       # 2026-10-09: 6일 연속(run #53~#58) 자동 스케줄이 "선정할 주제 후보가
       # 없습니다"로 중단됐다 — 16개가 전부 소진된 뒤 아무도 체크인을 못 봤다.
       # API로 실존을 확인한 7개를 추가해 23개로 늘렸다. 이 사고로 느낀 것:
@@ -289,10 +304,12 @@ topics:
         - 분류:광산 사고
         - 분류:기근
     # 2026-10-27: 기념일(당일·1~2일 전) > 스페인어권 인기도 > 본문 두께. freshness 는 늘 1.0 이라 뺐다.
+    # audience_fit(2026-10-27 스튜디오 분석): 지진·멕시코·중남미·항공 사건 가산(disasters/popularity.py).
     weights:
-      anniversary: 0.45
-      popularity: 0.40
-      story_density: 0.15
+      anniversary: 0.40
+      popularity: 0.30
+      audience_fit: 0.20
+      story_density: 0.10
   sillok:
     # 샘플 단계라 기사를 사람이 지목한다. 왕대 전체 색인은 샘플을 보고 판단한다.
     article_ids:

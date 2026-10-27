@@ -234,7 +234,12 @@ def render_center_overlay(
 
 
 def render_hook_question(
-    text: str, out_path: Path, size: tuple[int, int], color: str = "#FFFFFF"
+    text: str,
+    out_path: Path,
+    size: tuple[int, int],
+    color: str = "#FFFFFF",
+    stat: str = "",
+    stat_color: str = "#FFD84D",
 ) -> Path:
     """첫 3초 화면 정중앙의 큰 질문 문구("¿Sabías esto?") — 2026-10-26 사용자 지시.
 
@@ -259,6 +264,37 @@ def render_hook_question(
 
     line_height = int(font_size * 1.15)
     top = height * 0.5 - line_height * len(lines) / 2
+    if stat:
+        # 2026-10-27: 질문 위에 숫자를 가장 크게(노란색) — 소리 없이 넘기는 사람(모바일 60% 이상)도
+        # 0.5초 안에 "얼마나 큰 일인지"를 본다. 숫자 줄은 크게, 단위 낱말("MUERTOS")은 그 아래
+        # 한 단계 작게. 숫자+단위+질문 덩어리 전체를 세로 중앙에 둔다.
+        words = stat.split()
+        number = next((w for w in words if any(ch.isdigit() for ch in w)), words[0])
+        unit = " ".join(w for w in words if w is not number)
+        rows = []  # (텍스트, 폰트, 높이)
+        for text_row, ratio in ((number, 0.26), (unit, 0.12)):
+            if not text_row:
+                continue
+            row_size = int(width * ratio)
+            row_font = _font(row_size)
+            while draw.textlength(text_row, font=row_font) > width * 0.9 and row_size > 48:
+                row_size = int(row_size * 0.9)
+                row_font = _font(row_size)
+            rows.append((text_row, row_font, int(row_size * 1.12)))
+        block = sum(row[2] for row in rows) + int(font_size * 0.3) + line_height * len(lines)
+        cursor = height * 0.5 - block / 2
+        for text_row, row_font, row_height in rows:
+            row_width = draw.textlength(text_row, font=row_font)
+            _draw_text_with_shadow(
+                draw, ((width - row_width) / 2, cursor), text_row, row_font, stat_color,
+                shadow_blur=16, shadow_alpha=235,
+            )
+            draw.text(
+                ((width - row_width) / 2, cursor), text_row, font=row_font, fill=stat_color,
+                stroke_width=max(int(row_font.size * 0.06), 3), stroke_fill=(0, 0, 0, 255),
+            )
+            cursor += row_height
+        top = cursor + int(font_size * 0.3)
     for index, line in enumerate(lines):
         line_width = draw.textlength(line, font=font)
         _draw_text_with_shadow(

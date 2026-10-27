@@ -415,6 +415,12 @@ exactitud). Es la **única** fuente de hechos:
    la primera frase suene como la continuación (bucle). Nada de despedidas, "suscríbete" ni
    moralejas largas.
 
+**Cifra en pantalla (`hook_stat` de la parte 1)**: la cifra más brutal del texto en **máximo 3
+palabras y en mayúsculas** ("200.000 MUERTOS", "8.6 GRADOS", "36 TONELADAS", "2 HORAS"). Sale
+enorme en amarillo encima de la pregunta **desde el fotograma 0** — es lo que detiene el pulgar
+aunque el video esté sin sonido. El número tiene que estar **literalmente** en el texto, y la frase 1
+lo debe decir. Si el texto no tiene ninguna cifra impactante, cadena vacía.
+
 **Gancho en pantalla (`hook_number` de la parte 1)**: una pregunta de **máximo 4 palabras** que
 sale en grande en el centro durante los 3 primeros segundos y luego queda arriba. Debe picar
 sin explicar: "¿Por qué nadie huyó?", "¿Quién dio la orden?", "¿Sabías esto?". En español
@@ -508,6 +514,7 @@ dos seguidas iguales; el resto "none".
 {{
   "title_seed": "Una frase en español que resuma la historia (sin nombre de canal ni marcas).",
   "part1": {{"hook_number": "Pregunta de máximo 4 palabras para el centro de la pantalla.",
+             "hook_stat": "CIFRA BRUTAL en máximo 3 palabras, o cadena vacía",
              "lines": [
     {{"text": "Frase de narración en español (6-10 palabras)",
      "scene_type": "VEO | AI_IMAGE",
@@ -763,7 +770,29 @@ def _parse_part(raw: dict, part: int, candidate: StoryCandidate) -> ScriptPart:
         part=part,
         hook_number=_hook_number(raw.get("hook_number"), candidate),
         lines=lines,
+        hook_stat=_hook_stat(raw.get("hook_stat"), candidate, lines) if part == 1 else "",
     )
+
+
+_HOOK_STAT_MAX_CHARS = 22
+
+
+def _digits(text: str) -> str:
+    return "".join(ch for ch in text if ch.isdigit())
+
+
+def _hook_stat(raw: object, candidate: StoryCandidate, lines: list[ScriptLine]) -> str:
+    """첫 화면의 큰 숫자. 숫자가 없거나 길거나, 원문·대본 어디에도 없는 숫자면 버린다 —
+    첫 화면에 지어낸 숫자가 박히면 사실 기반 원칙이 통째로 깨진다."""
+    text = " ".join(str(raw or "").split()).upper()
+    digits = _digits(text)
+    if not digits or len(text) > _HOOK_STAT_MAX_CHARS or len(text.split()) > 3:
+        return ""
+    sources = [candidate.context, *candidate.facts, *(line.text for line in lines)]
+    if not any(digits in _digits(source) for source in sources if source):
+        logger.warning(f"[script] 첫 화면 숫자 '{text}' 가 원문에 없어 뺍니다")
+        return ""
+    return text
 
 
 def _parse_line(raw: dict, candidate: StoryCandidate) -> ScriptLine:

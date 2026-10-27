@@ -40,7 +40,7 @@ def test_every_configured_title_parses_with_unique_keys():
     assert len({entry.key for entry in entries}) == len(entries)
     assert sum(1 for entry in entries if entry.lang == "es") >= 50
     assert sum(1 for entry in entries if entry.when) >= 70
-    assert set(config["topics"]["disaster"]["weights"]) == {"anniversary", "popularity", "story_density"}
+    assert set(config["topics"]["disaster"]["weights"]) == {"anniversary", "popularity", "audience_fit", "story_density"}
 
 
 def test_audience_today_uses_latam_date():

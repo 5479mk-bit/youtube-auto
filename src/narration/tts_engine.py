@@ -320,7 +320,9 @@ def retimed_copy(
             copy.audio_path = str(new_path)
             copy.duration = _measure_duration(new_path) or line.duration
             lines.append(copy)
-        return ScriptPart(part=part.part, hook_number=part.hook_number, lines=lines)
+        return ScriptPart(
+            part=part.part, hook_number=part.hook_number, lines=lines, hook_stat=part.hook_stat
+        )
 
     result = build(tempo)
     total = sum(line.duration for line in result.lines)

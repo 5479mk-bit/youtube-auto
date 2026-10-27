@@ -462,6 +462,7 @@ def _merge_parts(script: Script) -> ScriptPart:
         part=1,
         hook_number=script.part1.hook_number,
         lines=[*script.part1.lines, *script.part2.lines],
+        hook_stat=script.part1.hook_stat,
     )
 
 
@@ -472,6 +473,7 @@ def _youtube_cut(part: ScriptPart) -> ScriptPart:
         part=part.part,
         hook_number=part.hook_number,
         lines=[line for line in part.lines if not line.tiktok_only],
+        hook_stat=part.hook_stat,
     )
 
 

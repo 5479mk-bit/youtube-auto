@@ -313,7 +313,11 @@ def _title_layers(
     layers = []
     if hook_seconds > 0:
         question = overlays.render_hook_question(
-            part.hook_number, work_dir / f"hook_question_part{part.part}.png", size
+            part.hook_number,
+            work_dir / f"hook_question_part{part.part}.png",
+            size,
+            stat=part.hook_stat,
+            stat_color=settings.get("subtitle.emphasis_color", "#FFD84D") or "#FFD84D",
         )
         layers.append(ImageClip(str(question)).with_start(0).with_duration(hook_seconds))
 

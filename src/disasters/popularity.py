@@ -317,10 +317,37 @@ def es_source_of(key: str, cache_path: Path) -> str:
     return (_load_cache(cache_path).get(f"ko2es:{key}") or {}).get("title", "")
 
 
+# ── 시청자 적합도 ─────────────────────────────────────────────────────────
+# 2026-10-27 유튜브 스튜디오(최근 28일): 시청자 멕시코 35% · 미국 17%(대부분 히스패닉) · 아르헨티나·
+# 칠레·페루 순, 남성 77%, 55세 이상 61%. 조회수 상위가 지진 영상("8.6 TERREMOTO" 982회,
+# "69.000 Muertes: Sismo Asia" 606회), 검색어도 "temblor"·"terremoto"·"aviones que se chocan".
+# 그래서 지진·멕시코·중남미·항공 사건에 가산점을 준다(값이 클수록 우선).
+_AUDIENCE_KEYWORDS: tuple[tuple[float, tuple[str, ...]], ...] = (
+    (1.0, ("terremoto", "sismo", "temblor", "tsunami", "지진", "해일")),
+    (1.0, ("méxico", "mexico", "멕시코", "puebla", "chiapas", "michoacán", "guerrero", "oaxaca",
+           "colima", "guadalajara", "ixhuatepec", "pasta de conchos", "otis", "paricutín",
+           "chichón", "patricia", "gilbert", "wilma", "pauline")),
+    (0.8, ("vuelo", "aéreo", "avión", "항공", "hindenburg", "transbordador", "우주왕복선", "apolo")),
+    (0.7, ("armero", "chile", "perú", "áncash", "ecuador", "guatemala", "managua", "mocoa",
+           "vargas", "cromañón", "kiss", "joelma", "brumadinho", "valdivia", "uruguaya", "lamia",
+           "ara san juan", "haití", "아이티", "페루", "mitch", "fuego", "maría", "san josé", "tam ")),
+)
+
+
+def audience_fit(entry: TopicEntry) -> float:
+    haystack = f"{entry.key} {entry.title}".lower()
+    return max(
+        (score for score, words in _AUDIENCE_KEYWORDS if any(word in haystack for word in words)),
+        default=0.0,
+    )
+
+
 def prescore(
     entry: TopicEntry, today: date, popularity: dict[str, float], weights: dict[str, float]
 ) -> float:
     """본문을 받기 전에 매기는 점수 — 본문 조회(429 위험)를 상위 몇 개로만 줄이려고."""
-    return weights.get("anniversary", 0.0) * anniversary_score(entry.when, today) + weights.get(
-        "popularity", 0.0
-    ) * popularity.get(entry.key, 0.0)
+    return (
+        weights.get("anniversary", 0.0) * anniversary_score(entry.when, today)
+        + weights.get("popularity", 0.0) * popularity.get(entry.key, 0.0)
+        + weights.get("audience_fit", 0.0) * audience_fit(entry)
+    )

@@ -35,7 +35,7 @@
 ## 로컬 실행·검증
 ```bash
 python -m pip install -r requirements.txt
-python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 247 passed, 1 skipped)
+python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 254 passed, 1 skipped)
 python main.py topics              # 주제 후보만 확인(과금 없음)
 python main.py cloud-check --generate   # Vertex 이미지 1장(약 30원)
 python main.py run --review --wait 1200 --combine-parts   # 한 회차 전체(과금 발생)
@@ -95,6 +95,13 @@ python main.py review-pending --wait 30
 - 업로드 시각: 크론은 KST 09:00 그대로 둔다(2026-10-26 사용자 결정). GitHub 스케줄 지연으로 실제
   업로드는 KST 12~13시경 = 멕시코·중남미 저녁 7~10시 — 주 시청층 골든타임. 스페인 저녁(KST 새벽)은 노리지 않는다.
 - 첫 3초: 4단어 이내 질문을 화면 정중앙에 크게(render_hook_question), 상단 배너는 3초 뒤부터.
+  2026-10-27부터 질문 위에 노란 큰 숫자(`hook_stat`, 예 "200.000 / MUERTOS")를 0초부터 — 원문에
+  없는 숫자는 코드가 버린다.
+- **유튜브 스튜디오 분석(2026-10-27, 최근 28일)** — 다음 작업자는 이 숫자를 기준으로 판단할 것:
+  유효 쇼츠 조회수 3,068, '계속 시청'(viewed vs swiped) 채널 51.9%(상위 영상 64%), 유입 95% 쇼츠 피드,
+  시청자 멕시코 35%·미국 17%·아르헨 5%·칠레 4%·페루 3%, 남성 77%, 55세 이상 61%, 신규 시청자 99.5%,
+  구독자 18명. 상위 영상은 숫자형 제목의 지진·참사("8.6 TERREMOTO" 982회, "3,276 muertos" 858회).
+  그래서: 숫자형 제목 공식 1순위, 지진·멕시코·중남미·항공 가산(`audience_fit`), 배속 1.05·또렷한 발음.
 
 ## 비용·크레딧 (주의)
 - Vertex(GCP 크레딧) 사용. Vertex 에는 Veo lite 가 없어 fast 단가(4초 클립 약 882원)로 과금된다.

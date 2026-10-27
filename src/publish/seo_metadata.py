@@ -96,12 +96,15 @@ _COMMON_RULES_ES = """Reglas:
 - **Título (2026-10-27)**: de 40 a 65 caracteres, y en los primeros ~35 caracteres tiene que
   aparecer **el nombre reconocible** del suceso, lugar u objeto (Titanic, Pompeya, Chernóbil,
   Armero, los Andes...). Quien lo ve pasar debe entender en un vistazo de qué trata **y** sentir
-  que le falta algo. Los 3 candidatos usan fórmulas distintas:
+  que le falta algo. Los 3 candidatos usan fórmulas distintas — **el primero siempre es la
+  fórmula de cifra**, la que mejor ha funcionado en este canal ("3,276 muertos: Rutina fatal",
+  "8.6 TERREMOTO: ¿Por qué no arrasó?", "36 toneladas de veneno: Bhopal"):
+  · "[CIFRA + qué]: [nombre] + [pregunta o giro]" — "69.000 muertos: el terremoto que nadie vio venir"
   · "[Nombre]: [hecho concreto que impacta]" — "Pompeya: 2.000 personas que nunca intentaron huir"
-  · "Por qué / Cómo [pregunta que pica]" — "Por qué nadie escapó de Pompeya a tiempo"
-  · "El día que [lo que pasó, dicho con fuerza]" — "El día que el Titanic se partió en dos"
-  **Prohibido**: títulos crípticos que empiezan con un número sin contexto ("61.2 m/s: El
-  RÉCORD EFÍMERO", "494 KM: El RUGIDO"), más de una palabra en MAYÚSCULAS, hashtags o emojis.
+  · "Por qué / El día que [...]" — "El día que el Titanic se partió en dos"
+  Para la audiencia mexicana, en sismos usa también "temblor" o "sismo" (así lo buscan).
+  **Prohibido**: una cifra sin decir de qué suceso o qué mide ("61.2 m/s: El RÉCORD EFÍMERO",
+  "494 KM: El RUGIDO"), más de una palabra en MAYÚSCULAS aparte de la cifra, hashtags o emojis.
   Todo lo que diga el título debe ser cierto según los datos — impactante sí, falso nunca.
   Si en Pistas hay un aniversario, **uno** de los 3 títulos lo usa con la cifra exacta de la
   pista ("Hace 41 años, Armero desapareció en una sola noche") — la gente busca estos sucesos
