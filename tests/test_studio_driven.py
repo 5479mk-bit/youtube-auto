@@ -72,7 +72,8 @@ def test_hook_frame_draws_big_yellow_number_above_question(tmp_path):
     ]
     assert yellow_rows and white_rows
     assert max(yellow_rows) < min(white_rows)  # 숫자가 질문 위
-    assert 250 < min(yellow_rows) and max(white_rows) < 710  # 화면 가운데 덩어리
+    # 화면 위·가운데 덩어리 — 아래쪽(58% 이하)은 첫 문장 자막 자리라 비워 둔다.
+    assert 100 < min(yellow_rows) and max(white_rows) < 960 * 0.58
 
 
 def test_audience_fit_prefers_mexico_earthquakes_and_flights():
@@ -98,3 +99,13 @@ def test_title_rules_put_number_formula_first():
     rules = seo_metadata._COMMON_RULES_ES
     assert "el primero siempre es la" in rules and "fórmula de cifra" in rules
     assert "temblor" in rules
+
+
+def test_reference_style_mystery_topics_and_fit():
+    config = yaml.safe_load(Path("config/config.yaml").read_text(encoding="utf-8"))
+    keys = [topic_rank.parse_entry(t).key for t in config["topics"]["disaster"]["titles"]]
+    for title in ("Tormenta solar de 1859", "Cráter de Chicxulub", "Vuelo 19", "Triángulo de las Bermudas"):
+        assert title in keys
+    fit = lambda raw: topic_rank.audience_fit(topic_rank.parse_entry(raw))
+    assert fit("es:Cráter de Chicxulub") == 1.0
+    assert fit("es:Tormenta solar de 1859 | 1859-09-01") == 0.8

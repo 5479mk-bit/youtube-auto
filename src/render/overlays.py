@@ -73,10 +73,22 @@ def render_subtitle(
     bottom_ratio = max(float(style.get("bottom_ratio", 0.24)), float(safe_bottom))
     baseline = int(height * (1 - bottom_ratio)) - block_height
 
+    upper = bool(style.get("uppercase", False))
+    lines = [text.upper() for text in cue.lines] if upper else list(cue.lines)
+    emphasis = [item.upper() for item in cue.emphasis] if upper else cue.emphasis
+    active = getattr(cue, "active_word", -1)
+    word_offset = 0
     max_line_width = 0.0
-    for index, text in enumerate(cue.lines):
+    for index, text in enumerate(lines):
         y = baseline + index * line_height
-        _draw_line_with_emphasis(draw, text, cue.emphasis, font, width, y, style)
+        count = len(text.split())
+        if active >= 0:
+            _draw_line_with_active_word(
+                draw, text, emphasis, font, width, y, style, active - word_offset
+            )
+        else:
+            _draw_line_with_emphasis(draw, text, emphasis, font, width, y, style)
+        word_offset += count
         max_line_width = max(max_line_width, draw.textlength(text, font=font))
 
     # 그림자·팝인 오버슈트(최대 1.15배)가 잘리지 않을 여유를 둔다.
@@ -119,6 +131,54 @@ def _draw_line_with_emphasis(
                 stroke_width=stroke, stroke_fill=(0, 0, 0, 255),
             )
         x += draw.textlength(segment, font=font)
+
+
+def _draw_line_with_active_word(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    emphasis: list[str],
+    font: ImageFont.FreeTypeFont,
+    width: int,
+    y: int,
+    style: dict,
+    active: int,
+) -> None:
+    """지금 읽는 단어 뒤에 색 박스를 깔고(흰 글씨), 강조어는 노란색으로 — 레퍼런스 자막 방식."""
+    tokens = text.split()
+    space = draw.textlength(" ", font=font)
+    widths = [draw.textlength(token, font=font) for token in tokens]
+    total = sum(widths) + space * max(len(tokens) - 1, 0)
+    x = (width - total) / 2
+    stroke = int(style.get("stroke_width", 0) or 0)
+    emphasis_words = {
+        word.strip(".,;:¿?¡!\"'").lower()
+        for phrase in emphasis for word in phrase.split()
+        if len(word.strip(".,;:¿?¡!\"'")) >= 3
+    }
+    size = font.size
+    for index, (token, token_width) in enumerate(zip(tokens, widths)):
+        is_active = index == active
+        if is_active:
+            pad_x, pad_top, pad_bottom = size * 0.14, size * 0.08, size * 0.22
+            draw.rounded_rectangle(
+                (x - pad_x, y - pad_top, x + token_width + pad_x, y + size + pad_bottom),
+                radius=int(size * 0.18),
+                fill=style.get("highlight_box_color", "#E3245B"),
+            )
+            color = style["font_color"]
+        elif token.strip(".,;:¿?¡!\"'").lower() in emphasis_words:
+            color = style["emphasis_color"]
+        else:
+            color = style["font_color"]
+        if not is_active:
+            _draw_text_with_shadow(
+                draw, (x, y), token, font, color, shadow_blur=style.get("shadow_blur", 6)
+            )
+        draw.text(
+            (x, y), token, font=font, fill=color,
+            stroke_width=0 if is_active else stroke, stroke_fill=(0, 0, 0, 255),
+        )
+        x += token_width + space
 
 
 def _split_emphasis(text: str, emphasis: list[str]) -> list[tuple[str, bool]]:
@@ -250,7 +310,9 @@ def render_hook_question(
     image = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
 
-    font_size = int(width * 0.13)
+    # 2026-10-27: 숫자(stat)가 같이 뜨면 질문은 한 단계 작게, 덩어리 전체를 화면 36% 높이에 —
+    # 아래쪽(60% 부근)은 첫 문장 자막 자리라 겹치면 안 된다.
+    font_size = int(width * (0.115 if stat else 0.13))
     font = _font(font_size)
     lines = _wrap_lines(draw, text, font, width * 0.86)
     while (
@@ -263,7 +325,8 @@ def render_hook_question(
         lines = _wrap_lines(draw, text, font, width * 0.86)
 
     line_height = int(font_size * 1.15)
-    top = height * 0.5 - line_height * len(lines) / 2
+    center = height * 0.36
+    top = center - line_height * len(lines) / 2
     if stat:
         # 2026-10-27: 질문 위에 숫자를 가장 크게(노란색) — 소리 없이 넘기는 사람(모바일 60% 이상)도
         # 0.5초 안에 "얼마나 큰 일인지"를 본다. 숫자 줄은 크게, 단위 낱말("MUERTOS")은 그 아래
@@ -272,7 +335,7 @@ def render_hook_question(
         number = next((w for w in words if any(ch.isdigit() for ch in w)), words[0])
         unit = " ".join(w for w in words if w is not number)
         rows = []  # (텍스트, 폰트, 높이)
-        for text_row, ratio in ((number, 0.26), (unit, 0.12)):
+        for text_row, ratio in ((number, 0.22), (unit, 0.10)):
             if not text_row:
                 continue
             row_size = int(width * ratio)
@@ -282,7 +345,7 @@ def render_hook_question(
                 row_font = _font(row_size)
             rows.append((text_row, row_font, int(row_size * 1.12)))
         block = sum(row[2] for row in rows) + int(font_size * 0.3) + line_height * len(lines)
-        cursor = height * 0.5 - block / 2
+        cursor = center - block / 2
         for text_row, row_font, row_height in rows:
             row_width = draw.textlength(text_row, font=row_font)
             _draw_text_with_shadow(

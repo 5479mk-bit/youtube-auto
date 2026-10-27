@@ -51,6 +51,10 @@ subtitle:
   bottom_ratio: 0.36          # 자막 블록 아래끝을 화면 하단 36% 지점에(쇼츠 하단 UI 위)
   max_chars_per_line: 14      # 한 화면에 2~3단어
   dynamic_pop: true           # 자막 큐마다 짧게 튀어오르는 팝인 애니메이션(사용자 지시, 2026-10-01)
+  # 2026-10-27 레퍼런스(틱톡 lazarus_404 60만 회): 대문자 굵은 자막, 지금 말하는 단어에만 빨간 박스.
+  uppercase: true
+  word_highlight: true
+  highlight_box_color: "#E3245B"
 
 audio:
   # voxcpm(GPU 전용)과 supertonic(로컬 서버)이 항상 1·2순위로 시도된다
@@ -259,6 +263,15 @@ topics:
       - "es:Huracán Gilbert | 1988-09-14"
       - "es:Huracán Wilma | 2005-10-21"
       - "es:Huracán Pauline | 1997-10-09"
+      # 2026-10-27 레퍼런스(틱톡 lazarus_404 "¿Qué pasaría si una tormenta solar...?", 검색어
+      # "cómo el mundo podría terminar"): '다시 일어나면?' 류 재앙·미스터리. 문서명 실존 확인.
+      - "es:Tormenta solar de 1859 | 1859-09-01"
+      - "es:Cráter de Chicxulub"
+      - "es:Caldera de Yellowstone"
+      - "es:Erupción del Tambora de 1815 | 1815-04-10"
+      - "es:Vuelo 19 | 1945-12-05"
+      - "es:Mary Celeste | 1872-12-04"
+      - "es:Triángulo de las Bermudas"
       # 2026-10-09: 6일 연속(run #53~#58) 자동 스케줄이 "선정할 주제 후보가
       # 없습니다"로 중단됐다 — 16개가 전부 소진된 뒤 아무도 체크인을 못 봤다.
       # API로 실존을 확인한 7개를 추가해 23개로 늘렸다. 이 사고로 느낀 것:

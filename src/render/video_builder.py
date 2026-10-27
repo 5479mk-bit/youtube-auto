@@ -407,7 +407,8 @@ def _subtitle_layers(
         clip = ImageClip(str(path)).with_start(cue.start).with_duration(
             max(cue.end - cue.start, 0.1)
         )
-        if dynamic:
+        # 단어 하이라이트로 쪼갠 큐는 묶음의 첫 단어에서만 튀어 오른다(단어마다 튀면 어지럽다).
+        if dynamic and getattr(cue, "active_word", -1) <= 0:
             center_x, center_y = bx + bw / 2, by + bh / 2
 
             def _pos(t: float, cx=center_x, cy=center_y, w=bw, h=bh) -> tuple[float, float]:
@@ -415,6 +416,9 @@ def _subtitle_layers(
                 return (cx - w * scale / 2, cy - h * scale / 2)
 
             clip = clip.resized(_subtitle_pop_scale).with_position(_pos)
+        else:
+            # 잘라낸 PNG 라 제자리(bx, by)에 놓아야 한다 — 안 그러면 화면 왼쪽 위(0, 0)에 붙는다.
+            clip = clip.with_position((bx, by))
         layers.append(clip)
     return layers
 

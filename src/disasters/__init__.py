@@ -49,6 +49,37 @@ _KR_BODY_MARKERS = (
 _KR_BODY_SCAN_CHARS = 500
 
 
+# 2026-10-27 레퍼런스(lazarus_404 "¿El hundimiento del Titanic fue realmente un accidente?" 60만 회,
+# 공유 2.4만): 이 장르에서 가장 많이 퍼지는 건 '이론·의혹·끝내 안 풀린 것'이다. 그런 문단은 보통
+# 문서 뒷부분에 있어 앞 4,000자만 넘기면 대본 작가가 못 본다 — 따로 골라 붙인다.
+_MYSTERY_MARKERS = (
+    "teoría", "teorias", "conspira", "misterio", "misterios", "nunca se", "sin explicación",
+    "inexplicable", "controvers", "polémic", "se especula", "especulacion", "especulación",
+    "encubri", "ocult", "advertencia", "ignorad", "sospech", "enigma", "leyenda",
+    "음모", "미스터리", "의혹", "논란", "은폐", "경고", "수수께끼", "전설",
+)
+_MYSTERY_MAX_CHARS = 1500
+
+
+def _mystery_appendix(text: str) -> str:
+    head = text[:MAX_CONTEXT_CHARS]
+    picked: list[str] = []
+    total = 0
+    for paragraph in text[MAX_CONTEXT_CHARS:].split("\n"):
+        paragraph = paragraph.strip()
+        if len(paragraph) < 60 or paragraph in head:
+            continue
+        lowered = paragraph.lower()
+        if any(marker in lowered for marker in _MYSTERY_MARKERS):
+            if total + len(paragraph) > _MYSTERY_MAX_CHARS:
+                break
+            picked.append(paragraph)
+            total += len(paragraph)
+    if not picked:
+        return ""
+    return "\n\n[Teorías, misterios y advertencias que menciona el mismo artículo]\n" + "\n".join(picked)
+
+
 def _looks_domestic(text: str) -> bool:
     head = text[:_KR_BODY_SCAN_CHARS]
     return any(marker in head for marker in _KR_BODY_MARKERS)
@@ -127,7 +158,7 @@ def collect_candidates(
             headline=title,
             headline_number="",
             subject=title,
-            context=text[:MAX_CONTEXT_CHARS],
+            context=text[:MAX_CONTEXT_CHARS] + _mystery_appendix(text),
             facts=facts[:MAX_FACTS],
             source_name=SOURCE_NAME,
             source_url=topic_rank.wiki_url(lang, title),

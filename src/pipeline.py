@@ -710,6 +710,7 @@ def _render_part(
         settings.get("subtitle.max_chars_per_line", 16),
         # 훅 숫자는 화면 한가운데 크게 떠 있으므로 자막으로 한 번 더 쓰지 않는다.
         suppress_texts=[part.hook_number],
+        word_highlight=settings.get("subtitle.word_highlight", False) is True,
     )
     subtitle_builder.write_srt(cues, work_dir / f"part{part.part}.srt")
 

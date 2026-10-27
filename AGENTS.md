@@ -35,7 +35,7 @@
 ## 로컬 실행·검증
 ```bash
 python -m pip install -r requirements.txt
-python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 254 passed, 1 skipped)
+python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 261 passed, 1 skipped)
 python main.py topics              # 주제 후보만 확인(과금 없음)
 python main.py cloud-check --generate   # Vertex 이미지 1장(약 30원)
 python main.py run --review --wait 1200 --combine-parts   # 한 회차 전체(과금 발생)
@@ -81,6 +81,14 @@ python main.py review-pending --wait 30
 - 재미 장치(2026-10-27): 프롬프트 `[MOTORES DE INTERÉS]`(실명 인물·열린 질문 2개·시계·숨은 사실·
   대비·"Imagina"·마지막 반전) + `RETENTION_EDITOR_PROMPT` 2차 패스(점수 매겨 9점 미만 문장만 고침,
   첫 문장 후보 5개 중 선택, 실패하면 초안 사용) + crack/braam 순간 흰 플래시(`video.impact_flash`).
+- **레퍼런스(2026-10-27, 사용자 지정)**: 틱톡 @darkmistery_0(팔로워 12만, 영상 634개), @lazarus_404
+  (72만 — "¿El hundimiento del Titanic fue realmente un accidente?" 60만 회·공유 2.4만), @historia.abierta8.
+  공통점: "¿Y si…?/¿Qué pasaría si…?" 첫 문장, 이론·의혹("Lo más inquietante es que…"), 실존 인물 이름,
+  "¿Tú qué crees?" 댓글 유도 엔딩, 대문자 자막 + 말하는 단어 빨간 박스, AI 이미지 + 실제 역사 사진 혼합,
+  컷 3.5~5초에 줌 모션, 95~124초(틱톡). 반영: 프롬프트 오프닝 A/B·[TEORÍAS Y MISTERIOS](이론은 이론으로만,
+  정치·보건 음모론 금지), 문서 뒷부분 미스터리 문단 추출(`disasters._mystery_appendix`), 단어별 하이라이트
+  자막(`subtitle.word_highlight/uppercase`), '다시 일어나면?' 주제(캐링턴·칙술루브·옐로스톤 등).
+  실제 사진은 아직(재난 경로는 웹 이미지 검색을 일부러 끔 — 유가족·저작권 판단 필요).
 - 템포: VEO 문장 무음 패딩 제거(`veo.min_scene_seconds: 0`), `audio.tempo: 1.1`(atempo), 쉼 0.05~0.3초,
   TTS 스타일은 긴박한 예고편 내레이터. 대본 모델 `gemini-2.5-pro`.
 - 자막: 82px 굵은 흰 글씨 + 검은 외곽선 6, 강조어 노란색(`#FFD84D`), 한 줄 14자, 화면 중하단.

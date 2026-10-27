@@ -395,7 +395,12 @@ exactitud). Es la **única** fuente de hechos:
   generes nada.
 
 [ESTRUCTURA — apertura en caliente (cold open), siempre así]
-1. **Frase 1 (segundo 0): el momento más brutal de la historia, en presente y sin contexto.**
+1. **Frase 1 (segundo 0)** — elige UNA de estas dos aperturas:
+   **A. ¿Y si...?** (la que más comparten los canales grandes de misterio en español): si el texto
+   menciona una teoría, una sospecha, algo nunca explicado o un fenómeno que podría repetirse, abre
+   con la pregunta prohibida: "¿Y si el Titanic no se hundió por un accidente?" / "¿Qué pasaría si
+   esta tormenta solar golpeara hoy?". 6 a 12 palabras.
+   **B. El momento más brutal**, en presente y sin contexto.
    Empieza en plena catástrofe con un número o una imagen imposible de ignorar. 6 a 10 palabras.
    Ejemplos del tono: "En 18 horas, una ciudad entera queda sepultada viva." / "El barco
    'imposible de hundir' tiene dos horas de vida." **Prohibido** empezar con contexto, fechas
@@ -408,18 +413,31 @@ exactitud). Es la **única** fuente de hechos:
 3. **Rebobina** ("Horas antes...", "Todo empezó con...") y cuenta en orden, en **presente
    histórico**, cada frase subiendo la tensión. Detalles concretos y sensoriales: lo que se ve,
    se oye, la hora exacta.
-4. **A mitad del video, re-gancho** para frenar el abandono: "Pero eso no fue lo peor." / "Y
-   aquí todo cambia."
-5. **Clímax**: el hecho más decisivo, con su número.
-6. **Última frase: golpe final que enlaza con la frase 1** — que al volver a empezar el video
-   la primera frase suene como la continuación (bucle). Nada de despedidas, "suscríbete" ni
-   moralejas largas.
+4. **A mitad del video, re-gancho** para frenar el abandono: "Y es aquí donde todo se vuelve
+   extraño." / "Lo más inquietante es que..." / "Lo perturbador es que..." / "Pero eso no fue lo
+   peor."
+5. **Clímax**: el hecho más decisivo, con su número. Si el fenómeno puede repetirse (sismos,
+   volcanes, tormentas solares, presas), conéctalo con el presente solo si el texto lo respalda:
+   "Y los científicos dicen que puede volver a pasar."
+6. **Última frase: una pregunta directa al espectador que lo obligue a comentar y que enlace con
+   la frase 1** (bucle): "¿Accidente... o algo más?" / "¿Tú habrías escapado?" / "¿Tú qué crees?".
+   Nada de despedidas, "suscríbete" ni moralejas largas.
+
+[TEORÍAS Y MISTERIOS — lo que más se comparte, con una regla de hierro]
+- Si el texto menciona teorías, sospechas, advertencias ignoradas, encubrimientos o cosas nunca
+  explicadas, son tu mejor material: dales espacio y tensión.
+- **Siempre como teoría, nunca como hecho**: "hay quienes creen que...", "una teoría dice que...",
+  "nunca se supo por qué...". Los hechos comprobados, como hechos; las sospechas, como sospechas.
+- Si el texto no menciona ninguna teoría, **no la inventes**: usa la pregunta sin respuesta que
+  dejan los hechos reales.
+- Prohibido: teorías sobre política actual, vacunas o salud, y acusar de un crimen a una persona
+  viva.
 
 **Cifra en pantalla (`hook_stat` de la parte 1)**: la cifra más brutal del texto en **máximo 3
 palabras y en mayúsculas** ("200.000 MUERTOS", "8.6 GRADOS", "36 TONELADAS", "2 HORAS"). Sale
 enorme en amarillo encima de la pregunta **desde el fotograma 0** — es lo que detiene el pulgar
 aunque el video esté sin sonido. El número tiene que estar **literalmente** en el texto, y la frase 1
-lo debe decir. Si el texto no tiene ninguna cifra impactante, cadena vacía.
+o la 2 lo debe decir. Si el texto no tiene ninguna cifra impactante, cadena vacía.
 
 **Gancho en pantalla (`hook_number` de la parte 1)**: una pregunta de **máximo 4 palabras** que
 sale en grande en el centro durante los 3 primeros segundos y luego queda arriba. Debe picar
@@ -543,10 +561,12 @@ Pistas: {hints}
 {script_json}
 
 Paso 1 — Califica del 1 al 10, con dureza: gancho de la frase 1 (¿detiene el pulgar en medio
-segundo?), bucles abiertos, persona/emoción, dato sorprendente, ritmo (ninguna frase de relleno),
-giro final que enlaza con la frase 1.
-Paso 2 — Escribe 5 frases 1 alternativas (6 a 10 palabras, presente, el momento más brutal o
-la imagen más imposible, con un número si hay) y elige la más fuerte (o la actual si es mejor).
+segundo?), bucles abiertos, persona/emoción, dato sorprendente o misterio/teoría (siempre como
+teoría), ritmo (ninguna frase de relleno), pregunta final que provoque comentarios y enlace con la
+frase 1.
+Paso 2 — Escribe 5 frases 1 alternativas (al menos 2 del tipo "¿Y si...?" si el material tiene
+una teoría o algo sin explicar; las demás, el momento más brutal en presente con un número) y elige
+la más fuerte (o la actual si es mejor).
 Paso 3 — Reescribe **solo lo que esté por debajo de 9**: frases planas, de contexto, repetidas o
 con muletillas. Mantén exactamente la estructura JSON, la cantidad aproximada de caracteres, los
 campos (scene_type, prompt, sfx, overlay, emphasis, solo_tiktok) y todas las reglas del guion

@@ -26,10 +26,15 @@ class SubtitleCue:
     end: float
     lines: list[str]
     emphasis: list[str]
+    # 지금 읽고 있는 단어(묶음 안 순번). -1 이면 단어 하이라이트 없음.
+    active_word: int = -1
 
 
 def build_cues(
-    part: ScriptPart, max_chars_per_line: int, suppress_texts: list[str] | None = None
+    part: ScriptPart,
+    max_chars_per_line: int,
+    suppress_texts: list[str] | None = None,
+    word_highlight: bool = False,
 ) -> list[SubtitleCue]:
     suppressed = {_key(text) for text in (suppress_texts or []) if text}
 
@@ -41,7 +46,30 @@ def build_cues(
                 _line_to_cues(line.text, line.emphasis, cursor, line.duration, max_chars_per_line)
             )
         cursor += line.duration
-    return cues
+    return _split_words(cues) if word_highlight else cues
+
+
+def _split_words(cues: list[SubtitleCue]) -> list[SubtitleCue]:
+    """묶음(2~3단어)을 단어마다 쪼개 '지금 읽는 단어'에 표시를 단다(2026-10-27).
+
+    레퍼런스(lazarus_404, 틱톡 60만 회)의 자막: 화면에는 2~3단어가 그대로 있고, 말하는 단어에만
+    색 박스가 옮겨 다닌다 — 눈이 소리를 따라가게 해 끝까지 보게 만든다. 단어별 실제 타이밍은
+    없으니 글자 수 비율로 나눈다(묶음 단위 싱크는 그대로라 크게 어긋나지 않는다).
+    """
+    out: list[SubtitleCue] = []
+    for cue in cues:
+        words = " ".join(cue.lines).split()
+        if len(words) <= 1:
+            out.append(SubtitleCue(cue.start, cue.end, cue.lines, cue.emphasis, 0 if words else -1))
+            continue
+        weights = [len(word) + 2 for word in words]
+        total = sum(weights)
+        cursor = cue.start
+        for index, weight in enumerate(weights):
+            end = cue.end if index == len(words) - 1 else cursor + (cue.end - cue.start) * weight / total
+            out.append(SubtitleCue(cursor, end, cue.lines, cue.emphasis, index))
+            cursor = end
+    return out
 
 
 def _line_to_cues(

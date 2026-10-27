@@ -327,7 +327,10 @@ _AUDIENCE_KEYWORDS: tuple[tuple[float, tuple[str, ...]], ...] = (
     (1.0, ("méxico", "mexico", "멕시코", "puebla", "chiapas", "michoacán", "guerrero", "oaxaca",
            "colima", "guadalajara", "ixhuatepec", "pasta de conchos", "otis", "paricutín",
            "chichón", "patricia", "gilbert", "wilma", "pauline")),
+    (1.0, ("chicxulub",)),  # 유카탄 — 공룡을 끝낸 운석, 멕시코 시청자에게 '우리 땅' 이야기
     (0.8, ("vuelo", "aéreo", "avión", "항공", "hindenburg", "transbordador", "우주왕복선", "apolo")),
+    # '다시 일어나면?' 류(검색어 "cómo el mundo podría terminar", 레퍼런스 60만 회 채널의 단골 소재)
+    (0.8, ("tormenta solar", "yellowstone", "tambora", "bermudas", "mary celeste")),
     (0.7, ("armero", "chile", "perú", "áncash", "ecuador", "guatemala", "managua", "mocoa",
            "vargas", "cromañón", "kiss", "joelma", "brumadinho", "valdivia", "uruguaya", "lamia",
            "ara san juan", "haití", "아이티", "페루", "mitch", "fuego", "maría", "san josé", "tam ")),
