@@ -372,7 +372,8 @@ verticales en español latinoamericano sobre desastres reales. Tu único objetiv
 en el primer segundo, que lo vean entero y que lo vuelvan a ver. Escribes para alguien que va
 pasando videos con el pulgar y te da medio segundo.
 
-El video dura **35 a 45 segundos** y es una sola pieza continua. Abajo, "parte 1"/"parte 2" son
+El video dura **35 a 45 segundos** y es una sola pieza continua. Del mismo guion sale también
+una **versión extendida de más de 60 segundos para TikTok** (ver [VERSIÓN TIKTOK]). Abajo, "parte 1"/"parte 2" son
 solo una división interna del guion — **nunca** escribas "parte 1", "parte 2", "continuará",
 "en el próximo video" ni nada que sugiera otra entrega.
 
@@ -419,10 +420,21 @@ sale en grande en el centro durante los 3 primeros segundos y luego queda arriba
 sin explicar: "¿Por qué nadie huyó?", "¿Quién dio la orden?", "¿Sabías esto?". En español
 latinoamericano, directa.
 
-Longitud: parte 1 unos {part1_chars} caracteres, parte 2 unos {part2_chars} caracteres.
-**Cada parte, entre 6 y 7 frases (objetos JSON).** El límite de caracteres manda sobre todo lo
-demás: si te pasas más de un 15%, fusiona o elimina frases (nunca la frase 1, el re-gancho, el
-clímax ni la última).
+Longitud (versión YouTube, solo frases normales): parte 1 unos {part1_chars} caracteres, parte 2
+unos {part2_chars} caracteres. **Cada parte, entre 6 y 7 frases normales (objetos JSON).** El
+límite de caracteres manda sobre todo lo demás: si te pasas más de un 15%, fusiona o elimina
+frases (nunca la frase 1, el re-gancho, el clímax ni la última).
+
+[VERSIÓN TIKTOK — frases extra]
+TikTok solo paga videos de **más de 60 segundos**. Además de las frases normales, intercala en cada
+parte **{extra_lines} frases extra** marcadas con `"solo_tiktok": true` (unos {extra_chars} caracteres
+por parte). La versión YouTube las quita; la de TikTok las incluye todas en su lugar.
+- Aportan **más hechos concretos del texto**: cifras, horas, nombres, lo que vieron los testigos,
+  un segundo detalle inquietante. Nunca relleno ni repetición.
+- **Nunca** son la frase 1, la 2, el re-gancho, el clímax ni la última frase.
+- Las frases normales deben entenderse perfectamente **sin** las extra: ninguna frase normal
+  puede referirse a algo que solo dice una frase extra.
+- Las frases extra siempre usan `scene_type` "AI_IMAGE" y `sfx` "none".
 
 [TONO]
 - **Español latinoamericano neutro** (de México a Argentina): "ustedes", nunca "vosotros";
@@ -484,7 +496,8 @@ dos seguidas iguales; el resto "none".
      "prompt": "prompt en inglés que termina con la frase de estilo de arriba",
      "sfx": "sub_boom | crack | whoosh | alarm | braam | none",
      "overlay": "número/palabra para el centro de la pantalla, o cadena vacía",
-     "emphasis": ["palabra clave"]}}
+     "emphasis": ["palabra clave"],
+     "solo_tiktok": false}}
   ]}},
   "part2": {{"hook_number": "Otra pregunta corta (solo se usa la de part1).",
               "lines": [ ...misma estructura... ]}}
@@ -548,6 +561,8 @@ def _prompt(candidate: StoryCandidate, part1_chars: int, part2_chars: int) -> st
             context=candidate.context,
             part1_chars=part1_chars,
             part2_chars=part2_chars,
+            extra_lines=TIKTOK_EXTRA_LINES_PER_PART,
+            extra_chars=TIKTOK_EXTRA_CHARS_PER_PART,
         )
 
     return HERITAGE_PROMPT.format(
@@ -567,7 +582,11 @@ def _prompt(candidate: StoryCandidate, part1_chars: int, part2_chars: int) -> st
 # 지시를 무시하고 2~5문장짜리 얇은 대본을 내면(3중 후킹 구조가 통째로 들어갈 자리가
 # 없다), 파싱은 성공해도 여기서 걸러 템플릿 폴백으로 넘긴다 — "검증 없이 통과되던
 # 얇은 대본"이 실제 원인이었다.
-_DISASTER_MIN_LINES_PER_PART = 5  # 2026-10-27: 35~45초 포맷으로 부당 6~7문장
+_DISASTER_MIN_LINES_PER_PART = 5  # 2026-10-27: 35~45초 포맷으로 부당 6~7문장(틱톡 전용 문장 제외)
+# 틱톡 확장판(2026-10-27 사용자 지시: 틱톡은 60초 초과, 유튜브는 35~45초). 1.0배속 약 12.7자/초
+# 기준으로 유튜브판 550자 + 확장 2×170자 ≈ 890자 ≈ 68초 — 모자라도 61초 위로 남게 여유를 둔다.
+TIKTOK_EXTRA_LINES_PER_PART = "3 o 4"
+TIKTOK_EXTRA_CHARS_PER_PART = 170
 # VEO 컷은 4초짜리 영상이 통째로 생성된다. 문장이 너무 짧으면 대사가 1~2초 만에 끝나
 # 나머지는 무음으로 채워진다. 12자 미만이면 4초를 채우기엔 짧다고 보고 템플릿 폴백으로
 # 넘긴다(프롬프트는 12~22음절을 요구한다).
@@ -586,9 +605,14 @@ def _parse(raw: dict | None, candidate: StoryCandidate) -> Script | None:
     if not part1.lines or not part2.lines:
         return None
 
+    if candidate.dataset == "disaster":
+        _sanitize_tiktok_only(part1, part2)
+
+    core1 = [line for line in part1.lines if not line.tiktok_only]
+    core2 = [line for line in part2.lines if not line.tiktok_only]
     if candidate.dataset == "disaster" and (
-        len(part1.lines) < _DISASTER_MIN_LINES_PER_PART
-        or len(part2.lines) < _DISASTER_MIN_LINES_PER_PART
+        len(core1) < _DISASTER_MIN_LINES_PER_PART
+        or len(core2) < _DISASTER_MIN_LINES_PER_PART
     ):
         logger.warning(
             f"[script] 3중 후킹 구조를 담기엔 대본이 너무 짧습니다 "
@@ -624,6 +648,21 @@ def _parse(raw: dict | None, candidate: StoryCandidate) -> Script | None:
         source_note=source_note,
         is_sample=candidate.is_sample,
     )
+
+
+def _sanitize_tiktok_only(part1: ScriptPart, part2: ScriptPart) -> None:
+    """틱톡 전용 문장 규칙을 코드로도 지킨다 — 첫 두 문장·각 부의 마지막 문장(클리프행어,
+    루프)은 유튜브판에 꼭 있어야 하고, 전용 문장은 Veo 클립을 더 쓰지 않게 정지컷으로."""
+    for index in (0, 1):
+        if index < len(part1.lines):
+            part1.lines[index].tiktok_only = False
+    for part in (part1, part2):
+        if part.lines:
+            part.lines[-1].tiktok_only = False
+        for line in part.lines:
+            if line.tiktok_only and line.scene_type == "VEO":
+                line.scene_type = "AI_IMAGE"
+                line.sfx = "none"
 
 
 def _parse_part(raw: dict, part: int, candidate: StoryCandidate) -> ScriptPart:
@@ -676,6 +715,7 @@ def _parse_line(raw: dict, candidate: StoryCandidate) -> ScriptLine:
         map_spots=[str(spot).strip() for spot in map_data.get("spots", []) if str(spot).strip()],
         sfx=sfx,
         overlay=_overlay(raw.get("overlay"), text),
+        tiktok_only=str(raw.get("solo_tiktok")).strip().lower() == "true",
     )
 
 

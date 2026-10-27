@@ -99,6 +99,10 @@ class ScriptLine:
     emphasis: list[str] = field(default_factory=list)  # 자막에서 강조할 조각
     audio_path: str = ""
     duration: float = 0.0
+    # 틱톡 확장판(60초+)에만 들어가는 문장(2026-10-27). 유튜브판(35~45초)에서는 뺀다.
+    tiktok_only: bool = False
+    # 배속·쉼을 입히기 전 TTS 원본 — 틱톡판을 다른 배속으로 다시 다듬을 때 쓴다.
+    raw_audio_path: str = ""
     camera: CameraMove = "push_in"
     # 이 문장을 어떤 화면으로 만들지. 대본 LLM 이 문장마다 직접 정한다.
     scene_type: str = "AI_IMAGE"
@@ -235,6 +239,8 @@ class RenderedPart:
     thumbnail_path: str
     duration: float
     metadata: VideoMetadata
+    tiktok_video_path: str = ""  # 틱톡 확장판(60초+). 없으면 video_path 를 그대로 올린다.
+    tiktok_duration: float = 0.0
 
 
 def write_json(path: Path, payload: Any) -> None:

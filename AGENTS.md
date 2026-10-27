@@ -5,7 +5,7 @@
 
 ## 한 줄 요약
 해외 재난·인재(人災) 사건을 위키백과(스페인어판 우선, 일부 한국어판) 본문을 사실 재료로 삼아
-**스페인어 쇼츠(35~45초)**로
+**스페인어 쇼츠(유튜브 35~45초 / 틱톡 확장판 60초 초과)**로
 자동 제작하고, **텔레그램 승인 없이 바로 유튜브에 공개 업로드**(+틱톡 초안함)한다. 텔레그램에는
 "업로드 완료 + 링크 + 크레딧 요약", 영상, 설명(+해시태그 5개)만 보낸다.
 
@@ -35,7 +35,7 @@
 ## 로컬 실행·검증
 ```bash
 python -m pip install -r requirements.txt
-python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 233 passed, 1 skipped)
+python -m pytest tests -q          # 커밋 전 반드시 전부 통과(현재 242 passed, 1 skipped)
 python main.py topics              # 주제 후보만 확인(과금 없음)
 python main.py cloud-check --generate   # Vertex 이미지 1장(약 30원)
 python main.py run --review --wait 1200 --combine-parts   # 한 회차 전체(과금 발생)
@@ -73,6 +73,11 @@ python main.py review-pending --wait 30
 - 구조: **콜드 오픈**(1문장 = 가장 처참한 순간, 현재형 6~10단어, "Aquí, en..."·"Hubo una vez" 금지)
   → 호기심 갭 → 되감기(역사적 현재) → 중간 재후킹 → 클라이맥스 숫자 → 첫 문장으로 이어지는 루프.
   기념일이면 "Hace N años"(절대 "hoy" 아님 — 시청 날짜가 제각각).
+- **틱톡 확장판**(2026-10-27 사용자 지시: 틱톡 60초 초과, 유튜브 35~45초): 대본에 `solo_tiktok`
+  문장(부당 3~4개, 정지컷)을 섞어 쓰고, 전체를 한 번만 TTS 한 뒤 유튜브판은 그 문장을 빼고
+  1.1배속, 틱톡판은 전부 넣고 1.0배속으로 따로 렌더(`output/<id>/tiktok/`). 61.5초 미만이면 배속을
+  0.9까지 낮추고 끝 여백 최대 6초. Veo·이미지 캐시를 같이 써서 추가 비용은 거의 없다.
+  설정 `publish.tiktok.extended/tempo/min_seconds`. 틱톡 초안함 업로드가 실패하면 확장판 파일을 텔레그램으로 보낸다.
 - 템포: VEO 문장 무음 패딩 제거(`veo.min_scene_seconds: 0`), `audio.tempo: 1.1`(atempo), 쉼 0.05~0.3초,
   TTS 스타일은 긴박한 예고편 내레이터. 대본 모델 `gemini-2.5-pro`.
 - 자막: 82px 굵은 흰 글씨 + 검은 외곽선 6, 강조어 노란색(`#FFD84D`), 한 줄 14자, 화면 중하단.

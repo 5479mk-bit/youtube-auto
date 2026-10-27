@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Protocol
@@ -272,6 +273,14 @@ def _finish(
     있었다.
     """
     for line, path in zip(part.lines, paths):
+        # _trim_and_pad 는 원본 자리를 덮어쓴다 — 틱톡판을 다른 배속으로 다시 다듬을 수 있게
+        # 배속 전 원본을 따로 남긴다.
+        raw_copy = path.with_name(f"{path.stem}_raw{path.suffix}")
+        try:
+            shutil.copyfile(path, raw_copy)
+            line.raw_audio_path = str(raw_copy)
+        except OSError:
+            line.raw_audio_path = ""
         new_path = _trim_and_pad(path, line.pause_after, tempo)
         duration = _measure_duration(new_path) or _estimate_duration(line.narration)
 
@@ -286,11 +295,59 @@ def _finish(
         line.duration = duration
 
 
+def retimed_copy(
+    part: ScriptPart,
+    tempo: float,
+    min_seconds: float = 0.0,
+    min_tempo: float = 0.9,
+    max_tail_pad: float = 6.0,
+) -> ScriptPart:
+    """이미 합성한 부를 다른 배속으로 다시 다듬은 사본(틱톡 확장판용, 2026-10-27).
+
+    TTS 를 다시 부르지 않는다 — `raw_audio_path`(배속 전 원본)에서 ffmpeg 만 다시 돌린다.
+    틱톡 크리에이터 보상은 1분 **초과** 영상만 대상이라, `min_seconds` 에 못 미치면 배속을
+    `min_tempo` 까지 낮추고, 그래도 모자라면 마지막 문장 뒤를 최대 `max_tail_pad` 초 무음으로
+    늘린다(그 이상 모자라면 억지로 늘리지 않고 경고만 — 긴 무음은 이탈만 부른다).
+    """
+    from dataclasses import replace
+
+    def build(rate: float) -> ScriptPart:
+        lines = []
+        for line in part.lines:
+            source = Path(line.raw_audio_path or line.audio_path)
+            copy = replace(line, emphasis=list(line.emphasis))
+            new_path = _trim_and_pad(source, line.pause_after, rate, suffix="_tiktok")
+            copy.audio_path = str(new_path)
+            copy.duration = _measure_duration(new_path) or line.duration
+            lines.append(copy)
+        return ScriptPart(part=part.part, hook_number=part.hook_number, lines=lines)
+
+    result = build(tempo)
+    total = sum(line.duration for line in result.lines)
+    if min_seconds and total < min_seconds and tempo > min_tempo:
+        slower = max(min_tempo, tempo * total / min_seconds)
+        logger.info(f"[tiktok] {total:.1f}초 → {min_seconds:.0f}초를 넘기려고 배속 {slower:.2f}로 낮춥니다")
+        result = build(slower)
+        total = sum(line.duration for line in result.lines)
+    shortfall = min_seconds - total
+    if shortfall > 0 and result.lines:
+        if shortfall <= max_tail_pad:
+            last = result.lines[-1]
+            last.audio_path = str(_pad_tail(Path(last.audio_path), shortfall + 0.1))
+            last.duration = _measure_duration(Path(last.audio_path)) or last.duration + shortfall + 0.1
+        else:
+            logger.warning(
+                f"[tiktok] 확장판이 {total:.1f}초로 {min_seconds:.0f}초에 크게 못 미칩니다 — "
+                "대본의 틱톡 전용 문장이 부족합니다(수익화 대상에서 빠질 수 있음)"
+            )
+    return result
+
+
 def _estimate_duration(text: str) -> float:
     return max(len(text) / CHARS_PER_SECOND, MIN_DURATION)
 
 
-def _trim_and_pad(audio_path: Path, pause: float, tempo: float = 1.0) -> Path:
+def _trim_and_pad(audio_path: Path, pause: float, tempo: float = 1.0, suffix: str = "") -> Path:
     """문장 앞뒤의 무음을 걷어낸 뒤 설계한 만큼만 쉼을 붙인다.
 
     TTS 엔진은 문장마다 앞뒤로 제멋대로 무음을 붙여 보낸다. 그 위에 쉼을 더하면
@@ -315,7 +372,7 @@ def _trim_and_pad(audio_path: Path, pause: float, tempo: float = 1.0) -> Path:
     if pause > 0:
         filters += f",apad=pad_dur={pause:.3f}"
 
-    processed = audio_path.with_name(f"{audio_path.stem}_paced.wav")
+    processed = audio_path.with_name(f"{audio_path.stem}_paced{suffix}.wav")
     subprocess.run(
         [
             imageio_ffmpeg.get_ffmpeg_exe(),
@@ -331,6 +388,9 @@ def _trim_and_pad(audio_path: Path, pause: float, tempo: float = 1.0) -> Path:
         check=True,
         capture_output=True,
     )
+    if suffix:
+        # 사본용(틱톡판) — 원본·유튜브판 파일은 건드리지 않는다.
+        return processed
     final_path = audio_path.with_suffix(".wav")
     processed.replace(final_path)
     if audio_path != final_path and audio_path.exists():

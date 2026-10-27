@@ -19,7 +19,9 @@ from . import assets
 from . import disasters
 from .disasters import discovery as disaster_discovery
 from .disasters import popularity as topic_rank
-from .models import PhotoCredit, RenderedPart, Script, ScriptPart, StoryCandidate, write_json
+from .models import (
+    PhotoCredit, RenderedPart, Script, ScriptPart, StoryCandidate, VideoMetadata, write_json,
+)
 from .motion.veo_budget import VeoBudget
 from .motion.veo_client import VeoClient
 from .narration import tts_engine
@@ -463,6 +465,22 @@ def _merge_parts(script: Script) -> ScriptPart:
     )
 
 
+def _youtube_cut(part: ScriptPart) -> ScriptPart:
+    """틱톡 전용 문장을 뺀 유튜브판(35~45초). 같은 ScriptLine 객체를 그대로 쓴다 — 음성·
+    길이가 이미 채워져 있어 다시 합성하지 않는다."""
+    return ScriptPart(
+        part=part.part,
+        hook_number=part.hook_number,
+        lines=[line for line in part.lines if not line.tiktok_only],
+    )
+
+
+def _tiktok_extended(settings: Settings) -> bool:
+    return settings.get("publish.tiktok.enabled", False) is True and (
+        settings.get("publish.tiktok.extended", False) is True
+    )
+
+
 def run(
     settings: Settings,
     render: bool = True,
@@ -525,10 +543,14 @@ def run(
     parts: list[RenderedPart] = []
     credits: list[PhotoCredit] = []
     duration_bounds: tuple[float, float] | None = None
+    full_part: ScriptPart | None = None
     if combine_parts:
         # 1부·2부를 나누지 않고 하나로 이어 붙인다 — 대본 구조(3중 후킹)는 그대로,
         # 렌더만 영상 하나로 합친다.
-        parts_to_render = (_merge_parts(script),)
+        # 2026-10-27: 유튜브는 35~45초, 틱톡은 60초 초과(사용자 지시). 전체(틱톡 전용 문장 포함)를
+        # 한 번만 합성하고, 유튜브판은 전용 문장을 뺀 것, 틱톡판은 전부를 1.0배속으로 렌더한다.
+        full_part = _merge_parts(script)
+        parts_to_render = (_youtube_cut(full_part),)
         duration_bounds = (
             settings.get("video.combined_duration_min", 63),
             settings.get("video.combined_duration_max", 999),
@@ -540,6 +562,8 @@ def run(
     else:
         parts_to_render = (script.part1, script.part2)
     try:
+        if full_part is not None:
+            _synthesize(settings, full_part, work_dir)
         for part in parts_to_render:
             rendered, part_credits = _render_part(
                 settings,
@@ -554,10 +578,16 @@ def run(
                 ai_client,
                 duration_bounds=duration_bounds,
                 is_combined=combine_parts,
+                skip_tts=full_part is not None,
             )
             parts.append(rendered)
             credits.extend(
                 credit for credit in part_credits if credit not in credits
+            )
+        if full_part is not None and _tiktok_extended(settings) and parts:
+            _render_tiktok_version(
+                settings, script, full_part, candidate, collector, provider, work_dir,
+                veo_client, official_video, ai_client, parts[0],
             )
     except PhotoMissing as exc:
         # 사진이 없으면 단색으로 때우지 않고 멈춘다. 쓸모없는 영상을 몇 분씩 렌더하고
@@ -594,6 +624,8 @@ def run(
                     "video": part.video_path,
                     "thumbnail": part.thumbnail_path,
                     "duration": part.duration,
+                    "tiktok_video": part.tiktok_video_path,
+                    "tiktok_duration": part.tiktok_duration,
                     "title": part.metadata.title,
                     "title_alternatives": part.metadata.title_alternatives,
                     "description": part.metadata.description,
@@ -611,6 +643,45 @@ def run(
     )
 
 
+def _synthesize(settings: Settings, part: ScriptPart, work_dir: Path) -> None:
+    tts_engine.synthesize_part(
+        part,
+        build_tts_engines(settings),
+        work_dir / "audio",
+        require_quality=settings.get("audio.require_quality_voice", True),
+        # VEO 문장 뒤 무음 패딩. 2026-10-27: 기본값 0 — 말이 끊기는 빈 구간이 생겨 이탈한다.
+        min_veo_line_duration=settings.get("veo.min_scene_seconds", 0),
+        tempo=float(settings.get("audio.tempo", 1.0) or 1.0),
+    )
+
+
+def _render_tiktok_version(
+    settings, script, full_part, candidate, collector, provider, work_dir,
+    veo_client, official_video, ai_client, youtube: RenderedPart,
+) -> None:
+    """틱톡 확장판(60초 초과). 실패해도 유튜브판에는 영향이 없다.
+
+    Veo 클립·생성 이미지는 프롬프트 기준 캐시라 유튜브판에서 만든 것을 그대로 다시 쓴다 —
+    추가 비용은 틱톡 전용 문장의 정지컷(장당 약 30원)뿐이다.
+    """
+    try:
+        tiktok_part = tts_engine.retimed_copy(
+            full_part,
+            float(settings.get("publish.tiktok.tempo", 1.0) or 1.0),
+            min_seconds=float(settings.get("publish.tiktok.min_seconds", 61.5) or 0),
+        )
+        rendered, _ = _render_part(
+            settings, script, tiktok_part, candidate, collector, provider,
+            work_dir / "tiktok", veo_client, official_video, ai_client,
+            duration_bounds=(60, 90), is_combined=True, skip_tts=True, video_only=True,
+        )
+        youtube.tiktok_video_path = rendered.video_path
+        youtube.tiktok_duration = rendered.duration
+        logger.info(f"[tiktok] 확장판 {rendered.duration:.1f}초 → {rendered.video_path}")
+    except Exception:
+        logger.exception("[tiktok] 확장판 렌더 실패 — 틱톡에는 유튜브판을 올립니다")
+
+
 def _render_part(
     settings: Settings,
     script: Script,
@@ -624,21 +695,13 @@ def _render_part(
     ai_client=None,
     duration_bounds: tuple[float, float] | None = None,
     is_combined: bool = False,
+    skip_tts: bool = False,
+    video_only: bool = False,
 ) -> tuple[RenderedPart, list[PhotoCredit]]:
-    logger.info(f"{part.part}부 내레이션 합성" if not is_combined else "내레이션 합성(합본)")
-    tts_engine.synthesize_part(
-        part,
-        build_tts_engines(settings),
-        work_dir / "audio",
-        require_quality=settings.get("audio.require_quality_voice", True),
-        # VEO 로 지정된 문장은 대본 규칙상 15~20자(약 3~4초)라, 씬 길이가 그 문장
-        # 길이를 그대로 물려받으면 Veo 가 실제로 만든 8초짜리 영상도 그만큼만 잘려
-        # 화면 대부분이 정지 이미지처럼 보인다. 무음을 더해 문장 길이를 실제 생성
-        # 길이(veo.duration_seconds)만큼 맞춘다 — 돈 주고 만든 8초를 다 쓴다.
-        # 2026-10-27: 기본값 0 — 무음으로 늘리면 말이 끊기는 빈 구간이 생겨 이탈한다.
-        min_veo_line_duration=settings.get("veo.min_scene_seconds", 0),
-        tempo=float(settings.get("audio.tempo", 1.0) or 1.0),
-    )
+    work_dir.mkdir(parents=True, exist_ok=True)
+    if not skip_tts:
+        logger.info(f"{part.part}부 내레이션 합성" if not is_combined else "내레이션 합성(합본)")
+        _synthesize(settings, part, work_dir)
 
     cues = subtitle_builder.build_cues(
         part,
@@ -655,7 +718,7 @@ def _render_part(
         return _finish_part(
             settings, script, part, candidate, collector, provider, work_dir,
             veo_client, ai_client, scenes, cues,
-            duration_bounds=duration_bounds, is_combined=is_combined,
+            duration_bounds=duration_bounds, is_combined=is_combined, video_only=video_only,
         )
 
     # 공식 동영상이 있으면 그걸 도입부로 쓰고 Veo 호출 자체를 건너뛴다 — 없으면 지금까지처럼
@@ -692,7 +755,7 @@ def _render_part(
     return _finish_part(
         settings, script, part, candidate, collector, provider, work_dir,
         veo_client, ai_client, scenes, cues,
-        duration_bounds=duration_bounds, is_combined=is_combined,
+        duration_bounds=duration_bounds, is_combined=is_combined, video_only=video_only,
     )
 
 
@@ -715,8 +778,10 @@ def _finish_part(
     cues,
     duration_bounds: tuple[float, float] | None = None,
     is_combined: bool = False,
+    video_only: bool = False,
 ) -> tuple[RenderedPart, list[PhotoCredit]]:
-    """씬 배정이 끝난 뒤는 두 경로가 같다 — 렌더하고 썸네일·메타데이터를 붙인다."""
+    """씬 배정이 끝난 뒤는 두 경로가 같다 — 렌더하고 썸네일·메타데이터를 붙인다.
+    `video_only`(틱톡 확장판)는 영상만 — 제목·설명은 유튜브판 것을 쓴다."""
     _warn_if_off_target(settings, part, duration_bounds)
 
     logger.info(
@@ -737,6 +802,15 @@ def _finish_part(
         ai_client=ai_client,
         is_combined=is_combined,
     )
+    if video_only:
+        return (
+            RenderedPart(
+                part=part.part, video_path=str(video_path), thumbnail_path="",
+                duration=duration,
+                metadata=VideoMetadata(title="", title_alternatives=[], description="", tags=[]),
+            ),
+            credits,
+        )
 
     thumbnail_path = build_thumbnail(
         video_path,
@@ -962,6 +1036,8 @@ def resume_pending_reviews(settings: Settings, wait_seconds: int) -> dict[str, l
                 video_path=part["video"],
                 thumbnail_path=part["thumbnail"],
                 duration=part["duration"],
+                tiktok_video_path=part.get("tiktok_video", ""),
+                tiktok_duration=part.get("tiktok_duration", 0.0),
                 metadata=VideoMetadata(
                     title=part["title"],
                     title_alternatives=part["title_alternatives"],
@@ -1080,9 +1156,23 @@ def _finish_review(
         # 자동 업로드는 알림 → 영상 → 설명(+해시태그) 순으로, 그 외엔 보내지 않는다.
         for part in parts:
             reviewer.send_video(Path(part.video_path), caption=part.metadata.title)
+        tiktok_file = _tiktok_file(parts[0])
+        if tiktok_file != Path(parts[0].video_path) and not any(
+            link.startswith("틱톡(") for link in extra_links
+        ):
+            # 틱톡 초안함 업로드가 안 됐으면 확장판 파일을 직접 올릴 수 있게 보낸다.
+            reviewer.send_video(
+                tiktok_file, caption=f"틱톡용 확장판 {parts[0].tiktok_duration:.0f}초 — 직접 올려 주세요"
+            )
         if caption_text:
             reviewer.notify(caption_text)
     return video_ids
+
+
+def _tiktok_file(part: RenderedPart) -> Path:
+    if part.tiktok_video_path and Path(part.tiktok_video_path).exists():
+        return Path(part.tiktok_video_path)
+    return Path(part.video_path)
 
 
 def _upload_to_extra_platforms(settings: Settings, part: RenderedPart) -> list[str]:
@@ -1094,9 +1184,12 @@ def _upload_to_extra_platforms(settings: Settings, part: RenderedPart) -> list[s
             from .publish import tiktok_uploader
 
             client = tiktok_uploader.get_client(settings)
+            # 틱톡은 60초 초과 확장판을 올린다(2026-10-27). 확장판 렌더가 실패했으면 유튜브판.
+            tiktok_path = _tiktok_file(part)
             if client is not None:
-                post_id = tiktok_uploader.upload(client, Path(part.video_path), caption)
-                extra_links.append(f"틱톡(앱 초안함에 업로드됨 — 직접 게시 필요): {post_id}")
+                post_id = tiktok_uploader.upload(client, tiktok_path, caption)
+                length = f"확장판 {part.tiktok_duration:.0f}초, " if tiktok_path != Path(part.video_path) else ""
+                extra_links.append(f"틱톡({length}앱 초안함에 업로드됨 — 직접 게시 필요): {post_id}")
             else:
                 logger.info("[tiktok] 시크릿이 없어 건너뜁니다")
         except Exception:
