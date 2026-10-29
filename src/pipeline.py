@@ -1180,10 +1180,9 @@ def _finish_review(
         for part in parts:
             reviewer.send_video(Path(part.video_path), caption=part.metadata.title)
         tiktok_file = _tiktok_file(parts[0])
-        if tiktok_file != Path(parts[0].video_path) and not any(
-            link.startswith("틱톡(") for link in extra_links
-        ):
-            # 틱톡 초안함 업로드가 안 됐으면 확장판 파일을 직접 올릴 수 있게 보낸다.
+        if tiktok_file != Path(parts[0].video_path):
+            # 2026-10-29: 초안함 업로드가 '성공'으로 찍혀도 사용자 앱에 이틀 연속 안 보였다 —
+            # 확장판 파일을 항상 텔레그램으로 보내 휴대폰에서 바로 올릴 수 있게 한다.
             reviewer.send_video(
                 tiktok_file, caption=f"틱톡용 확장판 {parts[0].tiktok_duration:.0f}초 — 직접 올려 주세요"
             )
