@@ -1214,8 +1214,10 @@ def _upload_to_extra_platforms(settings: Settings, part: RenderedPart) -> list[s
                 extra_links.append(f"틱톡({length}앱 초안함에 업로드됨 — 직접 게시 필요): {post_id}")
             else:
                 logger.info("[tiktok] 시크릿이 없어 건너뜁니다")
-        except Exception:
+        except Exception as exc:
             logger.exception("[tiktok] 업로드 실패 — 유튜브 결과는 그대로 둡니다")
+            # 실패 사유를 텔레그램 완료 알림에 그대로 보이게 한다(2026-10-30).
+            extra_links.append(f"⚠️ 틱톡 초안함 실패: {str(exc)[:200]}")
 
     if settings.get("publish.instagram.enabled", False):
         try:

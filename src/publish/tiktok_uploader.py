@@ -24,6 +24,11 @@ from . import platform_tokens
 
 _TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
 _INBOX_INIT_URL = "https://open.tiktokapis.com/v2/post/publish/inbox/video/init/"
+_STATUS_URL = "https://open.tiktokapis.com/v2/post/publish/status/fetch/"
+# 2026-10-30: 파일 전송은 성공(200)인데 앱 초안함에 이틀 연속 안 보였다 — 전송 뒤 틱톡이 영상을
+# 실제로 처리해 인박스로 보냈는지(SEND_TO_USER_INBOX) 아니면 실패했는지(FAILED + 사유)를 확인한다.
+_STATUS_POLL_SECONDS = 10
+_STATUS_POLL_TRIES = 30
 _REFRESH_TOKEN_CACHE_KEY = "tiktok_refresh_token"
 
 
@@ -118,5 +123,37 @@ def upload(client: TikTokClient, video_path: Path, caption: str, privacy_level: 
     if put_response.status_code >= 300:
         raise TikTokUploadError(f"영상 업로드 실패: {put_response.status_code}")
 
-    logger.info(f"[tiktok] 인박스(초안함) 업로드 완료 — 틱톡 앱에서 직접 게시 필요: {publish_id}")
+    status = wait_for_inbox(client, publish_id)
+    logger.info(f"[tiktok] 초안함 전달 확인({status}) — 틱톡 앱 알림에서 게시: {publish_id}")
     return publish_id
+
+
+def wait_for_inbox(client: TikTokClient, publish_id: str, sleep=None) -> str:
+    """틱톡이 처리를 끝내고 인박스로 보냈는지 확인한다. 실패면 사유와 함께 예외."""
+    import time
+
+    sleep = sleep or time.sleep
+    last = ""
+    for _ in range(_STATUS_POLL_TRIES):
+        response = requests.post(
+            _STATUS_URL,
+            headers={
+                "Authorization": f"Bearer {client.access_token}",
+                "Content-Type": "application/json",
+            },
+            json={"publish_id": publish_id},
+            timeout=30,
+        )
+        if response.status_code >= 300:
+            raise TikTokUploadError(f"상태 조회 실패: {response.status_code} {response.text[:300]}")
+        body = response.json()
+        data = body.get("data") or {}
+        last = str(data.get("status", ""))
+        if last in ("SEND_TO_USER_INBOX", "PUBLISH_COMPLETE"):
+            return last
+        if last == "FAILED":
+            raise TikTokUploadError(
+                f"틱톡 처리 실패: {data.get('fail_reason') or body.get('error')}"
+            )
+        sleep(_STATUS_POLL_SECONDS)
+    raise TikTokUploadError(f"틱톡 처리 확인 시간 초과(마지막 상태 {last or '없음'})")
